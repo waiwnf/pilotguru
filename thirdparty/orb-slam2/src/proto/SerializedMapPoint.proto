@@ -1,0 +1,57 @@
+package ORB_SLAM2;
+
+message KeyFrameWithObservation {
+	optional uint64 keyFrameId = 1;
+	optional uint64 observation = 2; 
+}
+
+message SerializedMapPoint {
+	optional uint64 mnId = 1;
+	optional int64 mnFirstKFid = 2;
+	optional int64 mnFirstFrame = 3;
+	optional int64 nObs = 4;
+
+	// Variables used by the tracking
+	optional float mTrackProjX = 5;
+	optional float mTrackProjY = 6;
+	optional float mTrackProjXR = 7;
+	optional bool mbTrackInView = 8;
+	optional int64 mnTrackScaleLevel = 9;
+	optional float mTrackViewCos = 10;
+	optional uint64 mnTrackReferenceForFrame = 11;
+	optional uint64 mnLastFrameSeen = 12;
+
+	// Variables used by local mapping
+	optional uint64 mnBALocalForKF = 13;
+	optional uint64 mnFuseCandidateForKF = 14;
+
+	// Variables used by loop closing
+	optional uint64 mnLoopPointForKF = 15;
+	optional uint64 mnCorrectedByKF = 16;
+	optional uint64 mnCorrectedReference = 17;
+	/* cv::Mat */ optional bytes mPosGBA = 18;
+	optional uint64 mnBAGlobalForKF = 19;
+	/* cv::Mat */ optional bytes mWorldPos = 20;
+	repeated KeyFrameWithObservation mObservations = 21;
+
+	// Mean viewing direction
+	/* cv::Mat */ optional bytes mNormalVector = 22;
+
+	// Best descriptor to fast matching
+	/* cv::Mat */ optional bytes mDescriptor = 23;
+
+	// Reference KeyFrame
+	optional uint64 mpRefKF = 24;
+
+	// Tracking counters
+	optional int64 mnVisible = 25;
+	optional int64 mnFound = 26;
+
+	// Bad flag (we do not currently erase MapPoint from memory)
+	optional bool mbBad = 27;
+	optional int64 mpReplaced = 28;
+
+	// Scale invariance distances
+	optional float mfMinDistance = 29;
+	optional float mfMaxDistance = 30;
+};

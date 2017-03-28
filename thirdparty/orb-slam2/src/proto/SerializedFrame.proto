@@ -1,0 +1,54 @@
+package ORB_SLAM2;
+
+import "SerializedBow.proto";
+import "SerializedGrid.proto";
+
+message SerializedFrame {
+    optional double mTimeStamp = 1;
+    /* cv::Mat */ optional bytes mK = 2;
+    optional float fx = 3;
+    optional float fy = 4;
+    optional float cx = 5;
+    optional float cy = 6;
+    optional float invfx = 7;
+    optional float invfy = 8;
+    /* cv::Mat */ optional bytes mDistCoef = 9;
+    optional float mbf = 10;
+    optional float mb = 11;
+    optional float mThDepth = 12;
+    optional int64 N = 13;
+    /* vector<cv::KeyPoint> */ optional bytes mvKeys = 14;
+    /* vector<cv::KeyPoint> */ optional bytes mvKeysRight = 15;
+    /* vector<cv::KeyPoint> */ optional bytes mvKeysUn = 16;
+    repeated float mvuRight = 17;
+    repeated float mvDepth = 18;
+    repeated BowVectorElement mBowVec = 19;
+    repeated FeatureVectorElement mFeatVec = 20;
+    /* cv::Mat */ optional bytes mDescriptors = 21;
+    /* cv::Mat */ optional bytes mDescriptorsRight = 22;
+    repeated int64 mvpMapPoints = 23;
+    repeated bool mvbOutlier = 24;
+    optional float mfGridElementWidthInv = 25;
+    optional float mfGridElementHeightInv = 26;
+    repeated Grid2D mGrid = 27;
+    /* cv::Mat */ optional bytes mT_cap_cw = 28;
+    optional uint64 nNextId = 29;
+    optional uint64 mnId = 30;
+    optional int64 mpReferenceKF = 31;
+    optional int32 mnScaleLevels = 32;
+    optional float mfScaleFactor = 33;
+    optional float mfLogScaleFactor = 34;
+    repeated float mvScaleFactors = 35;
+    repeated float mvInvScaleFactors = 36;
+    repeated float mvLevelSigma2 = 37;
+    repeated float mvInvLevelSigma2 = 38;
+    optional float mnMinX = 39;
+    optional float mnMaxX = 40;
+    optional float mnMinY = 41;
+    optional float mnMaxY = 42;
+    optional bool mbInitialComputations = 43;
+    /* cv::Mat */ optional bytes mRcw = 44;
+    /* cv::Mat */ optional bytes mt_small_cw = 45;
+    /* cv::Mat */ optional bytes mRwc = 46;
+    /* cv::Mat */ optional bytes mOw = 47;
+}

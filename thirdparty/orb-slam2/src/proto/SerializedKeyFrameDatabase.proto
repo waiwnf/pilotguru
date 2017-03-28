@@ -1,0 +1,9 @@
+package ORB_SLAM2;
+
+message SerializedKeyFrameDatabase {
+message IdList {
+	repeated uint64 values = 1;
+}
+
+repeated IdList mvInvertedFile = 1;
+}

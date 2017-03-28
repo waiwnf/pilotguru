@@ -1,0 +1,116 @@
+package ORB_SLAM2;
+
+import "SerializedBow.proto";
+import "SerializedGrid.proto";
+
+message ConnectedKeyFrameWeight {
+	optional uint64 frame = 1;
+	optional uint32 weight = 2;
+}
+
+message SerializedKeyFrame {
+    optional uint64 nNextId = 1;
+    optional uint64 mnId = 2;
+    optional uint64 mnFrameId = 3;
+    optional double mTimeStamp = 4;
+
+    // Grid (to speed up feature matching)
+    optional int32 mnGridCols = 5;
+    optional int32 mnGridRows = 6;
+    optional float mfGridElementWidthInv = 7;
+    optional float mfGridElementHeightInv = 8;
+
+    // Variables used by the tracking
+    optional uint64 mnTrackReferenceForFrame = 9;
+    optional uint64 mnFuseTargetForKF = 10;
+
+    // Variables used by the local mapping
+    optional uint64 mnBALocalForKF = 11;
+    optional uint64 mnBAFixedForKF = 12;
+
+    // Variables used by the keyframe database
+    optional uint64 mnLoopQuery = 13;
+    optional int32 mnLoopWords = 14;
+    optional float mLoopScore = 15;
+    optional uint64 mnRelocQuery = 16;
+    optional int32 mnRelocWords = 17;
+    optional float mRelocScore = 18;
+
+    // Variables used by loop closing
+    /* cv::Mat */ optional bytes mTcwGBA = 19;
+    /* cv::Mat */ optional bytes mTcwBefGBA = 20;
+    optional uint64 mnBAGlobalForKF = 21;
+
+    // Calibration parameters
+    optional float fx = 22;
+    optional float fy = 23;
+    optional float cx = 24;
+    optional float cy = 25;
+    optional float invfx = 26;
+    optional float invfy = 27;
+    optional float mbf = 28;
+    optional float mb = 29;
+    optional float mThDepth = 30;
+
+    // Number of KeyPoints
+    optional int64 N = 31;
+
+    // KeyPoints, stereo coordinate and descriptors (all associated by an index)
+    optional /* vector<cv::KeyPoint> */ bytes mvKeys = 32;
+    optional /* vector<cv::KeyPoint> */ bytes mvKeysUn = 33;
+    repeated float mvuRight = 34; // negative value for monocular points
+    repeated float mvDepth = 35; // negative value for monocular points
+    /* cv::Mat */ optional bytes mDescriptors = 36;
+
+    //BoW
+    repeated BowVectorElement mBowVec = 37;
+    repeated FeatureVectorElement mFeatVec = 38;
+
+    // Pose relative to parent (this is computed when bad flag is activated)
+    /* cv::Mat */ optional bytes mTcp = 39;
+
+    // Scale
+    optional int64 mnScaleLevels = 40;
+    optional float mfScaleFactor = 41;
+    optional float mfLogScaleFactor = 42;
+    repeated float mvScaleFactors = 43;
+    repeated float mvLevelSigma2 = 44;
+    repeated float mvInvLevelSigma2 = 45;
+
+    // Image bounds and calibration
+    optional int32 mnMinX = 46;
+    optional int32 mnMinY = 47;
+    optional int32 mnMaxX = 48;
+    optional int32 mnMaxY = 49;
+    /* cv::Mat */ optional bytes mK = 50;
+
+    // SE3 Pose and camera center
+    /* cv::Mat */ optional bytes Tcw = 51;
+    /* cv::Mat */ optional bytes Twc = 52;
+    /* cv::Mat */ optional bytes Ow = 53;
+
+    /* cv::Mat */ optional bytes Cw = 54; // Stereo middel point. Only for visualization
+
+    // MapPoints associated to keypoints
+    repeated int64 mvpMapPoints = 55;
+
+    // Grid over the image to speed up feature matching
+    repeated Grid2D mGrid = 56;
+
+	repeated ConnectedKeyFrameWeight mConnectedKeyFrameWeights = 57;
+    repeated uint64 mvpOrderedConnectedKeyFrames = 58;
+    repeated int32 mvOrderedWeights = 59;
+
+    // Spanning Tree and Loop Edges
+    optional bool mbFirstConnection = 60;
+    optional int64 mpParent = 61;
+    repeated uint64 mspChildrens = 62;
+    repeated uint64 mspLoopEdges = 63;
+
+    // Bad flags
+    optional bool mbNotErase = 64;
+    optional bool mbToBeErased = 65;
+    optional bool mbBad = 66;
+
+    optional float mHalfBaseline = 67; // Only for visualization
+}

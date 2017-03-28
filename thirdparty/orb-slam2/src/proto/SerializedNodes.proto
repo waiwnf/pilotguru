@@ -1,0 +1,19 @@
+package ORB_SLAM2;
+
+import "SerializedMapPoint.proto";
+import "SerializedKeyFrame.proto";
+
+message IndexedSerializedMapPoint {
+	optional uint64 index = 1;
+	optional SerializedMapPoint point = 2;
+}
+
+message IndexedSerializedKeyFrame {
+	optional uint64 index = 1;
+	optional SerializedKeyFrame frame = 2;
+}
+
+message SerializedNodes {
+	repeated IndexedSerializedMapPoint points = 1;
+	repeated IndexedSerializedKeyFrame frames = 2;
+}

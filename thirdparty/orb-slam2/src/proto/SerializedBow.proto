@@ -1,0 +1,11 @@
+package ORB_SLAM2;
+
+message BowVectorElement {
+	optional uint32 wordId = 1;
+	optional double wordValue = 2;
+}
+
+message FeatureVectorElement {
+	optional uint32 nodeId = 1;
+	repeated uint32 features = 2;
+}

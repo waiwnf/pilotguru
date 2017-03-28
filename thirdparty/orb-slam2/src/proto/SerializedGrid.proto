@@ -1,0 +1,8 @@
+package ORB_SLAM2;
+
+message Grid1D {
+	repeated uint64 values = 1;
+}
+message Grid2D {
+	repeated Grid1D values = 1;
+}

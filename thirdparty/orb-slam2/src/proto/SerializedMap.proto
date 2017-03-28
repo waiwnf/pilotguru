@@ -1,0 +1,8 @@
+package ORB_SLAM2;
+
+message SerializedMap {
+	repeated uint64 mspMapPoints = 1;
+    repeated uint64 mspKeyFrames = 2;
+    repeated uint64 mvpReferenceMapPoints = 3;
+	optional uint64 mnMaxKFid = 4;
+}

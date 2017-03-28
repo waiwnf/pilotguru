@@ -1,0 +1,63 @@
+package ORB_SLAM2;
+
+import "SerializedFrame.proto";
+
+message SerializedRelativeFramePoseData {
+  /* cv::Mat */ optional bytes mRelativeFramePose = 1;
+  optional uint64 mpReference = 2;
+  optional double mFrameTime = 3;
+  optional int64 mFrameId = 4;
+  optional bool mbLost = 5;
+}
+
+message SerializedTracking {
+	optional int32 /* eTrackingState */ mState = 1;
+	optional int32 /* eTrackingState */ mLastProcessedState = 2;
+
+	optional int32 mSensor = 3;
+
+	optional SerializedFrame mCurrentFrame = 4;
+	/* cv::Mat */ optional bytes mImGray = 5;
+
+	repeated int32 mvIniLastMatches = 6;
+	repeated int32 mvIniMatches = 7;
+	/* vector<cv::Point2f> */ optional bytes mvbPrevMatched = 8;
+	/* vector<cv::Point3f> */ optional bytes mvIniP3D = 9;
+	optional SerializedFrame mInitialFrame = 10;
+
+  repeated SerializedRelativeFramePoseData mlTrajectory = 11;
+
+	optional bool mbOnlyTracking = 15;
+
+	optional bool mbVO = 16;
+
+	optional uint64 mpReferenceKF = 17;
+	repeated uint64 mvpLocalKeyFrames = 18;
+	repeated uint64 mvpLocalMapPoints = 19;
+
+	/* cv::Mat */ optional bytes mK = 20;
+	/* cv::Mat */ optional bytes mDistCoef = 21;
+	
+	optional float mbf = 22;
+
+	//New KeyFrame rules (according to fps)
+	optional int32 mMinFrames = 23;
+	optional int32 mMaxFrames = 24;
+
+	optional float mThDepth = 25;
+
+	optional float mDepthMapFactor = 26;
+
+	optional int32 mnMatchesInliers = 27;
+
+	optional uint64 mpLastKeyFrame = 28;
+	optional SerializedFrame mLastFrame = 29;
+	optional uint64 mnLastKeyFrameId = 30;
+	optional uint64 mnLastRelocFrameId = 31;
+
+	/* cv::Mat */ optional bytes mVelocity = 32;
+
+	optional bool mbRGB = 33;
+
+	repeated uint64 mlpTemporalPoints = 34;
+}

@@ -1,0 +1,13 @@
+package ORB_SLAM2;
+
+import "SerializedNodes.proto";
+import "SerializedKeyFrameDatabase.proto";
+import "SerializedMap.proto";
+import "SerializedTracking.proto";
+
+message SerializedSystem {
+	optional SerializedNodes nodes = 1;
+	optional SerializedKeyFrameDatabase keyFrameDatabase = 2;
+	optional SerializedMap map = 3;
+	optional SerializedTracking tracking = 4;
+}
