@@ -62,17 +62,6 @@ int main(int argc, char **argv) {
   const cv::Mat steering_wheel = steering_wheel_bgr.clone();
   cv::cvtColor(steering_wheel_bgr, steering_wheel, cv::COLOR_BGR2RGB);
 
-  // TODO treat the 1st image properly.
-  ORB_SLAM2::TimestampedImage frame = image_source->next();
-  cv::Mat out_frame(frame.image.rows + steering_wheel.rows,
-                    std::max(frame.image.cols, steering_wheel.cols), CV_8UC3);
-  cv::Mat out_video =
-      out_frame.rowRange(0, frame.image.rows).colRange(0, frame.image.cols);
-  cv::Mat out_steer =
-      out_frame
-          .rowRange(frame.image.rows, frame.image.rows + steering_wheel.rows)
-          .colRange(0, steering_wheel.cols);
-
   std::ifstream trajectory_file(FLAGS_trajectory_json);
   nlohmann::json trajectory_json;
   trajectory_file >> trajectory_json;
@@ -80,17 +69,38 @@ int main(int argc, char **argv) {
 
   pilotguru::ImageSequenceVideoFileSink sink(FLAGS_out_video, 30 /* fps */);
 
+  std::unique_ptr<cv::Mat> out_frame(nullptr);
   double turn = 0;
   for (auto trajectory_it = trajectory.begin();
        trajectory_it != trajectory.end() && image_source->hasNext();) {
-    frame = image_source->next();
+    const ORB_SLAM2::TimestampedImage frame = image_source->next();
     const int64 frame_id = (*trajectory_it)[pilotguru::kFrameId];
     if (frame.frame_id < frame_id) {
+      // The frame is earlier than the current trajectory point. Advance the
+      // frame, but not the trajectory iterator, to get the frames to catch up.
       continue;
     }
     CHECK_EQ(frame.frame_id, frame_id);
     const double raw_turn = (*trajectory_it)[pilotguru::kTurnAngle];
     turn = (1.0 - FLAGS_learning_rate) * turn + FLAGS_learning_rate * raw_turn;
+    LOG(INFO) << "Frame: " << frame_id << " turn: " << turn;
+
+    if (out_frame == nullptr) {
+      out_frame.reset(new cv::Mat(
+          frame.image.rows + steering_wheel.rows,
+          std::max(frame.image.cols, steering_wheel.cols), CV_8UC3));
+    }
+    // Double check the sizes match in case the out_frame was initialized on an
+    // earlier iteration.
+    CHECK_EQ(out_frame->rows, frame.image.rows + steering_wheel.rows);
+    CHECK_EQ(out_frame->cols, std::max(frame.image.cols, steering_wheel.cols));
+    cv::Mat out_video =
+        out_frame->rowRange(0, frame.image.rows).colRange(0, frame.image.cols);
+    cv::Mat out_steer =
+        out_frame
+            ->rowRange(frame.image.rows, frame.image.rows + steering_wheel.rows)
+            .colRange(0, steering_wheel.cols);
+
     LOG(INFO) << "Frame: " << frame_id << " turn: " << turn;
     frame.image.copyTo(out_video);
 
@@ -99,7 +109,7 @@ int main(int argc, char **argv) {
         turn * FLAGS_scale, 1);
     cv::warpAffine(steering_wheel, out_steer, rotation_matrix,
                    steering_wheel.size(), cv::INTER_LINEAR);
-    sink.consume(out_frame);
+    sink.consume(*out_frame);
 
     ++trajectory_it;
   }
