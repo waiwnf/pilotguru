@@ -50,6 +50,20 @@ DEFINE_bool(vertical_flip, false,
             "Whether to flip input video frames vertically.");
 DEFINE_bool(horizontal_flip, false,
             "Whether to flip input video frames horizontally.");
+DEFINE_bool(output_per_segment_videos, false,
+            "Whether to write video files for every successfully SLAM-tracked "
+            "trajectory segment. If this flag is true, the frame IDs in the "
+            "output JSON files will correspond to frames in the segment video, "
+            "not in the overall input video.");
+
+namespace {
+std::string TrajectoryOutFileName(const std::string &out_dir, int segment_id,
+                                  const std::string &extension) {
+  std::stringstream name_stream;
+  name_stream << out_dir << "/trajectory-" << segment_id << "." << extension;
+  return name_stream.str();
+}
+} // namespace
 
 int main(int argc, char **argv) {
   google::InitGoogleLogging(argv[0]);
@@ -73,11 +87,18 @@ int main(int argc, char **argv) {
     ORB_SLAM2::System *SLAM =
         new ORB_SLAM2::System(vocabulary.get(), FLAGS_camera_settings,
                               ORB_SLAM2::System::MONOCULAR, FLAGS_visualize);
-    std::stringstream json_string_stream;
-    json_string_stream << FLAGS_out_dir << "/trajectory-" << segment_id
-                       << ".json";
-    const std::string json_file_name(json_string_stream.str());
-    pilotguru::TrackImageSequence(SLAM, *image_source, json_file_name, nullptr);
+    const std::string trajectory_json_name =
+        TrajectoryOutFileName(FLAGS_out_dir, segment_id, "json");
+    std::unique_ptr<pilotguru::ImageSequenceSink> trajectory_video_sink(
+        nullptr);
+    if (FLAGS_output_per_segment_videos) {
+      const std::string trajectory_video_name =
+          TrajectoryOutFileName(FLAGS_out_dir, segment_id, "mp4");
+      trajectory_video_sink.reset(new pilotguru::ImageSequenceVideoFileSink(
+          trajectory_video_name, 30 /* fps */));
+    }
+    pilotguru::TrackImageSequence(SLAM, *image_source, trajectory_json_name,
+                                  trajectory_video_sink.get());
     SLAM->Shutdown();
 
     delete SLAM;

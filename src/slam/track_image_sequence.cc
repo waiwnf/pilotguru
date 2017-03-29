@@ -87,7 +87,7 @@ ProjectDirectionsToTurnAngles(const std::vector<cv::Mat> &directions) {
 
 void SetPlane(nlohmann::json *json_root, const cv::Mat &plane) {
   CHECK_EQ(plane.rows, 2);
-  CHECK_EQ(plane.cols, 1);
+  CHECK_EQ(plane.cols, 3);
   (*CHECK_NOTNULL(json_root))[kPlane] = {
       {plane.at<double>(0, 0), plane.at<double>(0, 1), plane.at<double>(0, 2)},
       {plane.at<double>(1, 0), plane.at<double>(1, 1), plane.at<double>(1, 2)}};
@@ -142,7 +142,7 @@ bool TrackImageSequence(ORB_SLAM2::System *SLAM, ImageSequenceSource &image_sour
     }
     tracked += (tracking_state == ORB_SLAM2::OK);
 
-    if (tracked_frames_sink != nullptr) {
+    if (tracking_state == ORB_SLAM2::OK && tracked_frames_sink != nullptr) {
       tracked_frames_sink->consume(frameImage.image);
     }
   }
@@ -168,7 +168,7 @@ bool TrackImageSequence(ORB_SLAM2::System *SLAM, ImageSequenceSource &image_sour
   // may not be sufficiently precise.
   // TODO: figure out a good way for the threshold here.
   if (trajectory_pca->eigenvalues.at<double>(2) >
-      trajectory_pca->eigenvalues.at<double>(1) * 1e-5) {
+      trajectory_pca->eigenvalues.at<double>(1) * 1e-2) {
     LOG(WARNING) << "3rd eigenvalue was too large, dropping the trajectory. "
                     "Relative magnitude wrt the 2nd eigenvalue: "
                  << trajectory_pca->eigenvalues.at<double>(2) /
@@ -190,7 +190,7 @@ bool TrackImageSequence(ORB_SLAM2::System *SLAM, ImageSequenceSource &image_sour
   SetTrajectory(&trajectory_json, trajectory, *projected_directions,
                 turn_angles, frame_id_offset);
 
-  std::fstream trajectory_ostream(trajectory_out_file, ios::out | ios::trunc);
+  std::ofstream trajectory_ostream(trajectory_out_file);
   trajectory_ostream << trajectory_json.dump(2) << std::endl;
 
   return true;

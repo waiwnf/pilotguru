@@ -21,20 +21,25 @@ public:
 
 class ImageSequenceVideoFileSink : public ImageSequenceSink {
 public:
-  ImageSequenceVideoFileSink(const std::string &filename, int height, int width,
-                             int fps);
+  ImageSequenceVideoFileSink(const std::string &filename, int fps);
   virtual ~ImageSequenceVideoFileSink();
 
   void consume(const cv::Mat &image) override;
 
 private:
+  void InitStream(int height, int width);
+
+  const std::string filename_;
+  const int fps_;
+
+  AVFrame *out_frame_ = nullptr;
+  AVFrame *rgb_frame_ = nullptr;
+
   AVFormatContext *format_context_ = nullptr;
   AVStream *avstream_ = nullptr;
   AVCodec *codec_ = nullptr;
   AVCodecContext *codec_context_ = nullptr;
   int next_pts_ = 0;
-  AVFrame *out_frame_ = nullptr;
-  AVFrame *rgb_frame_ = nullptr;
   SwsContext *sws_context_ = nullptr;
 };
 

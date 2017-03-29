@@ -11,7 +11,8 @@
 
 namespace pilotguru {
 
-bool TrackImageSequence(ORB_SLAM2::System *SLAM, ImageSequenceSource &image_source,
+bool TrackImageSequence(ORB_SLAM2::System *SLAM,
+                        ImageSequenceSource &image_source,
                         const std::string &trajectoryOutFile,
                         ImageSequenceSink *tracked_frames_sink);
 

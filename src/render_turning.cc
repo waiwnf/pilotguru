@@ -16,6 +16,7 @@
 
 #include <io/image_sequence_reader.hpp>
 #include <io/image_sequence_writer.hpp>
+#include <io/json_constants.hpp>
 
 DEFINE_string(in_video, "", "Input video file.");
 DEFINE_bool(vertical_flip, false,
@@ -75,21 +76,20 @@ int main(int argc, char **argv) {
   std::ifstream trajectory_file(FLAGS_trajectory_json);
   nlohmann::json trajectory_json;
   trajectory_file >> trajectory_json;
-  const auto &trajectory = trajectory_json["trajectory"];
+  const auto &trajectory = trajectory_json[pilotguru::kTrajectory];
 
-  pilotguru::ImageSequenceVideoFileSink sink(FLAGS_out_video, out_frame.rows,
-                                             out_frame.cols, 30);
+  pilotguru::ImageSequenceVideoFileSink sink(FLAGS_out_video, 30 /* fps */);
 
   double turn = 0;
   for (auto trajectory_it = trajectory.begin();
        trajectory_it != trajectory.end() && image_source->hasNext();) {
     frame = image_source->next();
-    const int64 frame_id = (*trajectory_it)["frame_id"];
+    const int64 frame_id = (*trajectory_it)[pilotguru::kFrameId];
     if (frame.frame_id < frame_id) {
       continue;
     }
     CHECK_EQ(frame.frame_id, frame_id);
-    const double raw_turn = (*trajectory_it)["turn_angle"];
+    const double raw_turn = (*trajectory_it)[pilotguru::kTurnAngle];
     turn = (1.0 - FLAGS_learning_rate) * turn + FLAGS_learning_rate * raw_turn;
     LOG(INFO) << "Frame: " << frame_id << " turn: " << turn;
     frame.image.copyTo(out_video);
