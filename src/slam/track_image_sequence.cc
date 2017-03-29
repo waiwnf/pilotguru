@@ -2,6 +2,7 @@
 #include <slam/track_image_sequence.hpp>
 
 #include <opencv2/highgui/highgui.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
 
 #include <Eigen/Geometry>
 
@@ -22,6 +23,48 @@ nlohmann::json PoseToJson(const ORB_SLAM2::Pose &pose) {
   result[kRotation] = rotation;
 
   return result;
+}
+
+// TODO: per-coordinate smoothing + normalization is a hack.
+// Instead, it is better to do this properly as described in
+// https://ntrs.nasa.gov/archive/nasa/casi.ntrs.nasa.gov/20070017872.pdf
+//
+// sigma is in units of inter-frame distances.
+void SmoothRotations(std::vector<ORB_SLAM2::PoseWithTimestamp> *trajectory,
+                     int sigma) {
+  CHECK_NOTNULL(trajectory);
+  CHECK_GT(sigma, 0);
+  const cv::Mat smoothing_kernel = cv::getGaussianKernel(sigma * 4 + 1, sigma);
+  const cv::Mat unit_kernel =
+      cv::getGaussianKernel(1 /* size */, 1 /* sigma */);
+
+  cv::Mat raw_rotations(4, trajectory->size(), CV_64F);
+  for (size_t element_idx = 0; element_idx < trajectory->size();
+       ++element_idx) {
+    const Eigen::Quaterniond &rotation =
+        trajectory->at(element_idx).pose.rotation;
+    raw_rotations.at<double>(0, element_idx) = rotation.w();
+    raw_rotations.at<double>(1, element_idx) = rotation.x();
+    raw_rotations.at<double>(2, element_idx) = rotation.y();
+    raw_rotations.at<double>(3, element_idx) = rotation.z();
+  }
+  cv::Mat smooth_rotations(4, trajectory->size(), CV_64F);
+  cv::sepFilter2D(raw_rotations, smooth_rotations, CV_64F /* ddepth */,
+                  smoothing_kernel /* kernelX */, unit_kernel /* kernelY */,
+                  cv::Point(-1, -1) /* anchor */, 0 /* delta */,
+                  cv::BORDER_REPLICATE);
+
+  for (size_t element_idx = 0; element_idx < trajectory->size();
+       ++element_idx) {
+    const double element_norm =
+        cv::norm(smooth_rotations.col(element_idx), cv::NORM_L2);
+
+    Eigen::Quaterniond &rotation = trajectory->at(element_idx).pose.rotation;
+    rotation.w() = smooth_rotations.at<double>(0, element_idx) / element_norm;
+    rotation.x() = smooth_rotations.at<double>(1, element_idx) / element_norm;
+    rotation.y() = smooth_rotations.at<double>(2, element_idx) / element_norm;
+    rotation.z() = smooth_rotations.at<double>(3, element_idx) / element_norm;
+  }
 }
 
 std::unique_ptr<cv::PCA>
@@ -103,7 +146,7 @@ void SetTrajectory(nlohmann::json *json_root,
   (*json_root)[kTrajectory] = {};
   for (size_t point_idx = 0; point_idx < trajectory.size(); ++point_idx) {
     nlohmann::json point_json;
-    const ORB_SLAM2::PoseWithTimestamp& point = trajectory.at(point_idx);
+    const ORB_SLAM2::PoseWithTimestamp &point = trajectory.at(point_idx);
     point_json[kTimeUsec] = point.time_usec;
     point_json[kIsLost] = point.is_lost;
     point_json[kFrameId] = point.frame_id - frame_id_offset;
@@ -119,9 +162,11 @@ void SetTrajectory(nlohmann::json *json_root,
 }
 } // namespace
 
-bool TrackImageSequence(ORB_SLAM2::System *SLAM, ImageSequenceSource &image_source,
+bool TrackImageSequence(ORB_SLAM2::System *SLAM,
+                        ImageSequenceSource &image_source,
                         const std::string &trajectory_out_file,
-                        ImageSequenceSink *tracked_frames_sink) {
+                        ImageSequenceSink *tracked_frames_sink,
+                        int rotation_smooth_sigma) {
   CHECK_NOTNULL(SLAM);
 
   ORB_SLAM2::TimestampedImage frameImage;
@@ -147,12 +192,14 @@ bool TrackImageSequence(ORB_SLAM2::System *SLAM, ImageSequenceSource &image_sour
     }
   }
 
-  const std::vector<ORB_SLAM2::PoseWithTimestamp> trajectory = SLAM->GetTrajectory();
+  std::vector<ORB_SLAM2::PoseWithTimestamp> trajectory = SLAM->GetTrajectory();
   if (trajectory.empty()) {
     return false;
   }
 
-  // TODO rotation smoothing.
+  if (rotation_smooth_sigma > 0) {
+    SmoothRotations(&trajectory, rotation_smooth_sigma);
+  }
 
   // PCA to infer the horizontal plane (assuming the horizontal motion is
   // dominant).

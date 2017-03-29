@@ -55,6 +55,11 @@ DEFINE_bool(output_per_segment_videos, false,
             "trajectory segment. If this flag is true, the frame IDs in the "
             "output JSON files will correspond to frames in the segment video, "
             "not in the overall input video.");
+DEFINE_int64(rotation_smooth_sigma, -1,
+             "Gaussian kernel standard deviation (in "
+             "units of inter-frame intervals) for "
+             "smothing rotations. If this value is "
+             "negative, no smoothing is done.");
 
 namespace {
 std::string TrajectoryOutFileName(const std::string &out_dir, int segment_id,
@@ -98,7 +103,8 @@ int main(int argc, char **argv) {
           trajectory_video_name, 30 /* fps */));
     }
     pilotguru::TrackImageSequence(SLAM, *image_source, trajectory_json_name,
-                                  trajectory_video_sink.get());
+                                  trajectory_video_sink.get(),
+                                  FLAGS_rotation_smooth_sigma);
     SLAM->Shutdown();
 
     delete SLAM;
