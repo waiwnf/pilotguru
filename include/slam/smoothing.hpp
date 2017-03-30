@@ -1,5 +1,5 @@
-#ifndef PILOTGURU_SMOOTHING_HPP_
-#define PILOTGURU_SMOOTHING_HPP_
+#ifndef PILOTGURU_SLAM_SMOOTHING_HPP_
+#define PILOTGURU_SLAM_SMOOTHING_HPP_
 
 #include <vector>
 
@@ -15,4 +15,4 @@ void SmoothHeadingDirections(
 
 } // namespace pilotguru
 
-#endif // #ifndef PILOTGURU_SMOOTHING_HPP_
+#endif // #ifndef PILOTGURU_SLAM_SMOOTHING_HPP_

@@ -26,6 +26,7 @@ constexpr char kRotation[] = "rotation";
 nlohmann::json PoseToJson(const ORB_SLAM2::Pose &pose);
 
 void SetPlane(nlohmann::json *json_root, const cv::Mat &plane);
+cv::Mat ReadPlane(const nlohmann::json& json_root);
 
 void SetTrajectory(
     nlohmann::json *json_root,

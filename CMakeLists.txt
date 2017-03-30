@@ -28,6 +28,7 @@ add_library(pilotgurulib SHARED
   ${PROJECT_SOURCE_DIR}/src/io/image_sequence_reader.cc
   ${PROJECT_SOURCE_DIR}/src/io/image_sequence_writer.cc
   ${PROJECT_SOURCE_DIR}/src/io/json_converters.cc
+  ${PROJECT_SOURCE_DIR}/src/slam/horizontal_flatten.cc
   ${PROJECT_SOURCE_DIR}/src/slam/track_image_sequence.cc
   ${PROJECT_SOURCE_DIR}/src/slam/smoothing.cc
 )

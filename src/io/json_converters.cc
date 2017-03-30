@@ -40,6 +40,17 @@ void SetPlane(nlohmann::json *json_root, const cv::Mat &plane) {
       {plane.at<double>(1, 0), plane.at<double>(1, 1), plane.at<double>(1, 2)}};
 }
 
+cv::Mat ReadPlane(const nlohmann::json& json_root) {
+  cv::Mat plane(2,3, CV_64F);
+  const auto& plane_json = json_root[kPlane];
+  for (size_t row : {0, 1}) {
+    for (size_t col : {0,  1, 2}) {
+      plane.at<double>(row, col) = plane_json.at(row).at(col);
+    }
+  }
+  return plane;
+}
+
 void SetTrajectory(nlohmann::json *json_root,
                    const std::vector<ORB_SLAM2::PoseWithTimestamp> &trajectory,
                    const std::vector<cv::Mat> *projected_directions,
