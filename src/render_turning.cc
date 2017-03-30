@@ -31,7 +31,7 @@ DEFINE_double(scale, 6000.0, "Scale factor to go from angular velocity in "
                              "radians (from the 3D trajectory in the JSON "
                              "file) to the rotation angle of the steering "
                              "wheel (in degrees) for visualization.");
-DEFINE_double(learning_rate, 0.2,
+DEFINE_double(learning_rate, 1.0,
               "Temporal smoothing parameter for the rendered steering wheel. "
               "Must be between 0 and 1. ! corresponds to no smoothing at all, "
               "0 corresponds to no change. The formula is "
