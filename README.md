@@ -24,7 +24,7 @@ to gather all the necessary data to train your own computer vision based car aut
 
 ## Current status
 
-* Steering angle data from just the video - available.
+* Steering angle data from just the video - [available](https://youtu.be/gMXn0IMcX-k).
 * Forward velocity from video/GPS/accelerometer - under development, nothing to show yet.
 
 ## How to use
@@ -152,13 +152,10 @@ so that we can warp the captured image and remove most of the distortion.
         --steering_wheel /opt/pilotguru/img/steering_wheel_image.jpg \
         --out_video /opt/pilotguru/data/ride-0-smoothed.mp4
     ```
-    This will produce a video with a rotating steering wheel tiled next to the original ride recording.
+    This will produce a video [like this](https://youtu.be/gMXn0IMcX-k) with a rotating steering wheel 
+    tiled next to the original ride recording.
     The steering wheel rotation should generally match the car steering.
     
     **Caveat**: the steering wheel rotation in the rendering is somewhat misleading: it is proportional
     to the *angular velocity* of the car, so for turns at slow speed the rendered steering wheel will 
     rotate less than the real one in the car, and vice versa for high speed.
-    
-    
-    
-    
