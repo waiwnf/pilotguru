@@ -1,4 +1,5 @@
-#include <io/json_constants.hpp>
+#include <io/json_converters.hpp>
+#include <slam/smoothing.hpp>
 #include <slam/track_image_sequence.hpp>
 
 #include <opencv2/highgui/highgui.hpp>
@@ -10,62 +11,6 @@
 
 namespace pilotguru {
 namespace {
-
-nlohmann::json PoseToJson(const ORB_SLAM2::Pose &pose) {
-  nlohmann::json result;
-  result[kTranslation] = {pose.translation(0), pose.translation(1),
-                          pose.translation(2)};
-  nlohmann::json rotation;
-  rotation[kW] = pose.rotation.w();
-  rotation[kX] = pose.rotation.x();
-  rotation[kY] = pose.rotation.y();
-  rotation[kZ] = pose.rotation.z();
-  result[kRotation] = rotation;
-
-  return result;
-}
-
-// TODO: per-coordinate smoothing + normalization is a hack.
-// Instead, it is better to do this properly as described in
-// https://ntrs.nasa.gov/archive/nasa/casi.ntrs.nasa.gov/20070017872.pdf
-//
-// sigma is in units of inter-frame distances.
-void SmoothRotations(std::vector<ORB_SLAM2::PoseWithTimestamp> *trajectory,
-                     int sigma) {
-  CHECK_NOTNULL(trajectory);
-  CHECK_GT(sigma, 0);
-  const cv::Mat smoothing_kernel = cv::getGaussianKernel(sigma * 4 + 1, sigma);
-  const cv::Mat unit_kernel =
-      cv::getGaussianKernel(1 /* size */, 1 /* sigma */);
-
-  cv::Mat raw_rotations(4, trajectory->size(), CV_64F);
-  for (size_t element_idx = 0; element_idx < trajectory->size();
-       ++element_idx) {
-    const Eigen::Quaterniond &rotation =
-        trajectory->at(element_idx).pose.rotation;
-    raw_rotations.at<double>(0, element_idx) = rotation.w();
-    raw_rotations.at<double>(1, element_idx) = rotation.x();
-    raw_rotations.at<double>(2, element_idx) = rotation.y();
-    raw_rotations.at<double>(3, element_idx) = rotation.z();
-  }
-  cv::Mat smooth_rotations(4, trajectory->size(), CV_64F);
-  cv::sepFilter2D(raw_rotations, smooth_rotations, CV_64F /* ddepth */,
-                  smoothing_kernel /* kernelX */, unit_kernel /* kernelY */,
-                  cv::Point(-1, -1) /* anchor */, 0 /* delta */,
-                  cv::BORDER_REPLICATE);
-
-  for (size_t element_idx = 0; element_idx < trajectory->size();
-       ++element_idx) {
-    const double element_norm =
-        cv::norm(smooth_rotations.col(element_idx), cv::NORM_L2);
-
-    Eigen::Quaterniond &rotation = trajectory->at(element_idx).pose.rotation;
-    rotation.w() = smooth_rotations.at<double>(0, element_idx) / element_norm;
-    rotation.x() = smooth_rotations.at<double>(1, element_idx) / element_norm;
-    rotation.y() = smooth_rotations.at<double>(2, element_idx) / element_norm;
-    rotation.z() = smooth_rotations.at<double>(3, element_idx) / element_norm;
-  }
-}
 
 std::unique_ptr<cv::PCA>
 TrajectoryToPCA(const std::vector<ORB_SLAM2::PoseWithTimestamp> &trajectory) {
@@ -127,39 +72,6 @@ ProjectDirectionsToTurnAngles(const std::vector<cv::Mat> &directions) {
   }
   return turn_angles;
 }
-
-void SetPlane(nlohmann::json *json_root, const cv::Mat &plane) {
-  CHECK_EQ(plane.rows, 2);
-  CHECK_EQ(plane.cols, 3);
-  (*CHECK_NOTNULL(json_root))[kPlane] = {
-      {plane.at<double>(0, 0), plane.at<double>(0, 1), plane.at<double>(0, 2)},
-      {plane.at<double>(1, 0), plane.at<double>(1, 1), plane.at<double>(1, 2)}};
-}
-
-void SetTrajectory(nlohmann::json *json_root,
-                   const std::vector<ORB_SLAM2::PoseWithTimestamp> &trajectory,
-                   const std::vector<cv::Mat> &projected_directions,
-                   const vector<double> &turn_angles, int frame_id_offset) {
-  CHECK_NOTNULL(json_root);
-  CHECK_EQ(trajectory.size(), projected_directions.size());
-  CHECK_EQ(trajectory.size(), turn_angles.size());
-  (*json_root)[kTrajectory] = {};
-  for (size_t point_idx = 0; point_idx < trajectory.size(); ++point_idx) {
-    nlohmann::json point_json;
-    const ORB_SLAM2::PoseWithTimestamp &point = trajectory.at(point_idx);
-    point_json[kTimeUsec] = point.time_usec;
-    point_json[kIsLost] = point.is_lost;
-    point_json[kFrameId] = point.frame_id - frame_id_offset;
-    point_json[kPose] = PoseToJson(point.pose);
-
-    const cv::Mat &direction = projected_directions.at(point_idx);
-    point_json[kPlanarDirection] = {direction.at<double>(0, 0),
-                                    direction.at<double>(0, 1)};
-    point_json[kTurnAngle] = turn_angles.at(point_idx);
-
-    (*json_root)[kTrajectory].push_back(point_json);
-  }
-}
 } // namespace
 
 bool TrackImageSequence(ORB_SLAM2::System *SLAM,
@@ -198,7 +110,7 @@ bool TrackImageSequence(ORB_SLAM2::System *SLAM,
   }
 
   if (rotation_smooth_sigma > 0) {
-    SmoothRotations(&trajectory, rotation_smooth_sigma);
+    SmoothHeadingDirections(&trajectory, rotation_smooth_sigma);
   }
 
   // PCA to infer the horizontal plane (assuming the horizontal motion is
@@ -234,8 +146,8 @@ bool TrackImageSequence(ORB_SLAM2::System *SLAM,
   SetPlane(&trajectory_json, pca_plane);
   const int frame_id_offset =
       tracked_frames_sink == nullptr ? 0 : first_tracked_frame_id;
-  SetTrajectory(&trajectory_json, trajectory, *projected_directions,
-                turn_angles, frame_id_offset);
+  SetTrajectory(&trajectory_json, trajectory, projected_directions.get(),
+                &turn_angles, frame_id_offset);
 
   std::ofstream trajectory_ostream(trajectory_out_file);
   trajectory_ostream << trajectory_json.dump(2) << std::endl;

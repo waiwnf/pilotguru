@@ -16,7 +16,7 @@
 
 #include <io/image_sequence_reader.hpp>
 #include <io/image_sequence_writer.hpp>
-#include <io/json_constants.hpp>
+#include <io/json_converters.hpp>
 
 DEFINE_string(in_video, "", "Input video file.");
 DEFINE_bool(vertical_flip, false,
