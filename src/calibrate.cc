@@ -555,7 +555,7 @@ bool runCalibrationAndSave(Settings &s, Size imageSize, Mat &cameraMatrix,
       runCalibration(s, imageSize, cameraMatrix, distCoeffs, imagePoints, rvecs,
                      tvecs, reprojErrs, totalAvgErr);
   cout << (ok ? "Calibration succeeded" : "Calibration failed")
-       << ". avg re projection error = " << totalAvgErr;
+       << ". avg re projection error = " << totalAvgErr << "\n";
 
   if (ok) {
     saveCameraParams(s, imageSize, cameraMatrix, distCoeffs);
