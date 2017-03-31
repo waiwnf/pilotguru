@@ -5,10 +5,8 @@
 
 #include <io/json_converters.hpp>
 #include <slam/horizontal_flatten.hpp>
-#include <slam/smoothing.hpp>
 
 DEFINE_string(trajectory_in_file, "", "");
-DEFINE_int64(sigma, -1, "");
 DEFINE_string(trajectory_out_file, "", "");
 
 int main(int argc, char **argv) {
@@ -18,22 +16,17 @@ int main(int argc, char **argv) {
 
   CHECK(!FLAGS_trajectory_in_file.empty());
   CHECK(!FLAGS_trajectory_out_file.empty());
-  CHECK_GT(FLAGS_sigma, 0);
 
   std::vector<ORB_SLAM2::PoseWithTimestamp> trajectory;
   cv::Mat horizontal_plane;
+  std::vector<cv::Mat> projected_directions;
+  vector<double> turn_angles;
   pilotguru::ReadTrajectoryFromFile(FLAGS_trajectory_in_file, &trajectory,
-                                    &horizontal_plane, nullptr, nullptr);
-
-  pilotguru::SmoothHeadingDirections(&trajectory, FLAGS_sigma);
-  std::unique_ptr<std::vector<cv::Mat>> projected_directions =
-      pilotguru::ProjectDirections(trajectory, horizontal_plane);
-  const vector<double> turn_angles =
-      pilotguru::Projected2DDirectionsToTurnAngles(*projected_directions);
-
+                                    &horizontal_plane, &projected_directions, &turn_angles);
+  pilotguru::ProjectTranslations(&trajectory,horizontal_plane);
   pilotguru::WriteTrajectoryToFile(FLAGS_trajectory_out_file, trajectory,
                                    &horizontal_plane,
-                                   projected_directions.get(), &turn_angles, 0);
+                                   &projected_directions, &turn_angles, 0);
 
   return EXIT_SUCCESS;
 }

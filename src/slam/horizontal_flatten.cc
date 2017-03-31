@@ -28,6 +28,19 @@ ProjectDirections(const std::vector<ORB_SLAM2::PoseWithTimestamp> &trajectory,
   return std::move(projected_directions);
 }
 
+void ProjectTranslations(std::vector<ORB_SLAM2::PoseWithTimestamp> *trajectory,
+                         const cv::Mat &projection_plane) {
+  for (ORB_SLAM2::PoseWithTimestamp &p : *CHECK_NOTNULL(trajectory)) {
+    cv::Vec3d& translation = p.pose.translation;
+    const cv::Mat projected = (projection_plane * cv::Mat(translation)).t() * projection_plane;
+    CHECK_EQ(projected.rows, 1);
+    CHECK_EQ(projected.cols, 3);
+    for (size_t dim : {0, 1, 2}) {
+      translation[dim] = projected.at<double>(0,dim);
+    }
+  }
+}
+
 vector<double>
 Projected2DDirectionsToTurnAngles(const std::vector<cv::Mat> &directions) {
   vector<double> turn_angles(directions.size(), 0);

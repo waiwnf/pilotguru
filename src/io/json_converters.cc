@@ -40,11 +40,11 @@ void SetPlane(nlohmann::json *json_root, const cv::Mat &plane) {
       {plane.at<double>(1, 0), plane.at<double>(1, 1), plane.at<double>(1, 2)}};
 }
 
-cv::Mat ReadPlane(const nlohmann::json& json_root) {
-  cv::Mat plane(2,3, CV_64F);
-  const auto& plane_json = json_root[kPlane];
+cv::Mat ReadPlane(const nlohmann::json &json_root) {
+  cv::Mat plane(2, 3, CV_64F);
+  const auto &plane_json = json_root[kPlane];
   for (size_t row : {0, 1}) {
-    for (size_t col : {0,  1, 2}) {
+    for (size_t col : {0, 1, 2}) {
       plane.at<double>(row, col) = plane_json.at(row).at(col);
     }
   }
@@ -84,10 +84,10 @@ void SetTrajectory(nlohmann::json *json_root,
   }
 }
 
-void ReadTrajectory(const nlohmann::json &trajectory_json,
-                    std::vector<ORB_SLAM2::PoseWithTimestamp> *trajectory,
-                    std::vector<cv::Mat> *projected_directions,
-                    vector<double> *turn_angles) {
+void ParseTrajectory(const nlohmann::json &trajectory_json,
+                     std::vector<ORB_SLAM2::PoseWithTimestamp> *trajectory,
+                     std::vector<cv::Mat> *projected_directions,
+                     vector<double> *turn_angles) {
   CHECK_NOTNULL(trajectory);
   CHECK(trajectory->empty());
   if (projected_directions != nullptr) {
@@ -99,7 +99,7 @@ void ReadTrajectory(const nlohmann::json &trajectory_json,
 
   for (const auto &point_json : trajectory_json[kTrajectory]) {
     trajectory->emplace_back();
-    ORB_SLAM2::PoseWithTimestamp& point = trajectory->back();
+    ORB_SLAM2::PoseWithTimestamp &point = trajectory->back();
     point.pose = JsonToPose(point_json[kPose]);
     point.time_usec = point_json[kTimeUsec];
     point.is_lost = point_json[kIsLost];
@@ -107,14 +107,49 @@ void ReadTrajectory(const nlohmann::json &trajectory_json,
 
     if (projected_directions != nullptr) {
       projected_directions->emplace_back(1, 2, CV_64F);
-      cv::Mat& direction = projected_directions->back();
-      direction.at<double>(0,0) = point_json[kPlanarDirection].at(0);
-      direction.at<double>(0,1) = point_json[kPlanarDirection].at(1);
+      cv::Mat &direction = projected_directions->back();
+      direction.at<double>(0, 0) = point_json[kPlanarDirection].at(0);
+      direction.at<double>(0, 1) = point_json[kPlanarDirection].at(1);
     }
 
     if (turn_angles != nullptr) {
       turn_angles->push_back(point_json[kTurnAngle]);
     }
   }
+}
+
+void ReadTrajectoryFromFile(
+    const string &filename,
+    std::vector<ORB_SLAM2::PoseWithTimestamp> *trajectory,
+    cv::Mat *horizontal_plane, std::vector<cv::Mat> *projected_directions,
+    vector<double> *turn_angles) {
+  std::vector<ORB_SLAM2::PoseWithTimestamp> result;
+
+  std::ifstream trajectory_istream(filename);
+  nlohmann::json trajectory_json;
+  trajectory_istream >> trajectory_json;
+
+  ParseTrajectory(trajectory_json, trajectory, projected_directions,
+                  turn_angles);
+
+  if (horizontal_plane != nullptr) {
+    *horizontal_plane = ReadPlane(trajectory_json);
+  }
+}
+
+void WriteTrajectoryToFile(
+    const string &filename,
+    const std::vector<ORB_SLAM2::PoseWithTimestamp> &trajectory,
+    const cv::Mat *horizontal_plane,
+    const std::vector<cv::Mat> *projected_directions,
+    const vector<double> *turn_angles, int frame_id_offset) {
+  nlohmann::json trajectory_json;
+  pilotguru::SetTrajectory(&trajectory_json, trajectory, projected_directions,
+                           turn_angles, 0);
+  if (horizontal_plane != nullptr) {
+    pilotguru::SetPlane(&trajectory_json, *horizontal_plane);
+  }
+  std::ofstream trajectory_ostream(filename);
+  trajectory_ostream << trajectory_json.dump(2) << std::endl;
 }
 }

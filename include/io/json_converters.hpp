@@ -26,7 +26,7 @@ constexpr char kRotation[] = "rotation";
 nlohmann::json PoseToJson(const ORB_SLAM2::Pose &pose);
 
 void SetPlane(nlohmann::json *json_root, const cv::Mat &plane);
-cv::Mat ReadPlane(const nlohmann::json& json_root);
+cv::Mat ReadPlane(const nlohmann::json &json_root);
 
 void SetTrajectory(
     nlohmann::json *json_root,
@@ -34,11 +34,24 @@ void SetTrajectory(
     const std::vector<cv::Mat> *projected_directions /* optional */,
     const vector<double> *turn_angles /* optional */, int frame_id_offset);
 
-void ReadTrajectory(
-    const nlohmann::json &trajectory_json,
+void ParseTrajectory(const nlohmann::json &trajectory_json,
+                     std::vector<ORB_SLAM2::PoseWithTimestamp> *trajectory,
+                     std::vector<cv::Mat> *projected_directions /* optional */,
+                     vector<double> *turn_angles /* optional */);
+
+void ReadTrajectoryFromFile(
+    const string &filename,
     std::vector<ORB_SLAM2::PoseWithTimestamp> *trajectory,
+    cv::Mat *horizontal_plane /* optional */,
     std::vector<cv::Mat> *projected_directions /* optional */,
     vector<double> *turn_angles /* optional */);
+
+void WriteTrajectoryToFile(
+    const string &filename,
+    const std::vector<ORB_SLAM2::PoseWithTimestamp> &trajectory,
+    const cv::Mat *horizontal_plane /* optional */,
+    const std::vector<cv::Mat> *projected_directions /* optional */,
+    const vector<double> *turn_angles /* optional */, int frame_id_offset);
 } // namespace pilotguru
 
 #endif // PILOTGURU_IO_JSON_CONVERTERS_HPP_
