@@ -90,7 +90,7 @@
 
 Ожидаемый результат:
 
-<iframe width="560" height="315" src="https://www.youtube.com/embed/gMXn0IMcX-k" frameborder="0" allowfullscreen></iframe>
+<video>https://www.youtube.com/embed/gMXn0IMcX-k</video>
 
 Сразу чуть упростим - вместо угла поворота руля будем вычислять угловую
 скорость в горизонтальной плоскости. Это примерно эквивалентно если знать
