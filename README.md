@@ -119,7 +119,7 @@ so that we can warp the captured image and remove most of the distortion.
    so the less flex and wobble in the mount, the better. Long-armed mounts 
    [like this](http://www.dhresource.com/260x260s/f2-albu-g2-M01-27-15-rBVaGlVIh1iAEctPAACSjAj2Xrk779.jpg/universal-360-degree-rotating-long-arm-car.jpg)
    are probaby not very good for our use.
-   Something (like this)[http://www.mobilecityonline.com/images/products/26582_L.jpg] would be better.
+   Something [like this](http://www.mobilecityonline.com/images/products/26582_L.jpg) would be better.
    Make sure the phone camera has a good view out of the windshield. 
 2. Go for a ride! Set the phone to record a video. Remember to **use the same settings as you were using for camera calibration**.
 3. Back at your computer, grab the video from the phone, call it `pilotguru/data/ride.mp4`.
