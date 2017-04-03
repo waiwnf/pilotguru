@@ -143,7 +143,8 @@ so that we can warp the captured image and remove most of the distortion.
     
     The SLAM system estimates the full 3D trajectory of the camera (both translation and rotation), but the 
     translation information tends to be less reliable, so we will ignore it for now.
-5. Raw SLAM trajectory estimates tend to be quite noisy. Apply Gaussian smoothing across frames to the
+
+5. <a name="steering-smoothing-instructions"></a>Raw SLAM trajectory estimates tend to be quite noisy. Apply Gaussian smoothing across frames to the
     rotation values to remove the high-frequency noise:
     ```
     ./smooth_heading_directions \
@@ -153,7 +154,7 @@ so that we can warp the captured image and remove most of the distortion.
     ```
     Larger sigma leads to more smoothing. Try out a couple of values to see what is the smallest one that
     still removes most of the jitter.
-6. Visualize the results.
+6. <a name="steering-visualize-instructions"></a>Visualize the results.
     ```
     ./render_turning \
         --in_video /opt/pilotguru/data/ride.mp4 \
