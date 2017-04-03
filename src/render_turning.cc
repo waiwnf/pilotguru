@@ -41,6 +41,11 @@ DEFINE_double(learning_rate, 1.0,
 DEFINE_string(steering_wheel, "",
               "A file with the steering wheel image to use.");
 DEFINE_string(out_video, "", "Output video file to write.");
+DEFINE_int64(frames_to_skip, 0, "Number of initial trajectory frames to skip.");
+DEFINE_int64(max_out_frames, -1, "If positive, the maximum number of frames to "
+                                 "render for the output video. If the input "
+                                 "trajectory has more frames, the remaining "
+                                 "ones will be ignored.");
 
 int main(int argc, char **argv) {
   // Verify that the version of the library that we linked against is
@@ -71,8 +76,12 @@ int main(int argc, char **argv) {
 
   std::unique_ptr<cv::Mat> out_frame(nullptr);
   double turn = 0;
+  int total_rendered_frames = 0;
+  int skipped_frames = 0;
   for (auto trajectory_it = trajectory.begin();
-       trajectory_it != trajectory.end() && image_source->hasNext();) {
+       trajectory_it != trajectory.end() && image_source->hasNext() &&
+       (total_rendered_frames < FLAGS_max_out_frames ||
+        FLAGS_max_out_frames < 0);) {
     const ORB_SLAM2::TimestampedImage frame = image_source->next();
     const int64 frame_id = (*trajectory_it)[pilotguru::kFrameId];
     if (frame.frame_id < frame_id) {
@@ -82,6 +91,13 @@ int main(int argc, char **argv) {
     }
     CHECK_EQ(frame.frame_id, frame_id);
     const double raw_turn = (*trajectory_it)[pilotguru::kTurnAngle];
+
+    ++trajectory_it;
+    if (skipped_frames < FLAGS_frames_to_skip) {
+      ++skipped_frames;
+      continue;
+    }
+
     turn = (1.0 - FLAGS_learning_rate) * turn + FLAGS_learning_rate * raw_turn;
     LOG(INFO) << "Frame: " << frame_id << " turn: " << turn;
 
@@ -101,7 +117,6 @@ int main(int argc, char **argv) {
             ->rowRange(frame.image.rows, frame.image.rows + steering_wheel.rows)
             .colRange(0, steering_wheel.cols);
 
-    LOG(INFO) << "Frame: " << frame_id << " turn: " << turn;
     frame.image.copyTo(out_video);
 
     cv::Mat rotation_matrix = cv::getRotationMatrix2D(
@@ -111,7 +126,7 @@ int main(int argc, char **argv) {
                    steering_wheel.size(), cv::INTER_LINEAR);
     sink.consume(*out_frame);
 
-    ++trajectory_it;
+    ++total_rendered_frames;
   }
 
   return EXIT_SUCCESS;
