@@ -1,0 +1,60 @@
+<resources>
+    <string name="app_name">Multisensor-Grabber</string>
+
+    <string-array name="settings_res_entries">
+        <item>640x480</item>
+        <item>320x240</item>
+    </string-array>
+
+    <string-array name="settings_res_values">
+        <item>0</item>
+        <item>1</item>
+    </string-array>
+
+    <string name="settings_res_default_value">0</string>
+
+    <string name="settings_fr_title">Max. Framerate</string>
+    <string-array name="settings_fr_entries">
+        <item>10</item>
+        <item>15</item>
+        <item>20</item>
+        <item>25</item>
+        <item>30</item>
+        <item>100</item>
+    </string-array>
+    <string-array name="settings_fr_values">
+        <item>10</item>
+        <item>15</item>
+        <item>20</item>
+        <item>25</item>
+        <item>30</item>
+        <item>100</item>
+    </string-array>
+    <string name="settings_fr_default_value">10</string>
+
+    <string-array name="settings_wb_entries">
+    </string-array>
+    <string-array name="settings_wb_values">
+    </string-array>
+    <!-- <string name="settings_wb_default_value">10</string> -->
+
+    <string-array name="settings_iso_entries">
+    </string-array>
+    <string-array name="settings_iso_values">
+    </string-array>
+    <!-- <string name="settings_wb_default_value">10</string> -->
+
+
+    @array/settings_fm_entries
+    <string-array name="settings_fm_entries">
+        <item>auto</item>
+        <item>infinity</item>
+    </string-array>
+
+    <string-array name="settings_fm_values">
+        <item>auto</item>
+        <item>infinity</item>
+    </string-array>
+
+    <string name="settings_fm_default_value">infinity</string>
+</resources>

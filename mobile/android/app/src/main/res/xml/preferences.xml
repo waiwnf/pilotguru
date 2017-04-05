@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+    <Preference
+        android:key="about"
+        android:title="About">
+        <intent android:action="AboutView"/>
+    </Preference>
+
+    <Preference
+        android:key="pref_dir"
+        android:title="Open Target directory"
+        android:dialogTitle="Target directory"
+        android:enabled="true"
+        android:defaultValue=""
+        android:summary=""
+            />
+
+    <ListPreference
+        android:key="pref_resolutions"
+        android:title="Resolution"
+        android:dialogTitle="Resolution"
+        android:entries="@array/settings_res_entries"
+        android:entryValues="@array/settings_res_values"
+        android:defaultValue="@string/settings_res_default_value"
+        android:summary="%s"/>
+
+    <CheckBoxPreference
+        android:key="pref_fix_foc"
+        android:title="Fixed Focus distance"
+        android:defaultValue="false" />
+
+    <EditTextPreference
+        android:key="pref_focus_dist"
+        android:title="Focus distance"
+        android:dialogTitle="Focus distance"
+        android:enabled="false"
+        android:defaultValue="0."
+        android:summary="0."/>
+
+    <CheckBoxPreference
+        android:key="pref_fix_exp"
+        android:title="Fixed exposure time"
+        android:defaultValue="false" />
+
+    <EditTextPreference
+        android:key="pref_exposure"
+        android:title="Exposure time (ms)"
+        android:enabled="false"
+        android:defaultValue="0"
+        />
+
+    <EditTextPreference
+        android:key="info"
+        android:title="INFO"
+        android:summary="Actual framerate depends on exposure time"
+        android:enabled="false"
+        android:defaultValue="0"
+        />
+
+    <ListPreference
+        android:key="pref_wb"
+        android:summary="%s"
+        android:title="Whitebalance value"
+        android:dialogTitle="Whitebalance"
+        android:entries="@array/settings_wb_entries"
+        android:entryValues="@array/settings_wb_values" />
+
+    <CheckBoxPreference
+        android:key="pref_fix_iso"
+        android:title="Fixed ISO"
+        android:defaultValue="false" />
+
+    <ListPreference
+        android:key="pref_iso"
+        android:summary="%s"
+        android:title="ISO value"
+        android:dialogTitle="ISO value"
+        android:entries="@array/settings_iso_entries"
+        android:entryValues="@array/settings_iso_values" />
+
+    <ListPreference
+        android:key="pref_framerates"
+        android:summary="%s"
+        android:title="@string/settings_fr_title"
+        android:dialogTitle="@string/settings_fr_title"
+        android:entries="@array/settings_fr_entries"
+        android:entryValues="@array/settings_fr_values"
+        android:defaultValue="@string/settings_fr_default_value" />
+
+    <Preference
+        android:key="probe"
+        android:title="Probe Camera2 Features">
+        <intent android:action="ProbeView"/>
+    </Preference>
+
+</PreferenceScreen>

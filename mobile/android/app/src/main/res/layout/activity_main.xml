@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:keepScreenOn="true"
+    tools:context="de.weis.multisensor_grabber.MainActivity">
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+    <TextureView
+        android:id="@+id/texture"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_above="@+id/btn_takepicture"
+        android:layout_alignParentTop="true"/>
+    </FrameLayout>
+
+    <TextView
+        android:id="@+id/textview_battery"
+        android:text="BAT: "
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textColor="#00ff00"/>
+
+    <TextView
+        android:id="@+id/textview_coords"
+        android:text="COORDS: "
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/textview_battery"
+        android:textColor="#00ff00"/>
+
+    <TextView
+        android:id="@+id/textview_imu"
+        android:text="IMU: "
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/textview_coords"
+        android:textColor="#00ff00"/>
+
+
+    <TextView
+        android:id="@+id/textview_fps"
+        android:text="FPS"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/textview_imu"
+        android:textColor="#00ff00"/>
+
+    <TextView
+        android:id="@+id/textview_camera"
+        android:text="Camera:"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/textview_fps"
+        android:textColor="#00ff00"/>
+
+    <ImageButton
+        android:id="@+id/btn_takepicture"
+        android:src="@mipmap/icon_rec"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Take pic"
+        android:layout_marginEnd="12dp"
+        android:layout_marginBottom="12dp"
+        android:layout_alignParentBottom="true"
+        android:layout_alignParentEnd="true" />
+
+    <ImageButton
+        android:id="@+id/btn_settings"
+        android:src="@mipmap/icon_settings"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Settings"
+        android:layout_toLeftOf="@id/btn_takepicture"
+        android:layout_alignBottom="@id/btn_takepicture"
+        />
+
+</RelativeLayout>
