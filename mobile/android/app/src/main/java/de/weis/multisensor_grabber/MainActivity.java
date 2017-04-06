@@ -68,14 +68,6 @@ import java.util.Locale;
 import static android.hardware.camera2.CameraMetadata.CONTROL_AE_MODE_OFF;
 import static android.hardware.camera2.CameraMetadata.CONTROL_AF_MODE_OFF;
 import static android.hardware.camera2.CameraMetadata.CONTROL_AWB_MODE_AUTO;
-import static android.hardware.camera2.CameraMetadata.CONTROL_AWB_MODE_CLOUDY_DAYLIGHT;
-import static android.hardware.camera2.CameraMetadata.CONTROL_AWB_MODE_DAYLIGHT;
-import static android.hardware.camera2.CameraMetadata.CONTROL_AWB_MODE_FLUORESCENT;
-import static android.hardware.camera2.CameraMetadata.CONTROL_AWB_MODE_INCANDESCENT;
-import static android.hardware.camera2.CameraMetadata.CONTROL_AWB_MODE_OFF;
-import static android.hardware.camera2.CameraMetadata.CONTROL_AWB_MODE_SHADE;
-import static android.hardware.camera2.CameraMetadata.CONTROL_AWB_MODE_TWILIGHT;
-import static android.hardware.camera2.CameraMetadata.CONTROL_AWB_MODE_WARM_FLUORESCENT;
 
 public class MainActivity extends Activity {
   private static final String TAG = "Multisensor_Grabber";
@@ -182,7 +174,7 @@ public class MainActivity extends Activity {
   private Runnable grab_system_data = new Runnable() {
     @Override
     public void run() {
-      textview_battery.setText(String.format(Locale.US, "BAT: %.0f%", getBatteryLevel()));
+      textview_battery.setText(String.format(Locale.US, "BAT: %.01f%%", getBatteryLevel()));
       // FIXME: if we have gps-permission, but gps is off, this fails!
       try {
         textview_coords.setText(getCoordinatesText());
@@ -203,41 +195,13 @@ public class MainActivity extends Activity {
           getExposureText(),
           getFocalLengthText(),
           getIsoValueText(),
-          wb2string(_wb_value),
+          StringConverters.whiteBalanceModeToString(_wb_value),
           GbAvailable(_extdir));
       textview_camera.setText(camString);
 
       sys_handler.postDelayed(grab_system_data, 500);
     }
   };
-
-  // FIXME: double use in SettingsFragment.java
-  public static String wb2string(int wb) {
-    switch (wb) {
-      case CONTROL_AWB_MODE_CLOUDY_DAYLIGHT:
-        return "Cloudy daylight";
-      case CONTROL_AWB_MODE_DAYLIGHT:
-        return "Daylight";
-      case CONTROL_AWB_MODE_FLUORESCENT:
-        return "Fluorescent";
-      case CONTROL_AWB_MODE_INCANDESCENT:
-        return "Incandescent";
-      case CONTROL_AWB_MODE_SHADE:
-        return "Shade";
-      case CONTROL_AWB_MODE_TWILIGHT:
-        return "Twilight";
-      case CONTROL_AWB_MODE_WARM_FLUORESCENT:
-        return "Warm Fluorescent";
-      case CONTROL_AWB_MODE_OFF:
-        return "Off";
-      case CONTROL_AWB_MODE_AUTO:
-        return "Auto";
-      case -1:
-        return "Not available";
-      default:
-        return "N/A: " + wb;
-    }
-  }
 
   @Override
   protected void onCreate(Bundle savedInstanceState) {
