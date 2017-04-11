@@ -5,8 +5,8 @@ android {
     buildToolsVersion '25.0.2'
     defaultConfig {
         applicationId "de.weis.multisensor_grabber"
-        minSdkVersion 24
-        targetSdkVersion 24
+        minSdkVersion 23
+        targetSdkVersion 23
         versionCode 10
         versionName "1.2"
         testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
