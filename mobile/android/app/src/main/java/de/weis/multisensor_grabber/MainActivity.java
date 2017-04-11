@@ -96,7 +96,8 @@ public class MainActivity extends Activity {
       textviewBattery.setText(String.format(Locale.US, "BAT: %.01f%%", getBatteryPercent()));
       // FIXME: if we have gps-permission, but gps is off, this fails!
       try {
-        final LocationManager locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
+        final LocationManager locationManager =
+            (LocationManager) getSystemService(LOCATION_SERVICE);
         final String bestProvider = locationManager.getBestProvider(new Criteria(), false);
         locationManager.requestLocationUpdates(bestProvider, 1, 0.01f, sensorDataSaver);
         // TODO add updates for the text view
@@ -287,7 +288,10 @@ public class MainActivity extends Activity {
       mediaRecorder.setVideoSource(MediaRecorder.VideoSource.SURFACE);
       mediaRecorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
       mediaRecorder.setVideoEncoder(MediaRecorder.VideoEncoder.H264);
-      mediaRecorder.setVideoEncodingBitRate(2000000);
+      // Set the same bitrate per pixel as the reference 720x480 @ 6Mbps video.
+      final int videoBitrate =
+          (int) ((6e+6 * imageSize.getWidth() * imageSize.getHeight()) / (720 * 480));
+      mediaRecorder.setVideoEncodingBitRate(videoBitrate);
       mediaRecorder.setOutputFile((new File(storageDir, "video.mp4")).getAbsolutePath());
       mediaRecorder.setVideoSize(imageSize.getWidth(), imageSize.getHeight());
       mediaRecorder.setVideoFrameRate(30);
@@ -395,7 +399,8 @@ public class MainActivity extends Activity {
                 Manifest.permission.ACCESS_FINE_LOCATION}, REQUEST_CAMERA_PERMISSION);
       } else {
         cameraManager.openCamera(cameraId, stateCallback, null);
-        final LocationManager locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
+        final LocationManager locationManager =
+            (LocationManager) getSystemService(LOCATION_SERVICE);
         final String bestProvider = locationManager.getBestProvider(new Criteria(), false);
         locationManager.requestLocationUpdates(bestProvider, 1, 0.01f, sensorDataSaver);
         // TODO add updates for the text view
