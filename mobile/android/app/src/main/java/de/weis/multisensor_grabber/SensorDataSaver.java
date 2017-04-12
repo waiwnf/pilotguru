@@ -26,6 +26,7 @@ import java.text.SimpleDateFormat;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
@@ -33,7 +34,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 public class SensorDataSaver extends CameraCaptureSession.CaptureCallback implements
     SensorEventListener, LocationListener {
   public static String HEADINGS = "headings";
-  public static String ACCELERATIONS = "acceleraions";
+  public static String ACCELERATIONS = "accelerations";
   public static String LOCATIONS = "locations";
   public static String FRAMES = "frames";
 
@@ -49,6 +50,8 @@ public class SensorDataSaver extends CameraCaptureSession.CaptureCallback implem
 
   private final File storageDir;    // Parent directory where to write all the recordings.
   private File recordingDir = null;  // Directory where to write the current recording.
+
+  private long prevFrameSystemMs = 0, currentFrameSystemMs = 0;
 
   public SensorDataSaver(File storageDir) {
     this.storageDir = storageDir;
@@ -77,6 +80,13 @@ public class SensorDataSaver extends CameraCaptureSession.CaptureCallback implem
     } finally {
       recordingStatusChangeLock.unlock();
     }
+  }
+
+  public double getLastFps() {
+    final long interFrameMs =
+        (prevFrameSystemMs > 0) ? (currentFrameSystemMs - prevFrameSystemMs) : 0;
+    return (interFrameMs == 0) ? Double.NaN :
+        ((double) TimeUnit.SECONDS.toMillis(1)) / (double) interFrameMs;
   }
 
   public void stop() {
@@ -126,7 +136,7 @@ public class SensorDataSaver extends CameraCaptureSession.CaptureCallback implem
             heading.put("yaw", event.values[0]);
             heading.put("pitch", event.values[1]);
             heading.put("roll", event.values[2]);
-            heading.put("time_msec", System.currentTimeMillis());
+            heading.put("time_msec", TimeUnit.NANOSECONDS.toMillis(event.timestamp));
             headings.put(heading);
           }
         } catch (JSONException e) {
@@ -142,7 +152,7 @@ public class SensorDataSaver extends CameraCaptureSession.CaptureCallback implem
             acceleration.put("x", event.values[0]);
             acceleration.put("y", event.values[1]);
             acceleration.put("z", event.values[2]);
-            acceleration.put("time_msec", System.currentTimeMillis());
+            acceleration.put("time_msec", TimeUnit.NANOSECONDS.toMillis(event.timestamp));
             accelerations.put(acceleration);
           }
         } catch (JSONException e) {
@@ -198,9 +208,12 @@ public class SensorDataSaver extends CameraCaptureSession.CaptureCallback implem
       if (isRecording) {
         final JSONObject frameJson = new JSONObject();
         frameJson.put("frame_id", result.getFrameNumber());
-        frameJson.put("event_time_nanos", result.get(CaptureResult.SENSOR_TIMESTAMP));
+        final long frameSensorNanos = result.get(CaptureResult.SENSOR_TIMESTAMP);
+        frameJson.put("event_time_nanos", frameSensorNanos);
         frameJson.put("time_msec", System.currentTimeMillis());
         frames.put(frameJson);
+        prevFrameSystemMs = currentFrameSystemMs;
+        currentFrameSystemMs = TimeUnit.NANOSECONDS.toMillis(frameSensorNanos);
       }
     } catch (JSONException e) {
     } finally {

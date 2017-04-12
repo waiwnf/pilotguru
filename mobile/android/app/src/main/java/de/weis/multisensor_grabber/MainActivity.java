@@ -12,6 +12,7 @@ import android.graphics.Matrix;
 import android.graphics.RectF;
 import android.graphics.SurfaceTexture;
 import android.hardware.Sensor;
+import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
 import android.hardware.camera2.CameraAccessException;
 import android.hardware.camera2.CameraCaptureSession;
@@ -21,6 +22,7 @@ import android.hardware.camera2.CameraManager;
 import android.hardware.camera2.CaptureRequest;
 import android.hardware.camera2.TotalCaptureResult;
 import android.location.Criteria;
+import android.location.LocationListener;
 import android.location.LocationManager;
 import android.media.MediaRecorder;
 import android.os.BatteryManager;
@@ -90,20 +92,23 @@ public class MainActivity extends Activity {
     return (float) bytesAvailable / (1024.f * 1024.f * 1024.f);
   }
 
+  private void subscribeToLocationUpdates(LocationListener listener, long minTimeMsec) {
+    final LocationManager locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
+    final String bestProvider = locationManager.getBestProvider(new Criteria(), false);
+    locationManager.requestLocationUpdates(bestProvider, minTimeMsec, 0.01f, listener);
+  }
+
+  private void subscribeToImuUpdates(SensorEventListener listener, int delay) {
+    final SensorManager sm = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
+    sm.registerListener(listener, sm.getDefaultSensor(Sensor.TYPE_GYROSCOPE), delay);
+    sm.registerListener(listener, sm.getDefaultSensor(Sensor.TYPE_ACCELEROMETER), delay);
+  }
+
   private Runnable grab_system_data = new Runnable() {
     @Override
     public void run() {
+      textviewFps.setText(String.format(Locale.US, "FPS: %.01f", sensorDataSaver.getLastFps()));
       textviewBattery.setText(String.format(Locale.US, "BAT: %.01f%%", getBatteryPercent()));
-      // FIXME: if we have gps-permission, but gps is off, this fails!
-      try {
-        final LocationManager locationManager =
-            (LocationManager) getSystemService(LOCATION_SERVICE);
-        final String bestProvider = locationManager.getBestProvider(new Criteria(), false);
-        locationManager.requestLocationUpdates(bestProvider, 1, 0.01f, sensorDataSaver);
-        // TODO add updates for the text view
-      } catch (Exception e) {
-      }
-
       final String camString = String
           .format(Locale.US, "EXP: %s, FOC: %s, ISO: %s, WB: %s, Free space: %.02f Gb",
               captureSettings.getExposureText(), captureSettings.getFocalLengthText(),
@@ -140,6 +145,10 @@ public class MainActivity extends Activity {
       storageDir = getExternalFilesDirs(null)[0];
     }
     sensorDataSaver = new SensorDataSaver(storageDir);
+
+    // 10 FPS is enough for on-screen coordinates updates.
+    subscribeToLocationUpdates(new PreviewCoordinatesTextUpdater(textviewCoords), 100 /* minTimeMsec */);
+    subscribeToImuUpdates(new PreviewImuTextUpdater(textviewImu), SensorManager.SENSOR_DELAY_UI);
 
     takePictureButton.setOnClickListener(new View.OnClickListener() {
       @Override
@@ -399,17 +408,8 @@ public class MainActivity extends Activity {
                 Manifest.permission.ACCESS_FINE_LOCATION}, REQUEST_CAMERA_PERMISSION);
       } else {
         cameraManager.openCamera(cameraId, stateCallback, null);
-        final LocationManager locationManager =
-            (LocationManager) getSystemService(LOCATION_SERVICE);
-        final String bestProvider = locationManager.getBestProvider(new Criteria(), false);
-        locationManager.requestLocationUpdates(bestProvider, 1, 0.01f, sensorDataSaver);
-        // TODO add updates for the text view
-
-        SensorManager sm = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
-        sm.registerListener(sensorDataSaver, sm.getDefaultSensor(Sensor.TYPE_GYROSCOPE),
-            SensorManager.SENSOR_DELAY_GAME);
-        sm.registerListener(sensorDataSaver, sm.getDefaultSensor(Sensor.TYPE_ACCELEROMETER),
-            SensorManager.SENSOR_DELAY_GAME);
+        subscribeToLocationUpdates(sensorDataSaver, 20 /* minTimeMsec */);
+        subscribeToImuUpdates(sensorDataSaver, SensorManager.SENSOR_DELAY_GAME);
 
         sysHandler.postDelayed(grab_system_data, 1);
       }
