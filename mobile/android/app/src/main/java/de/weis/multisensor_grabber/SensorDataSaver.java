@@ -1,5 +1,6 @@
 package de.weis.multisensor_grabber;
 
+import android.content.Context;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
@@ -9,6 +10,7 @@ import android.hardware.camera2.CaptureResult;
 import android.hardware.camera2.TotalCaptureResult;
 import android.location.Location;
 import android.location.LocationListener;
+import android.media.MediaScannerConnection;
 import android.os.Bundle;
 import android.util.Pair;
 
@@ -91,7 +93,7 @@ public class SensorDataSaver extends CameraCaptureSession.CaptureCallback implem
         ((double) TimeUnit.SECONDS.toMicros(1)) / (double) interFrameMicros;
   }
 
-  public void stop() {
+  public void stop(Context context) {
     try {
       recordingStatusChangeLock.lock();
       isRecording = false;
@@ -103,10 +105,12 @@ public class SensorDataSaver extends CameraCaptureSession.CaptureCallback implem
         final JSONObject outputJson = new JSONObject();
         final String outputName = outputData.second;
         outputJson.put(outputName, outputData.first);
-        final Writer outputWriter =
-            new BufferedWriter(new FileWriter(new File(recordingDir, outputName + ".json")));
+        final File outputFile = new File(recordingDir, outputName + ".json");
+        final Writer outputWriter = new BufferedWriter(new FileWriter(outputFile));
         outputWriter.write(outputJson.toString(2));
         outputWriter.close();
+        // Make sure the files show up for the USB connection over MTP.
+        MediaScannerConnection.scanFile(context, new String[] {outputFile.toString()}, null, null);
       }
 
       // Release all the data arrays.

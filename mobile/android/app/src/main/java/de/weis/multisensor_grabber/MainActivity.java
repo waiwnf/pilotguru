@@ -25,6 +25,7 @@ import android.location.Criteria;
 import android.location.LocationListener;
 import android.location.LocationManager;
 import android.media.MediaRecorder;
+import android.media.MediaScannerConnection;
 import android.os.BatteryManager;
 import android.os.Handler;
 import android.os.HandlerThread;
@@ -85,6 +86,7 @@ public class MainActivity extends Activity {
   TextView textviewCamera;
   ImageButton settingsButton;
   MediaRecorder mediaRecorder = new MediaRecorder();
+  File outputFile;
   final String[] necessaryPermissions =
       {Manifest.permission.CAMERA, Manifest.permission.WRITE_EXTERNAL_STORAGE,
           Manifest.permission.ACCESS_FINE_LOCATION};
@@ -153,9 +155,11 @@ public class MainActivity extends Activity {
             cameraCaptureSession.close();
             createCameraPreview();
             isRecording = false;
-            sensorDataSaver.stop();
+            sensorDataSaver.stop(MainActivity.this);
             mediaRecorder.stop();
             mediaRecorder.reset();
+            MediaScannerConnection
+                .scanFile(MainActivity.this, new String[]{outputFile.toString()}, null, null);
             takePictureButton.setImageResource(R.mipmap.icon_rec);
             settingsButton.setEnabled(true);
             Toast.makeText(getApplicationContext(), "Stopped", Toast.LENGTH_LONG).show();
@@ -332,7 +336,8 @@ public class MainActivity extends Activity {
       final int videoBitrate =
           (int) ((6e+6 * imageSize.getWidth() * imageSize.getHeight()) / (720 * 480));
       mediaRecorder.setVideoEncodingBitRate(videoBitrate);
-      mediaRecorder.setOutputFile((new File(storageDir, "video.mp4")).getAbsolutePath());
+      outputFile = new File(storageDir, "video.mp4");
+      mediaRecorder.setOutputFile(outputFile.getAbsolutePath());
       mediaRecorder.setVideoSize(imageSize.getWidth(), imageSize.getHeight());
       mediaRecorder.setVideoFrameRate(30);
       mediaRecorder.prepare();
