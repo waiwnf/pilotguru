@@ -85,6 +85,9 @@ public class MainActivity extends Activity {
   TextView textviewCamera;
   ImageButton settingsButton;
   MediaRecorder mediaRecorder = new MediaRecorder();
+  final String[] necessaryPermissions =
+      {Manifest.permission.CAMERA, Manifest.permission.WRITE_EXTERNAL_STORAGE,
+          Manifest.permission.ACCESS_FINE_LOCATION};
 
   public static float GbAvailable(File f) {
     final StatFs stat = new StatFs(f.getPath());
@@ -121,24 +124,15 @@ public class MainActivity extends Activity {
     }
   };
 
-  @Override
-  protected void onCreate(Bundle savedInstanceState) {
-    super.onCreate(savedInstanceState);
-    setContentView(R.layout.activity_main);
+  private void tryOpenCamera() {
+    if (textureView.isAvailable()) {
+      openCamera();
+    } else {
+      textureView.setSurfaceTextureListener(textureListener);
+    }
+  }
 
-    textviewBattery = (TextView) findViewById(R.id.textview_battery);
-    textviewCoords = (TextView) findViewById(R.id.textview_coords);
-    textviewImu = (TextView) findViewById(R.id.textview_imu);
-    textviewFps = (TextView) findViewById(R.id.textview_fps);
-    textviewCamera = (TextView) findViewById(R.id.textview_camera);
-
-    textureView = (TextureView) findViewById(R.id.texture);
-    assert textureView != null;
-    textureView.setSurfaceTextureListener(textureListener);
-
-    takePictureButton = (ImageButton) findViewById(R.id.btn_takepicture);
-    assert takePictureButton != null;
-
+  private void createIfHaveAllPermissions() {
     try {
       storageDir = getExternalFilesDirs(null)[1];
     } catch (Exception e) {
@@ -178,7 +172,6 @@ public class MainActivity extends Activity {
       }
     });
 
-    settingsButton = (ImageButton) findViewById(R.id.btn_settings);
     settingsButton.setOnClickListener(new android.view.View.OnClickListener() {
       @Override
       public void onClick(View v) {
@@ -189,8 +182,46 @@ public class MainActivity extends Activity {
       }
     });
 
+    tryOpenCamera();
+  }
+
+  private boolean isHaveAllPermissions() {
+    for (final String permission : necessaryPermissions) {
+      if (!isPermissionGranted(permission)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  @Override
+  protected void onCreate(Bundle savedInstanceState) {
+    super.onCreate(savedInstanceState);
+    setContentView(R.layout.activity_main);
+
+    textviewBattery = (TextView) findViewById(R.id.textview_battery);
+    textviewCoords = (TextView) findViewById(R.id.textview_coords);
+    textviewImu = (TextView) findViewById(R.id.textview_imu);
+    textviewFps = (TextView) findViewById(R.id.textview_fps);
+    textviewCamera = (TextView) findViewById(R.id.textview_camera);
+
+    textureView = (TextureView) findViewById(R.id.texture);
+    assert textureView != null;
+    textureView.setSurfaceTextureListener(textureListener);
+
+    takePictureButton = (ImageButton) findViewById(R.id.btn_takepicture);
+    assert takePictureButton != null;
+    settingsButton = (ImageButton) findViewById(R.id.btn_settings);
     cameraManager = (CameraManager) getSystemService(Context.CAMERA_SERVICE);
 
+    if (isHaveAllPermissions()) {
+      // All the permissions have been granted already, continue with the init.
+      createIfHaveAllPermissions();
+    } else {
+      ActivityCompat
+          .requestPermissions(MainActivity.this, necessaryPermissions, REQUEST_CAMERA_PERMISSION);
+      // The rest of the resume logic is in the permissions result handler.
+    }
   }
 
   TextureView.SurfaceTextureListener textureListener = new TextureView.SurfaceTextureListener() {
@@ -396,23 +427,17 @@ public class MainActivity extends Activity {
   }
 
   private void openCamera() {
+    if (!isHaveAllPermissions()) {
+      return;
+    }
+
     try {
       final String cameraId = cameraManager.getCameraIdList()[0];
+      cameraManager.openCamera(cameraId, stateCallback, null);
+      subscribeToLocationUpdates(sensorDataSaver, 20 /* minTimeMsec */);
+      subscribeToImuUpdates(sensorDataSaver, SensorManager.SENSOR_DELAY_GAME);
 
-      // Add permission for camera and let user grant the permission
-      if (!isPermissionGranted(Manifest.permission.CAMERA) ||
-          !isPermissionGranted(Manifest.permission.WRITE_EXTERNAL_STORAGE) ||
-          !isPermissionGranted(Manifest.permission.ACCESS_FINE_LOCATION)) {
-        ActivityCompat.requestPermissions(MainActivity.this,
-            new String[]{Manifest.permission.CAMERA, Manifest.permission.WRITE_EXTERNAL_STORAGE,
-                Manifest.permission.ACCESS_FINE_LOCATION}, REQUEST_CAMERA_PERMISSION);
-      } else {
-        cameraManager.openCamera(cameraId, stateCallback, null);
-        subscribeToLocationUpdates(sensorDataSaver, 20 /* minTimeMsec */);
-        subscribeToImuUpdates(sensorDataSaver, SensorManager.SENSOR_DELAY_GAME);
-
-        sysHandler.postDelayed(grab_system_data, 1);
-      }
+      sysHandler.postDelayed(grab_system_data, 1);
     } catch (CameraAccessException e) {
       e.printStackTrace();
     }
@@ -463,26 +488,26 @@ public class MainActivity extends Activity {
   public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions,
                                          @NonNull int[] grantResults) {
     if (requestCode == REQUEST_CAMERA_PERMISSION) {
-      if (grantResults[0] == PackageManager.PERMISSION_DENIED) {
-        // close the app
-        Toast.makeText(MainActivity.this,
-            "Sorry!!!, you can't use this app without granting permission", Toast.LENGTH_LONG)
-            .show();
-        finish();
+      for (int i = 0; i < permissions.length; ++i) {
+        if (grantResults[i] != PackageManager.PERMISSION_GRANTED) {
+          // close the app
+          final String errorMessage = String
+              .format(Locale.US, "Sorry, you can't use this app without granting permission %s",
+                  permissions[i]);
+          Toast.makeText(MainActivity.this, errorMessage, Toast.LENGTH_LONG).show();
+          finish();
+          return;
+        }
       }
     }
+
+    createIfHaveAllPermissions();
   }
 
   @Override
   protected void onResume() {
     super.onResume();
     startBackgroundThread();
-
-    try {
-      storageDir = getExternalFilesDirs(null)[1];
-    } catch (Exception e) {
-      storageDir = getExternalFilesDirs(null)[0];
-    }
 
     /* put it in the prefs so the user can find the files later */
     SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(MainActivity.this);
@@ -492,11 +517,7 @@ public class MainActivity extends Activity {
       Toast.makeText(this, "Setting external directory failed", Toast.LENGTH_LONG);
     }
 
-    if (textureView.isAvailable()) {
-      openCamera();
-    } else {
-      textureView.setSurfaceTextureListener(textureListener);
-    }
+    tryOpenCamera();
   }
 
   @Override
