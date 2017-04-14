@@ -142,7 +142,7 @@ public class MainActivity extends Activity {
 
     // 10 FPS is enough for on-screen coordinates updates.
     subscribeToLocationUpdates(new PreviewCoordinatesTextUpdater(textviewCoords), 100 /* minTimeMsec */);
-    subscribeToImuUpdates(new PreviewImuTextUpdater(textviewImu),
+    subscribeToImuUpdates(new PreviewImuTextUpdater(textviewImu, 500 /* minUpdateIntervalMillis */),
         SensorManager.SENSOR_DELAY_NORMAL);
 
     takePictureButton.setOnClickListener(new View.OnClickListener() {
