@@ -23,10 +23,7 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.Writer;
-import java.text.DateFormat;
-import java.text.SimpleDateFormat;
 import java.util.Arrays;
-import java.util.Date;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Lock;
@@ -53,19 +50,19 @@ public class SensorDataSaver extends CameraCaptureSession.CaptureCallback implem
   private final Lock frameCaptureLock = recordingStatusLock.readLock();
   private final Lock recordingStatusChangeLock = recordingStatusLock.writeLock();
 
-  private final File storageDir;    // Parent directory where to write all the recordings.
-  private File recordingDir = null;  // Directory where to write the current recording.
+  private File recordingDir;    // Parent directory where to write the current recording.
 
   private long prevFrameSystemMicros = 0, currentFrameSystemMicros = 0;
 
-  public SensorDataSaver(File storageDir) {
-    this.storageDir = storageDir;
-  }
-
-  public void start() {
+  public void start(File recordingDir) {
     try {
       recordingStatusChangeLock.lock();
+      if (isRecording) {
+        throw new AssertionError("Called start() but SensorDataSaver is already recording.");
+      }
       isRecording = true;
+
+      this.recordingDir = recordingDir;
 
       // Allocate new arrays for all the datastreams. We will accumulate the data in memory and
       // write it out to files in the end (on stop()) to avoid file IO in all the event handlers
@@ -74,13 +71,6 @@ public class SensorDataSaver extends CameraCaptureSession.CaptureCallback implem
       accelerations = new JSONArray();
       locations = new JSONArray();
       frames = new JSONArray();
-
-      // Make a directory ID for the current recording based on the current timestamp.
-      final long sequenceStartMillis = System.currentTimeMillis();
-      final DateFormat dateFormat = new SimpleDateFormat("yyyy_MM_dd-HH_mm_ss");
-      recordingDir = new File(storageDir, dateFormat.format(new Date(sequenceStartMillis)));
-      recordingDir.mkdirs();
-
     } finally {
       recordingStatusChangeLock.unlock();
     }
@@ -96,6 +86,9 @@ public class SensorDataSaver extends CameraCaptureSession.CaptureCallback implem
   public void stop(Context context) {
     try {
       recordingStatusChangeLock.lock();
+      if (!isRecording) {
+        throw new AssertionError("Called stop() but SensorDataSaver is not recording.");
+      }
       isRecording = false;
 
       final List<Pair<JSONArray, String>> outputDataItems = Arrays

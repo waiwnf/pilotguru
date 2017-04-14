@@ -27,6 +27,7 @@ import android.location.LocationManager;
 import android.media.MediaRecorder;
 import android.media.MediaScannerConnection;
 import android.os.BatteryManager;
+import android.os.Environment;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.StatFs;
@@ -45,7 +46,10 @@ import android.widget.Toast;
 
 import java.io.File;
 import java.io.IOException;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
 import java.util.Arrays;
+import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 
@@ -66,7 +70,6 @@ public class MainActivity extends Activity {
   private static final int REQUEST_CAMERA_PERMISSION = 200;
   private Handler mBackgroundHandler;
   private HandlerThread mBackgroundThread;
-  File storageDir;
 
   CameraManager cameraManager;
   CameraCharacteristics cameraCharacteristics;
@@ -119,7 +122,7 @@ public class MainActivity extends Activity {
               captureSettings.getExposureText(), captureSettings.getFocalLengthText(),
               captureSettings.getIsoValueText(),
               StringConverters.whiteBalanceModeToString(captureSettings.getWhiteBalanceMode()),
-              GbAvailable(storageDir));
+              GbAvailable(Environment.getExternalStorageDirectory()));
       textviewCamera.setText(camString);
 
       sysHandler.postDelayed(grab_system_data, 500);
@@ -135,16 +138,12 @@ public class MainActivity extends Activity {
   }
 
   private void createIfHaveAllPermissions() {
-    try {
-      storageDir = getExternalFilesDirs(null)[1];
-    } catch (Exception e) {
-      storageDir = getExternalFilesDirs(null)[0];
-    }
-    sensorDataSaver = new SensorDataSaver(storageDir);
+    sensorDataSaver = new SensorDataSaver();
 
     // 10 FPS is enough for on-screen coordinates updates.
     subscribeToLocationUpdates(new PreviewCoordinatesTextUpdater(textviewCoords), 100 /* minTimeMsec */);
-    subscribeToImuUpdates(new PreviewImuTextUpdater(textviewImu), SensorManager.SENSOR_DELAY_UI);
+    subscribeToImuUpdates(new PreviewImuTextUpdater(textviewImu),
+        SensorManager.SENSOR_DELAY_NORMAL);
 
     takePictureButton.setOnClickListener(new View.OnClickListener() {
       @Override
@@ -320,14 +319,24 @@ public class MainActivity extends Activity {
     }
   }
 
+  private static File makeRecordingDir() {
+    final File storageDir = new File(Environment.getExternalStorageDirectory(), "PilotGuru");
+    final long sequenceStartMillis = System.currentTimeMillis();
+    final DateFormat dateFormat = new SimpleDateFormat("yyyy_MM_dd-HH_mm_ss");
+    final File recordingDir =
+        new File(storageDir, dateFormat.format(new Date(sequenceStartMillis)));
+    recordingDir.mkdirs();
+    return recordingDir;
+  }
+
   protected void takePicture() {
     if (null == cameraDevice) {
       return;
     }
 
     try {
-      sensorDataSaver.start();
-
+      final File recordingDir = makeRecordingDir();
+      sensorDataSaver.start(recordingDir);
       mediaRecorder.reset();
       mediaRecorder.setVideoSource(MediaRecorder.VideoSource.SURFACE);
       mediaRecorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
@@ -336,7 +345,7 @@ public class MainActivity extends Activity {
       final int videoBitrate =
           (int) ((6e+6 * imageSize.getWidth() * imageSize.getHeight()) / (720 * 480));
       mediaRecorder.setVideoEncodingBitRate(videoBitrate);
-      outputFile = new File(storageDir, "video.mp4");
+      outputFile = new File(recordingDir, "video.mp4");
       mediaRecorder.setOutputFile(outputFile.getAbsolutePath());
       mediaRecorder.setVideoSize(imageSize.getWidth(), imageSize.getHeight());
       mediaRecorder.setVideoFrameRate(30);
@@ -513,15 +522,6 @@ public class MainActivity extends Activity {
   protected void onResume() {
     super.onResume();
     startBackgroundThread();
-
-    /* put it in the prefs so the user can find the files later */
-    SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(MainActivity.this);
-    try {
-      prefs.edit().putString("pref_dir", storageDir.toString()).apply();
-    } catch (Exception e) {
-      Toast.makeText(this, "Setting external directory failed", Toast.LENGTH_LONG);
-    }
-
     tryOpenCamera();
   }
 
