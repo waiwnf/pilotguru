@@ -50,14 +50,14 @@ import static android.hardware.camera2.CameraMetadata.INFO_SUPPORTED_HARDWARE_LE
  */
 
 public class ProbeActivity extends Activity {
-  TextView tv;
+  TextView probeResultTextView;
 
   @Override
   public void onCreate(Bundle savedInstanceState) {
     super.onCreate(savedInstanceState);
     setContentView(R.layout.activity_probe);
-    tv = (TextView) findViewById(R.id.textview_probe);
-    tv.setText("Probing...");
+    probeResultTextView = (TextView) findViewById(R.id.textview_probe);
+    probeResultTextView.setText("Probing...");
 
     final CameraManager manager = (CameraManager) getSystemService(Context.CAMERA_SERVICE);
     String cameraId = null;
@@ -78,8 +78,12 @@ public class ProbeActivity extends Activity {
     final String result = model() + supportedHardwareLevel(characteristics) +
         availableAutoExposureModes(characteristics) + availableAutoFocusModes(characteristics) +
         availableAwbModes(characteristics);
-    tv.setText(Html.fromHtml(result, Html.FROM_HTML_MODE_LEGACY));
-    tv.setMovementMethod(new ScrollingMovementMethod());
+    if (android.os.Build.VERSION.SDK_INT < 24) {
+      probeResultTextView.setText(Html.fromHtml(result));
+    } else {
+      probeResultTextView.setText(Html.fromHtml(result, Html.FROM_HTML_MODE_LEGACY));
+    }
+    probeResultTextView.setMovementMethod(new ScrollingMovementMethod());
   }
 
   public String model() {
