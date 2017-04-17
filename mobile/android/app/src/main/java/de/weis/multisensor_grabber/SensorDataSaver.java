@@ -64,6 +64,10 @@ public class SensorDataSaver extends CameraCaptureSession.CaptureCallback implem
   private long lastSpaceQueryTimeMicros = 0;
   // Most recent cached filesystem free space result in Gb.
   private double spaceAvailableGb = 0;
+  // Multiple video recording sequences have unified frame id space. We want to have every sequence
+  // have its frames be counted from 0 onwards. We will store the first frame id of the current
+  // sequence here and subtract it from all the subsequent frame ids of that sequence.
+  private long firstFrameNumberInSequence = -1;
 
   public void start(@NonNull File recordingDir, TextView textViewFps, TextView textViewCamera) {
     try {
@@ -130,6 +134,9 @@ public class SensorDataSaver extends CameraCaptureSession.CaptureCallback implem
         // Make sure the files show up for the USB connection over MTP.
         MediaScannerConnection.scanFile(context, new String[]{outputFile.toString()}, null, null);
       }
+
+      // Reset the in-sequence frame numbering.
+      firstFrameNumberInSequence = -1;
 
       // Release all the data arrays.
       headings = null;
@@ -237,7 +244,14 @@ public class SensorDataSaver extends CameraCaptureSession.CaptureCallback implem
       if (isRecording) {
         // Make a timing log entry for the frame.
         final JSONObject frameJson = new JSONObject();
-        frameJson.put("frame_id", result.getFrameNumber());
+
+        final long globalFrameNumber = result.getFrameNumber();
+        if (firstFrameNumberInSequence < 0) {
+          firstFrameNumberInSequence = globalFrameNumber;
+        }
+        final long currentFrameNumberInSequence = globalFrameNumber - firstFrameNumberInSequence;
+        frameJson.put("frame_id", currentFrameNumberInSequence);
+
         final long frameSensorMicros =
             TimeUnit.NANOSECONDS.toMicros(result.get(CaptureResult.SENSOR_TIMESTAMP));
         frameJson.put(TIME_USEC, frameSensorMicros);
@@ -254,7 +268,6 @@ public class SensorDataSaver extends CameraCaptureSession.CaptureCallback implem
 
         // Update focus distance and stuff.
         if (textViewCamera != null) {
-          Log.i("SensorDataSaver", "Updating camera.");
           final int whiteBalanceMode = result.get(CaptureResult.CONTROL_AWB_MODE);
           final double gbAvailable = getGbAvailable(recordingDir, frameSensorMicros);
           final String cameraText = String
