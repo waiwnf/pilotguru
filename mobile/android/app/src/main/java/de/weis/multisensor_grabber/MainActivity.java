@@ -27,6 +27,7 @@ import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
+import android.util.Log;
 import android.view.Surface;
 import android.view.TextureView;
 import android.view.TextureView.SurfaceTextureListener;
@@ -81,6 +82,7 @@ public class MainActivity extends Activity {
 
     @Override
     public boolean onSurfaceTextureDestroyed(SurfaceTexture surface) {
+      setPreviewTextureAvailable(false);
       return false;
     }
 
@@ -102,10 +104,7 @@ public class MainActivity extends Activity {
         @Override
         public void onDisconnected(@NonNull CameraDevice camera) {
           cameraDevice = camera;
-          maybeStopRecording();
-          takePictureButton.setOnClickListener(null);
-          camera.close();
-          isCameraOpened = false;
+          closeCamera();
         }
 
         @Override
@@ -233,12 +232,18 @@ public class MainActivity extends Activity {
   }
 
   @Override
-  protected void onPause() {
+  protected void onResume() {
+    maybeConnectCamera();
+    super.onResume();
+  }
+
+  @Override
+  protected void onStop() {
     maybeStopRecording();
     if (cameraDevice != null) {
-      cameraDevice.close();
+      closeCamera();
     }
-    super.onPause();
+    super.onStop();
   }
 
   @Override
@@ -273,25 +278,36 @@ public class MainActivity extends Activity {
       return;
     }
 
+    subscribeToLocationUpdates(recorder.getSensorDataSaver(), 20 /* minTimeMsec */);
+    subscribeToImuUpdates(recorder.getSensorDataSaver(), SensorManager.SENSOR_DELAY_FASTEST);
+    subscribeToLocationUpdates(new PreviewCoordinatesTextUpdater(textViewCoords), 100 /* minTimeMsec */);
+    subscribeToImuUpdates(new PreviewImuTextUpdater(textViewImu, 500 /* minUpdateIntervalMillis */),
+        SensorManager.SENSOR_DELAY_NORMAL);
+
+    maybeConnectCamera();
+  }
+
+  private synchronized void maybeConnectCamera() {
+    if (isCameraOpened || !isPreviewTextureAvailable || !isHaveAllPermissions()) {
+      return;
+    }
+
     try {
       final CameraManager cameraManager = (CameraManager) getSystemService(Context.CAMERA_SERVICE);
       final String cameraId = cameraManager.getCameraIdList()[0];
-
       cameraManager.openCamera(cameraId, cameraStatePreviewCallback, null);
-
       settingsButton.setOnClickListener(settingsButtonListener);
-
-      subscribeToLocationUpdates(recorder.getSensorDataSaver(), 20 /* minTimeMsec */);
-      subscribeToImuUpdates(recorder.getSensorDataSaver(), SensorManager.SENSOR_DELAY_FASTEST);
-      subscribeToLocationUpdates(new PreviewCoordinatesTextUpdater(textViewCoords), 100 /* minTimeMsec */);
-      subscribeToImuUpdates(
-          new PreviewImuTextUpdater(textViewImu, 500 /* minUpdateIntervalMillis */),
-          SensorManager.SENSOR_DELAY_NORMAL);
+      isCameraOpened = true;
     } catch (CameraAccessException e) {
       dieOnException(e, "Camera access error occured, exiting.");
     }
+  }
 
-    isCameraOpened = true;
+  private synchronized void closeCamera() {
+    maybeStopRecording();
+    takePictureButton.setOnClickListener(null);
+    cameraDevice.close();
+    isCameraOpened = false;
   }
 
   private synchronized boolean isHaveAllPermissions() {
