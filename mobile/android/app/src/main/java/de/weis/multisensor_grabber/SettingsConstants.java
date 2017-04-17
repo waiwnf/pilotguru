@@ -1,11 +1,8 @@
 package de.weis.multisensor_grabber;
 
 public class SettingsConstants {
-  public static final String PREF_DIR = "pref_dir";
   public static final String PREF_FOCUS_DIST = "pref_focus_dist";
   public static final String PREF_FIXED_FOCUS_DIST = "pref_fix_foc";
-  public static final String PREF_EXPOSURE = "pref_exposure";
-  public static final String PREF_FIXED_EXPOSURE = "pref_fix_exp";
   public static final String PREF_WHITE_BALANCE = "pref_wb";
   public static final String PREF_ISO = "pref_iso";
   public static final String PREF_FIXED_ISO = "pref_fix_iso";

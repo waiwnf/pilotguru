@@ -6,15 +6,6 @@
         <intent android:action="AboutView"/>
     </Preference>
 
-    <Preference
-        android:key="pref_dir"
-        android:title="Open Target directory"
-        android:dialogTitle="Target directory"
-        android:enabled="true"
-        android:defaultValue=""
-        android:summary=""
-            />
-
     <ListPreference
         android:key="pref_resolutions"
         android:title="Resolution"
@@ -26,7 +17,7 @@
 
     <CheckBoxPreference
         android:key="pref_fix_foc"
-        android:title="Fixed Focus distance"
+        android:title="Fixed focus distance"
         android:defaultValue="false" />
 
     <EditTextPreference
@@ -36,18 +27,6 @@
         android:enabled="false"
         android:defaultValue="0."
         android:summary="0."/>
-
-    <CheckBoxPreference
-        android:key="pref_fix_exp"
-        android:title="Fixed exposure time"
-        android:defaultValue="false" />
-
-    <EditTextPreference
-        android:key="pref_exposure"
-        android:title="Exposure time (ms)"
-        android:enabled="false"
-        android:defaultValue="0"
-        />
 
     <EditTextPreference
         android:key="info"
@@ -77,15 +56,6 @@
         android:dialogTitle="ISO value"
         android:entries="@array/settings_iso_entries"
         android:entryValues="@array/settings_iso_values" />
-
-    <ListPreference
-        android:key="pref_framerates"
-        android:summary="%s"
-        android:title="@string/settings_fr_title"
-        android:dialogTitle="@string/settings_fr_title"
-        android:entries="@array/settings_fr_entries"
-        android:entryValues="@array/settings_fr_values"
-        android:defaultValue="@string/settings_fr_default_value" />
 
     <Preference
         android:key="probe"

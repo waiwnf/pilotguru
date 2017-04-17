@@ -5,19 +5,17 @@ import android.hardware.camera2.CameraAccessException;
 import android.hardware.camera2.CameraDevice;
 import android.hardware.camera2.CameraMetadata;
 import android.hardware.camera2.CaptureRequest;
-import android.preference.PreferenceManager;
+import android.media.CamcorderProfile;
+import android.util.Log;
+import android.util.SparseIntArray;
 import android.view.Surface;
 
 import org.xmlpull.v1.XmlSerializer;
 
 import java.io.IOException;
-import java.util.concurrent.TimeUnit;
 
-import static android.hardware.camera2.CameraMetadata.CONTROL_AE_MODE_OFF;
 import static android.hardware.camera2.CameraMetadata.CONTROL_AF_MODE_OFF;
 import static android.hardware.camera2.CameraMetadata.CONTROL_AWB_MODE_AUTO;
-import static de.weis.multisensor_grabber.SettingsConstants.PREF_EXPOSURE;
-import static de.weis.multisensor_grabber.SettingsConstants.PREF_FIXED_EXPOSURE;
 import static de.weis.multisensor_grabber.SettingsConstants.PREF_FIXED_FOCUS_DIST;
 import static de.weis.multisensor_grabber.SettingsConstants.PREF_FIXED_ISO;
 import static de.weis.multisensor_grabber.SettingsConstants.PREF_FOCUS_DIST;
@@ -25,17 +23,22 @@ import static de.weis.multisensor_grabber.SettingsConstants.PREF_ISO;
 import static de.weis.multisensor_grabber.SettingsConstants.PREF_WHITE_BALANCE;
 
 public class CaptureSettings implements SerializableSequenceElement {
-  private boolean isFixedExposure;
-  private long exposureTimeMillis;
-  private boolean isFixedFocusDistance;
-  private boolean isFixedIso;
-  private float focusDistance;
-  private int whiteBalanceMode;
-  private int isoSensitivity;
+  private static final SparseIntArray ORIENTATIONS = new SparseIntArray();
+  static {
+    ORIENTATIONS.append(Surface.ROTATION_0, 90);
+    ORIENTATIONS.append(Surface.ROTATION_90, 0);
+    ORIENTATIONS.append(Surface.ROTATION_180, 270);
+    ORIENTATIONS.append(Surface.ROTATION_270, 180);
+  }
+
+  private final boolean isFixedFocusDistance;
+  private final boolean isFixedIso;
+  private final float focusDistance;
+  private final int whiteBalanceMode;
+  private final int isoSensitivity;
+  private final int qualityProfile;
 
   CaptureSettings(SharedPreferences prefs) {
-    isFixedExposure = prefs.getBoolean(PREF_FIXED_EXPOSURE, false);
-    exposureTimeMillis = Long.parseLong(prefs.getString(PREF_EXPOSURE, "0"));
     isFixedFocusDistance = prefs.getBoolean(PREF_FIXED_FOCUS_DIST, false);
     isFixedIso = prefs.getBoolean(PREF_FIXED_ISO, false);
 
@@ -43,46 +46,20 @@ public class CaptureSettings implements SerializableSequenceElement {
     whiteBalanceMode = Integer
         .parseInt(prefs.getString(PREF_WHITE_BALANCE, Integer.toString(CONTROL_AWB_MODE_AUTO)));
     isoSensitivity = Integer.parseInt(prefs.getString(PREF_ISO, "-1"));
+    qualityProfile = Integer.parseInt(prefs.getString(SettingsConstants.PREF_RESOLUTIONS, "-1"));
+    if (qualityProfile < 0) {
+      throw new AssertionError("Invalid camcorder quality resolution enum code: " + qualityProfile);
+    }
   }
 
-  public boolean isFixedExposure() {
-    return isFixedExposure;
-  }
-
-  public long getExposureTimeMillis() {
-    return exposureTimeMillis;
-  }
-
-  public boolean isFixedFocusDistance() {
-    return isFixedFocusDistance;
-  }
-
-  public boolean isFixedIso() {
-    return isFixedIso;
-  }
-
-  public float getFocusDistance() {
-    return focusDistance;
-  }
-
-  public int getWhiteBalanceMode() {
-    return whiteBalanceMode;
-  }
-
-  public int getIsoSensitivity() {
-    return isoSensitivity;
-  }
-
-  public String getExposureText() {
-    return isFixedExposure ? ("Fixed: " + exposureTimeMillis + "ms") : "Auto";
-  }
-
-  public String getFocalLengthText() {
-    return isFixedFocusDistance ? ("Fixed: " + focusDistance) : "Auto";
-  }
-
-  public String getIsoValueText() {
-    return isFixedIso ? Integer.toString(isoSensitivity) : "Auto";
+  public CamcorderProfile getSupportedQualityProfile() {
+    final boolean hasPreferredProfile = CamcorderProfile.hasProfile(qualityProfile);
+    if (!hasPreferredProfile) {
+      Log.w("SensorGrabberMain", "Preferred quality profile " + qualityProfile +
+          " not supported, falling back to low quality.");
+    }
+    return CamcorderProfile
+        .get(hasPreferredProfile ? qualityProfile : CamcorderProfile.QUALITY_LOW);
   }
 
   public void serialize(XmlSerializer serializer) throws IOException {
@@ -94,15 +71,6 @@ public class CaptureSettings implements SerializableSequenceElement {
       serializer.attribute(null, "iso_value", "-1");
     }
 
-    if (isFixedExposure) {
-      serializer.attribute(null, "exp_time",
-          Long.toString(TimeUnit.MILLISECONDS.toNanos(exposureTimeMillis)));
-    } else {
-      //FIXME: is it possible to get the exposure time of each single image if auto-exposure is on?
-      //FIXME: look at the callback, for some cellphones we can get these values
-      serializer.attribute(null, "exp_time", "-1");
-    }
-
     if (isFixedFocusDistance) {
       serializer.attribute(null, "foc_dist", Float.toString(focusDistance));
     } else {
@@ -111,20 +79,13 @@ public class CaptureSettings implements SerializableSequenceElement {
   }
 
   public CaptureRequest.Builder makeCaptureRequestBuilder(CameraDevice cameraDevice,
-                                                          Iterable<Surface> outputSurfaces)
+                                                          Iterable<Surface> outputSurfaces, int rotation)
       throws CameraAccessException {
     final CaptureRequest.Builder captureBuilder =
         cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_RECORD);
     captureBuilder.set(CaptureRequest.CONTROL_MODE, CameraMetadata.CONTROL_MODE_AUTO);
     for (Surface outputSurface : outputSurfaces) {
       captureBuilder.addTarget(outputSurface);
-    }
-
-    if (isFixedExposure) {
-      captureBuilder.set(CaptureRequest.CONTROL_AE_MODE, CONTROL_AE_MODE_OFF);
-      captureBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME,
-          TimeUnit.MILLISECONDS.toNanos(exposureTimeMillis));
-      captureBuilder.set(CaptureRequest.CONTROL_AE_LOCK, true);
     }
 
     if (isFixedIso && isoSensitivity != -1) {
@@ -150,6 +111,8 @@ public class CaptureSettings implements SerializableSequenceElement {
     captureBuilder
         .set(CaptureRequest.NOISE_REDUCTION_MODE, CaptureRequest.NOISE_REDUCTION_MODE_OFF);
     captureBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_CANCEL);
+
+    captureBuilder.set(CaptureRequest.JPEG_ORIENTATION, ORIENTATIONS.get(rotation));
 
     return captureBuilder;
   }

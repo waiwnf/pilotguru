@@ -12,7 +12,11 @@ import android.location.Location;
 import android.location.LocationListener;
 import android.media.MediaScannerConnection;
 import android.os.Bundle;
+import android.os.StatFs;
+import android.support.annotation.NonNull;
+import android.util.Log;
 import android.util.Pair;
+import android.widget.TextView;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -25,6 +29,7 @@ import java.io.IOException;
 import java.io.Writer;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
@@ -50,11 +55,17 @@ public class SensorDataSaver extends CameraCaptureSession.CaptureCallback implem
   private final Lock frameCaptureLock = recordingStatusLock.readLock();
   private final Lock recordingStatusChangeLock = recordingStatusLock.writeLock();
 
+  private TextView textViewFps, textViewCamera;
+
   private File recordingDir;    // Parent directory where to write the current recording.
-
+  // Frame timestamps for FPS computations.
   private long prevFrameSystemMicros = 0, currentFrameSystemMicros = 0;
+  // Last filesystem free space query time.
+  private long lastSpaceQueryTimeMicros = 0;
+  // Most recent cached filesystem free space result in Gb.
+  private double spaceAvailableGb = 0;
 
-  public void start(File recordingDir) {
+  public void start(@NonNull File recordingDir, TextView textViewFps, TextView textViewCamera) {
     try {
       recordingStatusChangeLock.lock();
       if (isRecording) {
@@ -62,6 +73,8 @@ public class SensorDataSaver extends CameraCaptureSession.CaptureCallback implem
       }
       isRecording = true;
 
+      this.textViewFps = textViewFps;
+      this.textViewCamera = textViewCamera;
       this.recordingDir = recordingDir;
 
       // Allocate new arrays for all the datastreams. We will accumulate the data in memory and
@@ -81,6 +94,18 @@ public class SensorDataSaver extends CameraCaptureSession.CaptureCallback implem
         (prevFrameSystemMicros > 0) ? (currentFrameSystemMicros - prevFrameSystemMicros) : 0;
     return (interFrameMicros == 0) ? Double.NaN :
         ((double) TimeUnit.SECONDS.toMicros(1)) / (double) interFrameMicros;
+  }
+
+  public double getGbAvailable(File f, long currentTimeMicros) {
+    // Only query the file system every couple of seconds to keep the load and latency down.
+    if (currentTimeMicros - lastSpaceQueryTimeMicros > TimeUnit.SECONDS.toMicros(2)) {
+      final StatFs stat = new StatFs(f.getPath());
+      final long bytesAvailable = stat.getBlockSizeLong() * stat.getAvailableBlocksLong();
+      spaceAvailableGb = ((double) bytesAvailable) * 1e-9;
+
+      lastSpaceQueryTimeMicros = currentTimeMicros;
+    }
+    return spaceAvailableGb;
   }
 
   public void stop(Context context) {
@@ -103,7 +128,7 @@ public class SensorDataSaver extends CameraCaptureSession.CaptureCallback implem
         outputWriter.write(outputJson.toString(2));
         outputWriter.close();
         // Make sure the files show up for the USB connection over MTP.
-        MediaScannerConnection.scanFile(context, new String[] {outputFile.toString()}, null, null);
+        MediaScannerConnection.scanFile(context, new String[]{outputFile.toString()}, null, null);
       }
 
       // Release all the data arrays.
@@ -119,6 +144,10 @@ public class SensorDataSaver extends CameraCaptureSession.CaptureCallback implem
     } finally {
       recordingStatusChangeLock.unlock();
     }
+  }
+
+  public boolean isRecording() {
+    return isRecording;
   }
 
   // SensorEventListener: gyro and accelerations.
@@ -206,6 +235,7 @@ public class SensorDataSaver extends CameraCaptureSession.CaptureCallback implem
     try {
       frameCaptureLock.lock();
       if (isRecording) {
+        // Make a timing log entry for the frame.
         final JSONObject frameJson = new JSONObject();
         frameJson.put("frame_id", result.getFrameNumber());
         final long frameSensorMicros =
@@ -216,6 +246,23 @@ public class SensorDataSaver extends CameraCaptureSession.CaptureCallback implem
 
         prevFrameSystemMicros = currentFrameSystemMicros;
         currentFrameSystemMicros = frameSensorMicros;
+
+        // Update FPS text view.
+        if (textViewFps != null) {
+          textViewFps.setText(String.format(Locale.US, "FPS: %.01f", getLastFps()));
+        }
+
+        // Update focus distance and stuff.
+        if (textViewCamera != null) {
+          Log.i("SensorDataSaver", "Updating camera.");
+          final int whiteBalanceMode = result.get(CaptureResult.CONTROL_AWB_MODE);
+          final double gbAvailable = getGbAvailable(recordingDir, frameSensorMicros);
+          final String cameraText = String
+              .format(Locale.US, "FOC: %s,  ISO: %s,  WB: %s,  Free space: %.02f Gb",
+                  getFocalLengthText(result), getIsoSensitivity(result),
+                  StringConverters.whiteBalanceModeToString(whiteBalanceMode), gbAvailable);
+          textViewCamera.setText(cameraText);
+        }
       }
     } catch (JSONException e) {
     } finally {
@@ -223,4 +270,29 @@ public class SensorDataSaver extends CameraCaptureSession.CaptureCallback implem
     }
   }
 
+  // Helpers for extracting camera info status bits for the status string.
+
+  private String getFocalLengthText(CaptureResult result) {
+    final boolean isFixedFocusDistance =
+        result.get(CaptureResult.CONTROL_AF_MODE) == CaptureResult.CONTROL_AF_MODE_OFF;
+    final Float focusDistance = result.get(CaptureResult.LENS_FOCUS_DISTANCE);
+    if (isFixedFocusDistance) {
+      if (focusDistance != null) {
+        return String.format(Locale.US, "Fixed: %0.1f", focusDistance);
+      } else {
+        return "NA";
+      }
+    } else {
+      return "Auto";
+    }
+  }
+
+  private String getIsoSensitivity(CaptureResult result) {
+    final Integer sensitivity = result.get(CaptureResult.SENSOR_SENSITIVITY);
+    if (sensitivity != null) {
+      return sensitivity.toString();
+    } else {
+      return "NA";
+    }
+  }
 }

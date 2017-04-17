@@ -2,35 +2,16 @@
     <string name="app_name">Multisensor-Grabber</string>
 
     <string-array name="settings_res_entries">
-        <item>640x480</item>
-        <item>320x240</item>
+        <item>480p</item>
+        <item>720p</item>
     </string-array>
 
     <string-array name="settings_res_values">
-        <item>0</item>
-        <item>1</item>
+        <item>4</item>
+        <item>5</item>
     </string-array>
 
-    <string name="settings_res_default_value">0</string>
-
-    <string name="settings_fr_title">Max. Framerate</string>
-    <string-array name="settings_fr_entries">
-        <item>10</item>
-        <item>15</item>
-        <item>20</item>
-        <item>25</item>
-        <item>30</item>
-        <item>100</item>
-    </string-array>
-    <string-array name="settings_fr_values">
-        <item>10</item>
-        <item>15</item>
-        <item>20</item>
-        <item>25</item>
-        <item>30</item>
-        <item>100</item>
-    </string-array>
-    <string name="settings_fr_default_value">10</string>
+    <string name="settings_res_default_value">4</string>
 
     <string-array name="settings_wb_entries">
     </string-array>

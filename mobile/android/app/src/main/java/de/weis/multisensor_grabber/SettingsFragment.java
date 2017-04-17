@@ -1,33 +1,27 @@
 package de.weis.multisensor_grabber;
 
 import android.content.Context;
-import android.content.Intent;
 import android.content.SharedPreferences;
-import android.graphics.ImageFormat;
 import android.hardware.camera2.CameraAccessException;
 import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraManager;
-import android.net.Uri;
+import android.media.CamcorderProfile;
 import android.os.Bundle;
 import android.preference.CheckBoxPreference;
 import android.preference.ListPreference;
 import android.preference.Preference;
 import android.preference.PreferenceFragment;
 import android.preference.PreferenceManager;
+import android.util.Pair;
 import android.util.Range;
-import android.util.Size;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
-import static android.hardware.camera2.CameraCharacteristics.CONTROL_AE_AVAILABLE_MODES;
 import static android.hardware.camera2.CameraCharacteristics.CONTROL_AWB_AVAILABLE_MODES;
-import static android.hardware.camera2.CameraMetadata.CONTROL_AE_MODE_OFF;
 import static android.hardware.camera2.CameraMetadata.CONTROL_AWB_MODE_AUTO;
 
-import static de.weis.multisensor_grabber.SettingsConstants.PREF_DIR;
-import static de.weis.multisensor_grabber.SettingsConstants.PREF_EXPOSURE;
-import static de.weis.multisensor_grabber.SettingsConstants.PREF_FIXED_EXPOSURE;
 import static de.weis.multisensor_grabber.SettingsConstants.PREF_FIXED_FOCUS_DIST;
 import static de.weis.multisensor_grabber.SettingsConstants.PREF_FIXED_ISO;
 import static de.weis.multisensor_grabber.SettingsConstants.PREF_FOCUS_DIST;
@@ -41,7 +35,6 @@ import static de.weis.multisensor_grabber.SettingsConstants.PREF_WHITE_BALANCE;
 public class SettingsFragment extends PreferenceFragment implements
     SharedPreferences.OnSharedPreferenceChangeListener {
   CameraCharacteristics characteristics = null;
-  SharedPreferences prefs;
 
   @Override
   public void onCreate(Bundle savedInstanceState) {
@@ -52,23 +45,6 @@ public class SettingsFragment extends PreferenceFragment implements
 
     getPreferenceScreen().getSharedPreferences().registerOnSharedPreferenceChangeListener(this);
 
-    prefs = PreferenceManager.getDefaultSharedPreferences(getActivity());
-
-    findPreference(PREF_DIR)
-        .setOnPreferenceClickListener(new Preference.OnPreferenceClickListener() {
-          @Override
-          public boolean onPreferenceClick(Preference preference) {
-            Intent intent = new Intent(Intent.ACTION_VIEW);
-            Uri selected = Uri.parse(prefs.getString(PREF_DIR, ""));
-            intent.setDataAndType(selected, "resource/folder");
-
-            if (intent.resolveActivityInfo(getActivity().getPackageManager(), 0) != null) {
-              startActivity(intent);
-            }
-            return true;
-          }
-        });
-
     final CameraManager manager =
         (CameraManager) getContext().getSystemService(Context.CAMERA_SERVICE);
     try {
@@ -77,16 +53,6 @@ public class SettingsFragment extends PreferenceFragment implements
     } catch (CameraAccessException e) {
       e.printStackTrace();
     }
-
-    final CheckBoxPreference prefFixedExposure =
-        (CheckBoxPreference) findPreference(PREF_FIXED_EXPOSURE);
-    prefFixedExposure.setOnPreferenceChangeListener(new Preference.OnPreferenceChangeListener() {
-      @Override
-      public boolean onPreferenceChange(Preference preference, Object newValue) {
-        populateExposureList(newValue);
-        return true;
-      }
-    });
 
     final CheckBoxPreference prefFixedFocus =
         (CheckBoxPreference) findPreference(PREF_FIXED_FOCUS_DIST);
@@ -108,13 +74,12 @@ public class SettingsFragment extends PreferenceFragment implements
     });
 
     populateFocusDistance(null);
-    populateExposureList(null);
-    populateResolutionList();
+    populateResolutionList((ListPreference) findPreference(SettingsConstants.PREF_RESOLUTIONS));
     populateWhitebalanceList();
     populateIsoList(null);
 
     // initial summary setting
-    findPreference(PREF_DIR).setSummary(prefs.getString(PREF_DIR, ""));
+    final SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(getActivity());
     findPreference(PREF_FOCUS_DIST).setSummary(prefs.getString(PREF_FOCUS_DIST, ""));
     findPreference(PREF_WHITE_BALANCE).setSummary(StringConverters
         .whiteBalanceModeToString(Integer.parseInt(prefs.getString(PREF_WHITE_BALANCE, "-1"))));
@@ -174,57 +139,33 @@ public class SettingsFragment extends PreferenceFragment implements
     prefWhiteBalance.setEntryValues(entryValues);
   }
 
-  public void populateExposureList(Object val) {
-    CheckBoxPreference prefFixedExposure = (CheckBoxPreference) findPreference(PREF_FIXED_EXPOSURE);
-    final Preference exposurePreference = (Preference) findPreference(PREF_EXPOSURE);
+  public static void populateResolutionList(ListPreference prefResolutions) {
+    // All the possible profiles that we may be interested in.
+    final List<Pair<Integer, String>> possibleProfiles = Arrays
+        .asList(new Pair<>(CamcorderProfile.QUALITY_480P, "480p"),
+            new Pair<>(CamcorderProfile.QUALITY_720P, "720p"),
+            new Pair<>(CamcorderProfile.QUALITY_1080P, "1080p"),
+            new Pair<>(CamcorderProfile.QUALITY_2160P, "2160p"),
+            new Pair<>(CamcorderProfile.QUALITY_CIF, "CIF (352 x 288)"),
+            new Pair<>(CamcorderProfile.QUALITY_QVGA, "QVGA (320x240)"),
+            new Pair<>(CamcorderProfile.QUALITY_QCIF, "QCIF (176 x 144)"));
 
-    boolean autoExposureOffSupported = false;
-    for (Integer mode : characteristics.get(CONTROL_AE_AVAILABLE_MODES)) {
-      if (mode == CONTROL_AE_MODE_OFF) {
-        autoExposureOffSupported = true;
-        break;
+    final List<CharSequence> supportedProfileIds = new ArrayList<>();
+    final List<CharSequence> supportedProfileLabels = new ArrayList<>();
+    for (Pair<Integer, String> profile : possibleProfiles) {
+      if (CamcorderProfile.hasProfile(profile.first)) {
+        supportedProfileIds.add(Integer.toString(profile.first));
+        supportedProfileLabels.add(profile.second);
       }
     }
 
-    if (!autoExposureOffSupported) {
-      prefFixedExposure.setChecked(false);
-      prefFixedExposure.setEnabled(false);
-      exposurePreference.setEnabled(false);
-      exposurePreference.setSummary("Not supported by device");
-    } else {
-      final boolean isChecked = (val == null) ? prefFixedExposure.isChecked() : val.equals(true);
-      exposurePreference.setEnabled(isChecked);
-      if (isChecked) {
-        exposurePreference.setSummary("Enabled");
-        findPreference(PREF_EXPOSURE).setSummary(prefs.getString(PREF_EXPOSURE, ""));
-      } else {
-        exposurePreference.setSummary("Fixed exposure not enabled");
-      }
-    }
-  }
-
-  public void populateResolutionList() {
-    if (characteristics == null) {
-      return;
+    if (supportedProfileIds.isEmpty()) {
+      throw new AssertionError("Could not find a supported video recording profile.");
     }
 
-    final Size[] sizes = characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
-        .getOutputSizes(ImageFormat.JPEG);
-
-    // List dialog to select resolution
-    final CharSequence[] entries = new CharSequence[sizes.length];
-    final CharSequence[] entryValues = new CharSequence[sizes.length];
-    for (int sizeId = 0; sizeId < sizes.length; ++sizeId) {
-      final Size size = sizes[sizeId];
-      entries[sizeId] = size.toString();
-      entryValues[sizeId] = Integer.toString(sizeId);
-    }
-
-    final ListPreference prefResolutions =
-        (ListPreference) findPreference(SettingsConstants.PREF_RESOLUTIONS);
-    prefResolutions.setEntries(entries);
-    prefResolutions.setDefaultValue("0");
-    prefResolutions.setEntryValues(entryValues);
+    prefResolutions.setEntries(supportedProfileLabels.toArray(new CharSequence[0]));
+    prefResolutions.setEntryValues(supportedProfileIds.toArray(new CharSequence[0]));
+    prefResolutions.setDefaultValue(supportedProfileIds.get(0));
   }
 
   @Override
