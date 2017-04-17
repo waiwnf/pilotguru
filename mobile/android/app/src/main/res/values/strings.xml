@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Multisensor-Grabber</string>
+    <string name="app_name">PilotGuru Recorder</string>
 
     <string-array name="settings_res_entries">
         <item>480p</item>

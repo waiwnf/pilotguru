@@ -15,10 +15,8 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.TreeSet;
 
-import static android.hardware.camera2.CameraCharacteristics.CONTROL_AE_LOCK_AVAILABLE;
 import static android.hardware.camera2.CameraCharacteristics.CONTROL_AF_AVAILABLE_MODES;
 import static android.hardware.camera2.CameraCharacteristics.CONTROL_AWB_AVAILABLE_MODES;
-import static android.hardware.camera2.CameraCharacteristics.CONTROL_AWB_LOCK_AVAILABLE;
 import static android.hardware.camera2.CameraMetadata.CONTROL_AE_MODE_OFF;
 import static android.hardware.camera2.CameraCharacteristics.CONTROL_AE_AVAILABLE_MODES;
 import static android.hardware.camera2.CameraMetadata.CONTROL_AE_MODE_ON;
@@ -130,8 +128,7 @@ public class ProbeActivity extends Activity {
         coloredText(available.contains(CONTROL_AWB_MODE_INCANDESCENT), "WB: incandescent") +
         coloredText(available.contains(CONTROL_AWB_MODE_SHADE), "WB: shade") +
         coloredText(available.contains(CONTROL_AWB_MODE_TWILIGHT), "WB: twilight") +
-        coloredText(available.contains(CONTROL_AWB_MODE_WARM_FLUORESCENT), "WB: warm fluorescent") +
-        coloredText(characteristics.get(CONTROL_AWB_LOCK_AVAILABLE), "AWB Lock ");
+        coloredText(available.contains(CONTROL_AWB_MODE_WARM_FLUORESCENT), "WB: warm fluorescent");
   }
 
   public String availableAutoFocusModes(CameraCharacteristics characteristics) {
@@ -159,7 +156,6 @@ public class ProbeActivity extends Activity {
         coloredText(available.contains(CONTROL_AE_MODE_ON_AUTO_FLASH),
             "Auto exposure, auto flash") +
         coloredText(available.contains(CONTROL_AE_MODE_ON_AUTO_FLASH_REDEYE),
-            "Auto exposure, auto flash redeye") +
-        coloredText(characteristics.get(CONTROL_AE_LOCK_AVAILABLE), "AE Lock");
+            "Auto exposure, auto flash redeye");
   }
 }

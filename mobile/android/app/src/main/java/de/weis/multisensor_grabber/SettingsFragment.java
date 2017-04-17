@@ -46,7 +46,7 @@ public class SettingsFragment extends PreferenceFragment implements
     getPreferenceScreen().getSharedPreferences().registerOnSharedPreferenceChangeListener(this);
 
     final CameraManager manager =
-        (CameraManager) getContext().getSystemService(Context.CAMERA_SERVICE);
+        (CameraManager) getActivity().getSystemService(Context.CAMERA_SERVICE);
     try {
       final String cameraId = manager.getCameraIdList()[0];
       characteristics = manager.getCameraCharacteristics(cameraId);
