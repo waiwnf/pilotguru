@@ -1,15 +1,12 @@
 package de.weis.multisensor_grabber;
 
 import android.content.Context;
-import android.hardware.camera2.CameraCaptureSession;
 import android.media.CamcorderProfile;
 import android.media.MediaRecorder;
 import android.media.MediaScannerConnection;
 import android.support.annotation.NonNull;
-import android.util.Log;
 import android.view.Surface;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import java.io.File;
 import java.io.IOException;

@@ -10,10 +10,6 @@ import android.util.Log;
 import android.util.SparseIntArray;
 import android.view.Surface;
 
-import org.xmlpull.v1.XmlSerializer;
-
-import java.io.IOException;
-
 import static android.hardware.camera2.CameraMetadata.CONTROL_AF_MODE_OFF;
 import static android.hardware.camera2.CameraMetadata.CONTROL_AWB_MODE_AUTO;
 import static de.weis.multisensor_grabber.SettingsConstants.PREF_FIXED_FOCUS_DIST;
@@ -22,7 +18,7 @@ import static de.weis.multisensor_grabber.SettingsConstants.PREF_FOCUS_DIST;
 import static de.weis.multisensor_grabber.SettingsConstants.PREF_ISO;
 import static de.weis.multisensor_grabber.SettingsConstants.PREF_WHITE_BALANCE;
 
-public class CaptureSettings implements SerializableSequenceElement {
+public class CaptureSettings {
   private static final SparseIntArray ORIENTATIONS = new SparseIntArray();
   static {
     ORIENTATIONS.append(Surface.ROTATION_0, 90);
@@ -60,22 +56,6 @@ public class CaptureSettings implements SerializableSequenceElement {
     }
     return CamcorderProfile
         .get(hasPreferredProfile ? qualityProfile : CamcorderProfile.QUALITY_LOW);
-  }
-
-  public void serialize(XmlSerializer serializer) throws IOException {
-    serializer.attribute(null, "wb_value", Integer.toString(whiteBalanceMode));
-
-    if (isFixedIso) {
-      serializer.attribute(null, "iso_value", Integer.toString(isoSensitivity));
-    } else {
-      serializer.attribute(null, "iso_value", "-1");
-    }
-
-    if (isFixedFocusDistance) {
-      serializer.attribute(null, "foc_dist", Float.toString(focusDistance));
-    } else {
-      serializer.attribute(null, "foc_dist", "-1");
-    }
   }
 
   public CaptureRequest.Builder makeCaptureRequestBuilder(CameraDevice cameraDevice,
