@@ -1,5 +1,6 @@
 package de.weis.multisensor_grabber;
 
+import android.app.Activity;
 import android.content.Context;
 import android.media.CamcorderProfile;
 import android.media.MediaRecorder;
@@ -17,11 +18,12 @@ import java.util.Date;
 public class SensorAndVideoRecorder {
   private final File storageDir;
   private final MediaRecorder videoRecorder = new MediaRecorder();
-  private final SensorDataSaver sensorRecorder = new SensorDataSaver();
+  private final SensorDataSaver sensorRecorder;
   private File videoFile;
 
-  public SensorAndVideoRecorder(@NonNull File storageDir) {
+  public SensorAndVideoRecorder(@NonNull Activity parentActivity, @NonNull File storageDir) {
     this.storageDir = storageDir;
+    this.sensorRecorder = new SensorDataSaver(parentActivity);
   }
 
   public Surface start(@NonNull CamcorderProfile profile, TextView textViewFps,

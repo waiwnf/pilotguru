@@ -27,7 +27,6 @@ import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
-import android.util.Log;
 import android.view.Surface;
 import android.view.TextureView;
 import android.view.TextureView.SurfaceTextureListener;
@@ -67,8 +66,8 @@ public class MainActivity extends Activity {
 
   private CameraDevice cameraDevice;
   private CameraCaptureSession cameraCaptureSession;
-  private SensorAndVideoRecorder recorder =
-      new SensorAndVideoRecorder(new File(Environment.getExternalStorageDirectory(), "PilotGuru"));
+  private SensorAndVideoRecorder recorder = new SensorAndVideoRecorder(this,
+      new File(Environment.getExternalStorageDirectory(), "PilotGuru"));
 
   private final SurfaceTextureListener textureStatusListener = new SurfaceTextureListener() {
     @Override
@@ -133,7 +132,7 @@ public class MainActivity extends Activity {
         settingsButton.setEnabled(true);
         Toast.makeText(getApplicationContext(), "Stopped", Toast.LENGTH_LONG).show();
       } catch (CameraAccessException e) {
-        dieOnException(e, "Camera access exception, exiting.");
+        Errors.dieOnException(MainActivity.this, e, "Camera access exception, exiting.");
       }
     }
   }
@@ -160,9 +159,9 @@ public class MainActivity extends Activity {
           createCameraSession(cameraDevice, Arrays.asList(videoRecorderSurface),
               recorder.getSensorDataSaver());
         } catch (CameraAccessException e) {
-          dieOnException(e, "Camer access exception, exiting.");
+          Errors.dieOnException(MainActivity.this, e, "Camer access exception, exiting.");
         } catch (IOException e) {
-          dieOnException(e, "IO exception, exiting.");
+          Errors.dieOnException(MainActivity.this, e, "IO exception, exiting.");
         }
       }
     }
@@ -299,7 +298,7 @@ public class MainActivity extends Activity {
       settingsButton.setOnClickListener(settingsButtonListener);
       isCameraOpened = true;
     } catch (CameraAccessException e) {
-      dieOnException(e, "Camera access error occured, exiting.");
+      Errors.dieOnException(this, e, "Camera access error occured, exiting.");
     }
   }
 
@@ -350,7 +349,8 @@ public class MainActivity extends Activity {
                 cameraCaptureSession = session;
                 session.setRepeatingRequest(captureRequestBuilder.build(), captureListener, null);
               } catch (CameraAccessException e) {
-                dieOnException(e, "Camera access error occured, exiting.");
+                Errors
+                    .dieOnException(MainActivity.this, e, "Camera access error occured, exiting.");
               }
             }
 
@@ -361,7 +361,7 @@ public class MainActivity extends Activity {
           };
       camera.createCaptureSession(surfaces, captureSessionStateCallback, null);
     } catch (CameraAccessException e) {
-      dieOnException(e, "Camera access error occured, exiting.");
+      Errors.dieOnException(this, e, "Camera access error occured, exiting.");
     }
   }
 
@@ -384,12 +384,6 @@ public class MainActivity extends Activity {
       transform.postRotate(180, viewRect.centerX(), viewRect.centerY());
     }
     textureView.setTransform(transform);
-  }
-
-  private void dieOnException(Exception e, String message) {
-    e.printStackTrace();
-    Toast.makeText(this, message, Toast.LENGTH_LONG).show();
-    finish();
   }
 
   private void subscribeToLocationUpdates(LocationListener listener, long minTimeMsec) {

@@ -1,5 +1,6 @@
 package de.weis.multisensor_grabber;
 
+import android.app.Activity;
 import android.content.Context;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
@@ -14,20 +15,14 @@ import android.media.MediaScannerConnection;
 import android.os.Bundle;
 import android.os.StatFs;
 import android.support.annotation.NonNull;
-import android.util.Log;
-import android.util.Pair;
+import android.util.JsonWriter;
 import android.widget.TextView;
-
-import org.json.JSONArray;
-import org.json.JSONException;
-import org.json.JSONObject;
 
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.io.Writer;
-import java.util.Arrays;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.TimeUnit;
@@ -45,7 +40,9 @@ public class SensorDataSaver extends CameraCaptureSession.CaptureCallback implem
   public static String SYSTEM_TIME_MSEC = "system_time_msec";
   public static String TIME_USEC = "time_usec";
 
-  private JSONArray headings = null, accelerations = null, locations = null, frames = null;
+  private JsonWriter headingsWriter = null, accelerationsWriter = null, locationsWriter = null,
+      framesWriter = null;
+  private List<String> jsonFiles = new LinkedList<>();
 
   private boolean isRecording = false;
   private final ReadWriteLock recordingStatusLock = new ReentrantReadWriteLock();
@@ -57,6 +54,7 @@ public class SensorDataSaver extends CameraCaptureSession.CaptureCallback implem
 
   private TextView textViewFps, textViewCamera;
 
+  private final Activity parentActivity;
   private File recordingDir;    // Parent directory where to write the current recording.
   // Frame timestamps for FPS computations.
   private long prevFrameSystemMicros = 0, currentFrameSystemMicros = 0;
@@ -68,6 +66,10 @@ public class SensorDataSaver extends CameraCaptureSession.CaptureCallback implem
   // have its frames be counted from 0 onwards. We will store the first frame id of the current
   // sequence here and subtract it from all the subsequent frame ids of that sequence.
   private long firstFrameNumberInSequence = -1;
+
+  public SensorDataSaver(@NonNull Activity parentActivity) {
+    this.parentActivity = parentActivity;
+  }
 
   public void start(@NonNull File recordingDir, TextView textViewFps, TextView textViewCamera) {
     try {
@@ -81,15 +83,44 @@ public class SensorDataSaver extends CameraCaptureSession.CaptureCallback implem
       this.textViewCamera = textViewCamera;
       this.recordingDir = recordingDir;
 
-      // Allocate new arrays for all the datastreams. We will accumulate the data in memory and
-      // write it out to files in the end (on stop()) to avoid file IO in all the event handlers
-      // during recording.
-      headings = new JSONArray();
-      accelerations = new JSONArray();
-      locations = new JSONArray();
-      frames = new JSONArray();
+      headingsWriter = initJsonListWriter(recordingDir, HEADINGS);
+      accelerationsWriter = initJsonListWriter(recordingDir, ACCELERATIONS);
+      locationsWriter = initJsonListWriter(recordingDir, LOCATIONS);
+      framesWriter = initJsonListWriter(recordingDir, FRAMES);
     } finally {
       recordingStatusChangeLock.unlock();
+    }
+  }
+
+  private JsonWriter initJsonListWriter(@NonNull File recordingDir, @NonNull String name) {
+    JsonWriter writer = null;
+    try {
+      // Init the file IO stuff.
+      final File outFile = new File(recordingDir, name + ".json");
+      // Save the file name so that we can scan it after writing is finished to make the file
+      // visible over USB connection without reboot.
+      jsonFiles.add(outFile.toString());
+      writer = new JsonWriter(new BufferedWriter(new FileWriter(outFile)));
+
+      // Configure the writer and write the preamble for a named list.
+      writer.setIndent("  ");
+      writer.beginObject();
+      writer.name(name);
+      writer.beginArray();
+    } catch (IOException e) {
+      Errors.dieOnException(parentActivity, e,
+          "Error trying to initialize " + name + " JSON writer.");
+    }
+    return writer;
+  }
+
+  private void finishJsonListWriter(@NonNull JsonWriter writer, @NonNull String name) {
+    try {
+      writer.endArray();
+      writer.endObject();
+      writer.close();
+    } catch (IOException e) {
+      Errors.dieOnException(parentActivity, e, "Error trying to close " + name + "JSON writer.");
     }
   }
 
@@ -113,44 +144,23 @@ public class SensorDataSaver extends CameraCaptureSession.CaptureCallback implem
   }
 
   public void stop(Context context) {
-    try {
-      recordingStatusChangeLock.lock();
-      if (!isRecording) {
-        throw new AssertionError("Called stop() but SensorDataSaver is not recording.");
-      }
-      isRecording = false;
-
-      final List<Pair<JSONArray, String>> outputDataItems = Arrays
-          .asList(new Pair<>(headings, HEADINGS), new Pair<>(accelerations, ACCELERATIONS),
-              new Pair<>(locations, LOCATIONS), new Pair<>(frames, FRAMES));
-      for (Pair<JSONArray, String> outputData : outputDataItems) {
-        final JSONObject outputJson = new JSONObject();
-        final String outputName = outputData.second;
-        outputJson.put(outputName, outputData.first);
-        final File outputFile = new File(recordingDir, outputName + ".json");
-        final Writer outputWriter = new BufferedWriter(new FileWriter(outputFile));
-        outputWriter.write(outputJson.toString(2));
-        outputWriter.close();
-        // Make sure the files show up for the USB connection over MTP.
-        MediaScannerConnection.scanFile(context, new String[]{outputFile.toString()}, null, null);
-      }
-
-      // Reset the in-sequence frame numbering.
-      firstFrameNumberInSequence = -1;
-
-      // Release all the data arrays.
-      headings = null;
-      accelerations = null;
-      locations = null;
-      frames = null;
-
-    } catch (JSONException e) {
-      e.printStackTrace();
-    } catch (IOException e) {
-      e.printStackTrace();
-    } finally {
-      recordingStatusChangeLock.unlock();
+    recordingStatusChangeLock.lock();
+    if (!isRecording) {
+      throw new AssertionError("Called stop() but SensorDataSaver is not recording.");
     }
+    isRecording = false;
+
+    finishJsonListWriter(headingsWriter, HEADINGS);
+    finishJsonListWriter(accelerationsWriter, ACCELERATIONS);
+    finishJsonListWriter(locationsWriter, LOCATIONS);
+    finishJsonListWriter(framesWriter, FRAMES);
+    MediaScannerConnection.scanFile(context, jsonFiles.toArray(new String[0]), null, null);
+    jsonFiles.clear();
+
+    // Reset the in-sequence frame numbering.
+    firstFrameNumberInSequence = -1;
+
+    recordingStatusChangeLock.unlock();
   }
 
   public boolean isRecording() {
@@ -165,15 +175,16 @@ public class SensorDataSaver extends CameraCaptureSession.CaptureCallback implem
         try {
           gyroLock.lock();
           if (isRecording) {
-            final JSONObject heading = new JSONObject();
-            heading.put("yaw", event.values[0]);
-            heading.put("pitch", event.values[1]);
-            heading.put("roll", event.values[2]);
-            heading.put(TIME_USEC, TimeUnit.NANOSECONDS.toMicros(event.timestamp));
-            heading.put(SYSTEM_TIME_MSEC, System.currentTimeMillis());
-            headings.put(heading);
+            headingsWriter.beginObject();
+            headingsWriter.name("yaw").value(event.values[0]);
+            headingsWriter.name("pitch").value(event.values[1]);
+            headingsWriter.name("roll").value(event.values[2]);
+            headingsWriter.name(TIME_USEC).value(TimeUnit.NANOSECONDS.toMicros(event.timestamp));
+            headingsWriter.name(SYSTEM_TIME_MSEC).value(System.currentTimeMillis());
+            headingsWriter.endObject();
           }
-        } catch (JSONException e) {
+        } catch (IOException e) {
+          Errors.dieOnException(parentActivity, e, "Error writing headings JSON.");
         } finally {
           gyroLock.unlock();
         }
@@ -182,15 +193,17 @@ public class SensorDataSaver extends CameraCaptureSession.CaptureCallback implem
         try {
           accelerometerLock.lock();
           if (isRecording) {
-            final JSONObject acceleration = new JSONObject();
-            acceleration.put("x", event.values[0]);
-            acceleration.put("y", event.values[1]);
-            acceleration.put("z", event.values[2]);
-            acceleration.put(TIME_USEC, TimeUnit.NANOSECONDS.toMicros(event.timestamp));
-            acceleration.put(SYSTEM_TIME_MSEC, System.currentTimeMillis());
-            accelerations.put(acceleration);
+            accelerationsWriter.beginObject();
+            accelerationsWriter.name("x").value(event.values[0]);
+            accelerationsWriter.name("y").value(event.values[1]);
+            accelerationsWriter.name("z").value(event.values[2]);
+            accelerationsWriter.name(TIME_USEC)
+                .value(TimeUnit.NANOSECONDS.toMicros(event.timestamp));
+            accelerationsWriter.name(SYSTEM_TIME_MSEC).value(System.currentTimeMillis());
+            accelerationsWriter.endObject();
           }
-        } catch (JSONException e) {
+        } catch (IOException e) {
+          Errors.dieOnException(parentActivity, e, "Error writing accelerations JSON.");
         } finally {
           accelerometerLock.unlock();
         }
@@ -208,19 +221,20 @@ public class SensorDataSaver extends CameraCaptureSession.CaptureCallback implem
     try {
       locationLock.lock();
       if (isRecording) {
-        final JSONObject locationJson = new JSONObject();
-        locationJson.put("lat", location.getLatitude());
-        locationJson.put("lon", location.getLongitude());
-        locationJson.put("accuracy_m", location.getAccuracy());
-        locationJson.put("speed_m_s", location.getSpeed());
-        locationJson.put("bearing_degrees", location.getBearing());
-        locationJson.put("location_time_msec", location.getTime());
-        locationJson.put(SYSTEM_TIME_MSEC, System.currentTimeMillis());
-        locationJson.put("time_since_boot_usec",
-            TimeUnit.NANOSECONDS.toMicros(location.getElapsedRealtimeNanos()));
-        locations.put(locationJson);
+        locationsWriter.beginObject();
+        locationsWriter.name("lat").value(location.getLatitude());
+        locationsWriter.name("lon").value(location.getLongitude());
+        locationsWriter.name("accuracy_m").value(location.getAccuracy());
+        locationsWriter.name("speed_m_s").value(location.getSpeed());
+        locationsWriter.name("bearing_degrees").value(location.getBearing());
+        locationsWriter.name("location_time_msec").value(location.getTime());
+        locationsWriter.name(SYSTEM_TIME_MSEC).value(System.currentTimeMillis());
+        locationsWriter.name("time_since_boot_usec")
+            .value(TimeUnit.NANOSECONDS.toMicros(location.getElapsedRealtimeNanos()));
+        locationsWriter.endObject();
       }
-    } catch (JSONException e) {
+    } catch (IOException e) {
+      Errors.dieOnException(parentActivity, e, "Error writing accelerations JSON.");
     } finally {
       locationLock.unlock();
     }
@@ -236,27 +250,23 @@ public class SensorDataSaver extends CameraCaptureSession.CaptureCallback implem
   }
 
   // CaptureCallback - captured frames timestamps.
-
   public void onCaptureCompleted(CameraCaptureSession session, CaptureRequest request,
                                  TotalCaptureResult result) {
     try {
       frameCaptureLock.lock();
       if (isRecording) {
-        // Make a timing log entry for the frame.
-        final JSONObject frameJson = new JSONObject();
-
         final long globalFrameNumber = result.getFrameNumber();
         if (firstFrameNumberInSequence < 0) {
           firstFrameNumberInSequence = globalFrameNumber;
         }
         final long currentFrameNumberInSequence = globalFrameNumber - firstFrameNumberInSequence;
-        frameJson.put("frame_id", currentFrameNumberInSequence);
-
         final long frameSensorMicros =
             TimeUnit.NANOSECONDS.toMicros(result.get(CaptureResult.SENSOR_TIMESTAMP));
-        frameJson.put(TIME_USEC, frameSensorMicros);
-        frameJson.put(SYSTEM_TIME_MSEC, System.currentTimeMillis());
-        frames.put(frameJson);
+
+        framesWriter.beginObject();
+        framesWriter.name("frame_id").value(currentFrameNumberInSequence);
+        framesWriter.name(TIME_USEC).value(frameSensorMicros);
+        framesWriter.endObject();
 
         prevFrameSystemMicros = currentFrameSystemMicros;
         currentFrameSystemMicros = frameSensorMicros;
@@ -277,7 +287,8 @@ public class SensorDataSaver extends CameraCaptureSession.CaptureCallback implem
           textViewCamera.setText(cameraText);
         }
       }
-    } catch (JSONException e) {
+    } catch (IOException e) {
+      Errors.dieOnException(parentActivity, e, "Error writing frames timestamps JSON.");
     } finally {
       frameCaptureLock.unlock();
     }
