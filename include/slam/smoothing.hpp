@@ -13,6 +13,9 @@ namespace pilotguru {
 void SmoothHeadingDirections(
     std::vector<ORB_SLAM2::PoseWithTimestamp> *trajectory, int sigma);
 
+vector<double> SmoothTimeSeries(const vector<double> &timestamps,
+                                const vector<double> &values, double sigma);
+
 } // namespace pilotguru
 
 #endif // #ifndef PILOTGURU_SLAM_SMOOTHING_HPP_

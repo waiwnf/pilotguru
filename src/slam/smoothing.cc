@@ -1,5 +1,7 @@
 #include <slam/smoothing.hpp>
 
+#include <cmath>
+
 #include <opencv2/imgproc/imgproc.hpp>
 
 namespace pilotguru {
@@ -41,5 +43,53 @@ void SmoothHeadingDirections(
     rotation.y() = smooth_rotations.at<double>(2, element_idx) / element_norm;
     rotation.z() = smooth_rotations.at<double>(3, element_idx) / element_norm;
   }
+}
+
+namespace {
+double NormalCdf(double x, double mean, double sigma) {
+  CHECK_GT(sigma, 0);
+  static const double sqrt_2 = sqrt(2.0);
+  return 0.5 * (1.0 + erf((x - mean) / (sqrt_2 * sigma)));
+}
+} // namespace
+
+vector<double> SmoothTimeSeries(const vector<double> &timestamps,
+                                const vector<double> &values, double sigma) {
+  CHECK_GT(sigma, 0);
+  CHECK_EQ(timestamps.size(), values.size());
+  vector<double> result(values.size(), 0);
+
+  size_t left_idx = 0;  // Left boundary of the smoothing window.
+  size_t right_idx = 0; // Right boundary of the smoothing window.
+  for (size_t target_idx = 0; target_idx < values.size(); ++target_idx) {
+    // Move the smoothing window boundaries to just outside 3 sigma away from
+    // the target timestamp.
+    while (left_idx + 1 < values.size() &&
+           timestamps.at(target_idx) - timestamps.at(left_idx + 1) >
+               3 * sigma) {
+      ++left_idx;
+    }
+    while (right_idx + 1 < values.size() &&
+           timestamps.at(right_idx + 1) - timestamps.at(target_idx) <
+               3 * sigma) {
+      ++right_idx;
+    }
+
+    double prev_point_gaussian_cdf = 0;
+    for (size_t integral_idx = left_idx; integral_idx < right_idx;
+         ++integral_idx) {
+      const double next_timestamp_midpoint =
+          (timestamps.at(integral_idx) + timestamps.at(integral_idx + 1)) / 2.0;
+      const double next_gaussian_cdf =
+          NormalCdf(next_timestamp_midpoint, timestamps.at(target_idx), sigma);
+      result.at(target_idx) += values.at(integral_idx) *
+                               (next_gaussian_cdf - prev_point_gaussian_cdf);
+      prev_point_gaussian_cdf = next_gaussian_cdf;
+    }
+    result.at(target_idx) +=
+        values.at(right_idx) * (1.0 - prev_point_gaussian_cdf);
+  }
+
+  return result;
 }
 }
