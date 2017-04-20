@@ -13,6 +13,7 @@ import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
 import android.hardware.camera2.CameraAccessException;
 import android.hardware.camera2.CameraCaptureSession;
+import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraDevice;
 import android.hardware.camera2.CameraManager;
 import android.hardware.camera2.CaptureRequest;
@@ -154,8 +155,10 @@ public class MainActivity extends Activity {
           // Stop preview-only capture session, replace it with video recording session.
           cameraCaptureSession.stopRepeating();
           cameraCaptureSession.close();
-          final Surface videoRecorderSurface =
-              recorder.start(effectiveCamcorderProfile(), textViewFps, textViewCamera);
+          final int displayRotationEnum = getWindowManager().getDefaultDisplay().getRotation();
+          final Surface videoRecorderSurface = recorder
+              .start(effectiveCamcorderProfile(), textViewFps, textViewCamera, displayRotationEnum,
+                  getSensorOrientationDegrees());
           createCameraSession(cameraDevice, Arrays.asList(videoRecorderSurface),
               recorder.getSensorDataSaver());
         } catch (CameraAccessException e) {
@@ -363,6 +366,14 @@ public class MainActivity extends Activity {
     } catch (CameraAccessException e) {
       Errors.dieOnException(this, e, "Camera access error occured, exiting.");
     }
+  }
+
+  private int getSensorOrientationDegrees() throws CameraAccessException {
+    final String cameraId = cameraDevice.getId();
+    final CameraManager cameraManager = (CameraManager) getSystemService(Context.CAMERA_SERVICE);
+    final CameraCharacteristics cameraCharacteristics =
+        cameraManager.getCameraCharacteristics(cameraId);
+    return cameraCharacteristics.get(CameraCharacteristics.SENSOR_ORIENTATION);
   }
 
   private void configureTransform(CamcorderProfile camcorderProfile, int viewWidth,

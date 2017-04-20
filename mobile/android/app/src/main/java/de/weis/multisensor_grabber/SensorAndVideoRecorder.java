@@ -27,7 +27,9 @@ public class SensorAndVideoRecorder {
   }
 
   public Surface start(@NonNull CamcorderProfile profile, TextView textViewFps,
-                       TextView textViewCamera) throws IOException {
+                       TextView textViewCamera, int displayRotationEnum /* Display.getRotation() */,
+                       int sensorOrientationDegrees /* CameraCharacteristics.SENSOR_ORIENTATION */)
+      throws IOException {
     if (sensorRecorder.isRecording()) {
       throw new AssertionError(
           "Attempted to start recording, but recording is already in progress");
@@ -49,6 +51,7 @@ public class SensorAndVideoRecorder {
     videoRecorder.setVideoEncodingBitRate(profile.videoBitRate);
     videoRecorder.setVideoEncoder(profile.videoCodec);
     videoRecorder.setOutputFile(videoFile.getAbsolutePath());
+    videoRecorder.setOrientationHint(sensorOrientationDegrees - displayRotationEnum * 90);
     videoRecorder.prepare();
     videoRecorder.start();
 
