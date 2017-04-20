@@ -54,11 +54,14 @@ private:
   int video_stream_index_ = -1;
   AVCodecContext *codec_context_ = nullptr;
   AVCodec *codec_ = nullptr;
+  cv::Mat raw_frame_image_;  // Before rotations.
   ORB_SLAM2::TimestampedImage next_frame_;
   bool has_next_ = false;
   AVFrame *source_frame_ = nullptr;
   AVFrame *rgb_frame_ = nullptr;
   SwsContext *sws_context_ = nullptr;
+  // Counterclockwise.
+  int rotate_degrees_ = 0;
 };
 
 std::unique_ptr<ImageSequenceSource>

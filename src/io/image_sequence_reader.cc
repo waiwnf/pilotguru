@@ -95,13 +95,23 @@ VideoImageSequenceSource::VideoImageSequenceSource(const std::string &filename)
   avpicture_fill((AVPicture *)rgb_frame_, buffer, AV_PIX_FMT_RGB24,
                  codec_context_->width, codec_context_->height);
 
-  next_frame_.image =
+  raw_frame_image_ =
       cv::Mat(codec_context_->height, codec_context_->width, CV_8UC3);
 
   sws_context_ = sws_getCachedContext(
       sws_context_, codec_context_->width, codec_context_->height,
       codec_context_->pix_fmt, codec_context_->width, codec_context_->height,
       AV_PIX_FMT_RGB24, SWS_BILINEAR, nullptr, nullptr, nullptr);
+
+  // Read the requested video rotation.
+  const AVDictionary *video_metadata =
+      format_context_->streams[video_stream_index_]->metadata;
+  const AVDictionaryEntry *rotate_entry =
+      av_dict_get(video_metadata, "rotate", nullptr, 0 /* flags */);
+  if (rotate_entry != nullptr) {
+    CHECK(sscanf(rotate_entry->value, "%d", &rotate_degrees_));
+  }
+  rotate_degrees_ %= 360;
 
   fetchNext();
 }
@@ -143,7 +153,7 @@ void VideoImageSequenceSource::fetchNext() {
 
     for (int row = 0; row < source_frame_->height; ++row) {
       for (int col = 0; col < source_frame_->width; ++col) {
-        cv::Vec3b &dest = next_frame_.image.at<cv::Vec3b>(row, col);
+        cv::Vec3b &dest = raw_frame_image_.at<cv::Vec3b>(row, col);
         const unsigned char *src =
             rgb_frame_->data[0] + row * rgb_frame_->linesize[0] + 3 * col;
         dest[0] = src[0];
@@ -158,6 +168,27 @@ void VideoImageSequenceSource::fetchNext() {
     ++next_frame_.frame_id;
     has_next_ = true;
     break;
+  }
+
+  // http://stackoverflow.com/questions/16265673/rotate-image-by-90-180-or-270-degrees
+  switch (rotate_degrees_) {
+  case 0:
+    raw_frame_image_.copyTo(next_frame_.image);
+    break;
+  case 90:
+    cv::flip(raw_frame_image_.t(), next_frame_.image, 0);
+    break;
+  case 180:
+    // 180 degrees rotations corresponds to flipping around both x and y axes.
+    cv::flip(raw_frame_image_, next_frame_.image, -1);
+    break;
+  case 270:
+    cv::flip(raw_frame_image_.t(), next_frame_.image, 1);
+    break;
+  default:
+    LOG(FATAL) << "Unsupported rotation angle in video metadata: "
+               << rotate_degrees_
+               << ". Only multiples of 90 degrees rotations are supported.";
   }
 }
 
