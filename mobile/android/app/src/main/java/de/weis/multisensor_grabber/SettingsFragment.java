@@ -22,9 +22,7 @@ import java.util.List;
 import static android.hardware.camera2.CameraCharacteristics.CONTROL_AWB_AVAILABLE_MODES;
 import static android.hardware.camera2.CameraMetadata.CONTROL_AWB_MODE_AUTO;
 
-import static de.weis.multisensor_grabber.SettingsConstants.PREF_FIXED_FOCUS_DIST;
 import static de.weis.multisensor_grabber.SettingsConstants.PREF_FIXED_ISO;
-import static de.weis.multisensor_grabber.SettingsConstants.PREF_FOCUS_DIST;
 import static de.weis.multisensor_grabber.SettingsConstants.PREF_ISO;
 import static de.weis.multisensor_grabber.SettingsConstants.PREF_WHITE_BALANCE;
 
@@ -54,16 +52,6 @@ public class SettingsFragment extends PreferenceFragment implements
       e.printStackTrace();
     }
 
-    final CheckBoxPreference prefFixedFocus =
-        (CheckBoxPreference) findPreference(PREF_FIXED_FOCUS_DIST);
-    prefFixedFocus.setOnPreferenceChangeListener(new Preference.OnPreferenceChangeListener() {
-      @Override
-      public boolean onPreferenceChange(Preference preference, Object newValue) {
-        populateFocusDistance(newValue);
-        return true;
-      }
-    });
-
     final CheckBoxPreference prefFixedIso = (CheckBoxPreference) findPreference(PREF_FIXED_ISO);
     prefFixedIso.setOnPreferenceChangeListener(new Preference.OnPreferenceChangeListener() {
       @Override
@@ -73,24 +61,14 @@ public class SettingsFragment extends PreferenceFragment implements
       }
     });
 
-    populateFocusDistance(null);
     populateResolutionList((ListPreference) findPreference(SettingsConstants.PREF_RESOLUTIONS));
     populateWhitebalanceList();
     populateIsoList(null);
 
     // initial summary setting
     final SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(getActivity());
-    findPreference(PREF_FOCUS_DIST).setSummary(prefs.getString(PREF_FOCUS_DIST, ""));
     findPreference(PREF_WHITE_BALANCE).setSummary(StringConverters
         .whiteBalanceModeToString(Integer.parseInt(prefs.getString(PREF_WHITE_BALANCE, "-1"))));
-  }
-
-  public void populateFocusDistance(Object val) {
-    final CheckBoxPreference prefFixedFocusDist =
-        (CheckBoxPreference) findPreference(PREF_FIXED_FOCUS_DIST);
-    final Preference prefFocusDist = findPreference(PREF_FOCUS_DIST);
-    final boolean isChecked = (val == null) ? prefFixedFocusDist.isChecked() : val.equals(true);
-    prefFocusDist.setEnabled(isChecked);
   }
 
   public void populateIsoList(Object val) {

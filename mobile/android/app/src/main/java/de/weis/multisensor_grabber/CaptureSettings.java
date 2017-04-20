@@ -12,14 +12,13 @@ import android.view.Surface;
 
 import static android.hardware.camera2.CameraMetadata.CONTROL_AF_MODE_OFF;
 import static android.hardware.camera2.CameraMetadata.CONTROL_AWB_MODE_AUTO;
-import static de.weis.multisensor_grabber.SettingsConstants.PREF_FIXED_FOCUS_DIST;
 import static de.weis.multisensor_grabber.SettingsConstants.PREF_FIXED_ISO;
-import static de.weis.multisensor_grabber.SettingsConstants.PREF_FOCUS_DIST;
 import static de.weis.multisensor_grabber.SettingsConstants.PREF_ISO;
 import static de.weis.multisensor_grabber.SettingsConstants.PREF_WHITE_BALANCE;
 
 public class CaptureSettings {
   private static final SparseIntArray ORIENTATIONS = new SparseIntArray();
+
   static {
     ORIENTATIONS.append(Surface.ROTATION_0, 90);
     ORIENTATIONS.append(Surface.ROTATION_90, 0);
@@ -27,18 +26,14 @@ public class CaptureSettings {
     ORIENTATIONS.append(Surface.ROTATION_270, 180);
   }
 
-  private final boolean isFixedFocusDistance;
   private final boolean isFixedIso;
-  private final float focusDistance;
   private final int whiteBalanceMode;
   private final int isoSensitivity;
   private final int qualityProfile;
 
   CaptureSettings(SharedPreferences prefs) {
-    isFixedFocusDistance = prefs.getBoolean(PREF_FIXED_FOCUS_DIST, false);
     isFixedIso = prefs.getBoolean(PREF_FIXED_ISO, false);
 
-    focusDistance = Float.parseFloat(prefs.getString(PREF_FOCUS_DIST, "-1"));
     whiteBalanceMode = Integer
         .parseInt(prefs.getString(PREF_WHITE_BALANCE, Integer.toString(CONTROL_AWB_MODE_AUTO)));
     isoSensitivity = Integer.parseInt(prefs.getString(PREF_ISO, "-1"));
@@ -59,7 +54,8 @@ public class CaptureSettings {
   }
 
   public CaptureRequest.Builder makeCaptureRequestBuilder(CameraDevice cameraDevice,
-                                                          Iterable<Surface> outputSurfaces, int rotation)
+                                                          Iterable<Surface> outputSurfaces,
+                                                          int rotation)
       throws CameraAccessException {
     final CaptureRequest.Builder captureBuilder =
         cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_RECORD);
@@ -73,11 +69,9 @@ public class CaptureSettings {
     }
 
 
-    /************************************** FOCUS ********************************/
-    if (isFixedFocusDistance) {
-      captureBuilder.set(CaptureRequest.LENS_FOCUS_DISTANCE, focusDistance);
-      captureBuilder.set(CaptureRequest.CONTROL_AF_MODE, CONTROL_AF_MODE_OFF);
-    }
+    // Set focus distance to infinity.
+    captureBuilder.set(CaptureRequest.LENS_FOCUS_DISTANCE, 0.0f);
+    captureBuilder.set(CaptureRequest.CONTROL_AF_MODE, CONTROL_AF_MODE_OFF);
 
     /************************************** WHITEBALANCE ********************************/
 

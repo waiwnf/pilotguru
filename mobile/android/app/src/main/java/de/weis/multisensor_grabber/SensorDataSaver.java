@@ -302,12 +302,16 @@ public class SensorDataSaver extends CameraCaptureSession.CaptureCallback implem
     final Float focusDistance = result.get(CaptureResult.LENS_FOCUS_DISTANCE);
     if (isFixedFocusDistance) {
       if (focusDistance != null) {
-        return String.format(Locale.US, "Fixed: %0.1f", focusDistance);
+        return String.format(Locale.US, "Fixed: %.01f", focusDistance);
       } else {
         return "NA";
       }
     } else {
-      return "Auto";
+      if (focusDistance != null) {
+        return String.format(Locale.US, "Auto: %.01f", focusDistance);
+      } else {
+        return "Auto";
+      }
     }
   }
 
