@@ -27,6 +27,7 @@ DEFINE_string(trajectory_json, "",
               "JSON file with the trajectory for (a subsequence of) the input "
               "video. See optical_trajectories.cc to generate the trajectory "
               "from video automatically using SLAM.");
+DEFINE_string(velocity_json, "", "");
 DEFINE_double(scale, 6000.0, "Scale factor to go from angular velocity in "
                              "radians (from the 3D trajectory in the JSON "
                              "file) to the rotation angle of the steering "
@@ -88,13 +89,20 @@ int main(int argc, char **argv) {
     trajectory = &(*trajectory_json)[pilotguru::kTrajectory];
   }
 
+  std::unique_ptr<nlohmann::json> velocity_json(nullptr);
+  nlohmann::json *velocities = nullptr;
+  if (!FLAGS_velocity_json.empty()) {
+    velocity_json = pilotguru::ReadJsonFile(FLAGS_velocity_json);
+    velocities = &(*velocity_json)[pilotguru::kFrames];
+  }
+
   pilotguru::ImageSequenceVideoFileSink sink(FLAGS_out_video, 30 /* fps */);
 
   std::unique_ptr<cv::Mat> out_frame(nullptr);
   double turn = 0;
   int total_rendered_frames = 0;
   int skipped_frames = 0;
-  size_t trajectory_idx = 0;
+  size_t trajectory_idx = 0, velocity_idx = 0;
   while (image_source->hasNext() &&
          (total_rendered_frames < FLAGS_max_out_frames ||
           FLAGS_max_out_frames < 0)) {
@@ -102,7 +110,12 @@ int main(int argc, char **argv) {
     const bool render_steering =
         (trajectory != nullptr) && trajectory_idx < trajectory->size() &&
         trajectory->at(trajectory_idx)[pilotguru::kFrameId] <= frame.frame_id;
-    if (!render_steering) {
+    
+    const bool render_velocity =
+        (velocities != nullptr) && velocity_idx < velocities->size() &&
+        velocities->at(velocity_idx)[pilotguru::kSpeedMS] <= frame.frame_id;
+
+    if (!render_steering && !render_velocity) {
       // The video frame is earlier than the current trajectory point. Advance
       // the frame, but not the trajectory iterator, to get the frames to catch
       // up.
@@ -132,6 +145,14 @@ int main(int argc, char **argv) {
       ++trajectory_idx;
     }
 
+    double velocity = 0;
+    if (render_velocity) {
+      const auto &velocity_point = velocities->at(velocity_idx);
+      CHECK_EQ(frame.frame_id, velocity_point[pilotguru::kFrameId]);
+      velocity = velocity_point[pilotguru::kSpeedMS];
+      ++velocity_idx;
+    }
+
     // This goes after advancing all the annotations iterators to make sure
     // we skip annotations also along with the raw frames.
     if (skipped_frames < FLAGS_frames_to_skip) {
@@ -144,6 +165,11 @@ int main(int argc, char **argv) {
           (1.0 - FLAGS_learning_rate) * turn + FLAGS_learning_rate * raw_turn;
       RenderRotation(out_frame.get(), frame.image.rows, 0, steering_wheel,
                      turn * FLAGS_scale);
+    }
+
+    if (render_velocity) {
+      RenderRotation(out_frame.get(), frame.image.rows, steering_wheel.cols, steering_wheel,
+                     -velocity * 10.0);
     }
 
     sink.consume(*out_frame);
