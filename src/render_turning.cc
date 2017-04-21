@@ -81,9 +81,12 @@ int main(int argc, char **argv) {
   const cv::Mat steering_wheel = steering_wheel_bgr.clone();
   cv::cvtColor(steering_wheel_bgr, steering_wheel, cv::COLOR_BGR2RGB);
 
-  std::unique_ptr<nlohmann::json> trajectory_json =
-      pilotguru::ReadJsonFile(FLAGS_trajectory_json);
-  const auto &trajectory = (*trajectory_json)[pilotguru::kTrajectory];
+  std::unique_ptr<nlohmann::json> trajectory_json(nullptr);
+  nlohmann::json *trajectory = nullptr;
+  if (!FLAGS_trajectory_json.empty()) {
+    trajectory_json = pilotguru::ReadJsonFile(FLAGS_trajectory_json);
+    trajectory = &(*trajectory_json)[pilotguru::kTrajectory];
+  }
 
   pilotguru::ImageSequenceVideoFileSink sink(FLAGS_out_video, 30 /* fps */);
 
@@ -91,29 +94,20 @@ int main(int argc, char **argv) {
   double turn = 0;
   int total_rendered_frames = 0;
   int skipped_frames = 0;
-  for (auto trajectory_it = trajectory.begin();
-       trajectory_it != trajectory.end() && image_source->hasNext() &&
-       (total_rendered_frames < FLAGS_max_out_frames ||
-        FLAGS_max_out_frames < 0);) {
+  size_t trajectory_idx = 0;
+  while (image_source->hasNext() &&
+         (total_rendered_frames < FLAGS_max_out_frames ||
+          FLAGS_max_out_frames < 0)) {
     const ORB_SLAM2::TimestampedImage frame = image_source->next();
-    const int64 frame_id = (*trajectory_it)[pilotguru::kFrameId];
-    if (frame.frame_id < frame_id) {
+    const bool render_steering =
+        (trajectory != nullptr) && trajectory_idx < trajectory->size() &&
+        trajectory->at(trajectory_idx)[pilotguru::kFrameId] <= frame.frame_id;
+    if (!render_steering) {
       // The video frame is earlier than the current trajectory point. Advance
       // the frame, but not the trajectory iterator, to get the frames to catch
       // up.
       continue;
     }
-    CHECK_EQ(frame.frame_id, frame_id);
-    const double raw_turn = (*trajectory_it)[pilotguru::kTurnAngle];
-
-    ++trajectory_it;
-    if (skipped_frames < FLAGS_frames_to_skip) {
-      ++skipped_frames;
-      continue;
-    }
-
-    turn = (1.0 - FLAGS_learning_rate) * turn + FLAGS_learning_rate * raw_turn;
-    LOG(INFO) << "Frame: " << frame_id << " turn: " << turn;
 
     if (out_frame == nullptr) {
       out_frame.reset(new cv::Mat(
@@ -128,8 +122,29 @@ int main(int argc, char **argv) {
         out_frame->rowRange(0, frame.image.rows).colRange(0, frame.image.cols);
     frame.image.copyTo(out_video);
 
-    RenderRotation(out_frame.get(), frame.image.rows, 0, steering_wheel,
-                   turn * FLAGS_scale);
+    // Read off the raw turn angle and advance the turn angles index.
+    double raw_turn = 0;
+    if (render_steering) {
+      // Read off the raw value
+      const auto &point = trajectory->at(trajectory_idx);
+      CHECK_EQ(frame.frame_id, point[pilotguru::kFrameId]);
+      raw_turn = point[pilotguru::kTurnAngle];
+      ++trajectory_idx;
+    }
+
+    // This goes after advancing all the annotations iterators to make sure
+    // we skip annotations also along with the raw frames.
+    if (skipped_frames < FLAGS_frames_to_skip) {
+      ++skipped_frames;
+      continue;
+    }
+
+    if (render_steering) {
+      turn =
+          (1.0 - FLAGS_learning_rate) * turn + FLAGS_learning_rate * raw_turn;
+      RenderRotation(out_frame.get(), frame.image.rows, 0, steering_wheel,
+                     turn * FLAGS_scale);
+    }
 
     sink.consume(*out_frame);
 
