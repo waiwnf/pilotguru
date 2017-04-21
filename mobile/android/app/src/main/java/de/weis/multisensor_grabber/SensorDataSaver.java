@@ -14,14 +14,17 @@ import android.location.LocationListener;
 import android.media.MediaScannerConnection;
 import android.os.Bundle;
 import android.os.StatFs;
+import android.os.SystemClock;
 import android.support.annotation.NonNull;
 import android.util.JsonWriter;
+import android.util.Log;
 import android.widget.TextView;
 
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
@@ -37,7 +40,6 @@ public class SensorDataSaver extends CameraCaptureSession.CaptureCallback implem
   public static String LOCATIONS = "locations";
   public static String FRAMES = "frames";
 
-  public static String SYSTEM_TIME_MSEC = "system_time_msec";
   public static String TIME_USEC = "time_usec";
 
   private JsonWriter headingsWriter = null, accelerationsWriter = null, locationsWriter = null,
@@ -57,11 +59,21 @@ public class SensorDataSaver extends CameraCaptureSession.CaptureCallback implem
   private final Activity parentActivity;
   private File recordingDir;    // Parent directory where to write the current recording.
   // Frame timestamps for FPS computations.
-  private long prevFrameSystemMicros = 0, currentFrameSystemMicros = 0;
+  private long prevFrameSystemNanos = 0, currentFrameSystemNanos = 0;
   // Last filesystem free space query time.
-  private long lastSpaceQueryTimeMicros = 0;
+  private long lastSpaceQueryTimeNanos = 0;
   // Most recent cached filesystem free space result in Gb.
   private double spaceAvailableGb = 0;
+
+  // Allocate storage for multiple attempts at computing the difference between
+  // SystemClock.elapsedRealtimeNanos() (which is not paused when sleeping) and System.nanoTime()
+  // (which is paused in deep sleep).
+  // We want to compute the difference repeatedly several times to warm up the caches and achieve
+  // better accuracy. This array stores results for all the attempts to avoid the compiler
+  // optimizing away the iterations with unused results.
+  private long[] elapsedNanoTimeDiffCache = new long[5];
+  private long elapsedRealtimeNanoTimeDiff;
+
   // Multiple video recording sequences have unified frame id space. We want to have every sequence
   // have its frames be counted from 0 onwards. We will store the first frame id of the current
   // sequence here and subtract it from all the subsequent frame ids of that sequence.
@@ -82,6 +94,13 @@ public class SensorDataSaver extends CameraCaptureSession.CaptureCallback implem
       this.textViewFps = textViewFps;
       this.textViewCamera = textViewCamera;
       this.recordingDir = recordingDir;
+
+      // Compute the timer difference repeatedly to warm up the caches.
+      for (int i = 0; i < elapsedNanoTimeDiffCache.length; ++i) {
+        elapsedNanoTimeDiffCache[i] = SystemClock.elapsedRealtimeNanos() - System.nanoTime();
+      }
+      // Use the las estimate, which should be more accurate than the first.
+      elapsedRealtimeNanoTimeDiff = elapsedNanoTimeDiffCache[elapsedNanoTimeDiffCache.length - 1];
 
       headingsWriter = initJsonListWriter(recordingDir, HEADINGS);
       accelerationsWriter = initJsonListWriter(recordingDir, ACCELERATIONS);
@@ -124,21 +143,21 @@ public class SensorDataSaver extends CameraCaptureSession.CaptureCallback implem
     }
   }
 
-  public double getLastFps() {
-    final long interFrameMicros =
-        (prevFrameSystemMicros > 0) ? (currentFrameSystemMicros - prevFrameSystemMicros) : 0;
-    return (interFrameMicros == 0) ? Double.NaN :
-        ((double) TimeUnit.SECONDS.toMicros(1)) / (double) interFrameMicros;
+  private double getLastFps() {
+    final long interFrameNanos =
+        (prevFrameSystemNanos > 0) ? (currentFrameSystemNanos - prevFrameSystemNanos) : 0;
+    return (interFrameNanos == 0) ? Double.NaN :
+        ((double) TimeUnit.SECONDS.toNanos(1)) / (double) interFrameNanos;
   }
 
-  public double getGbAvailable(File f, long currentTimeMicros) {
+  private double getGbAvailable(File f, long currentTimeNanos) {
     // Only query the file system every couple of seconds to keep the load and latency down.
-    if (currentTimeMicros - lastSpaceQueryTimeMicros > TimeUnit.SECONDS.toMicros(2)) {
+    if (currentTimeNanos - lastSpaceQueryTimeNanos > TimeUnit.SECONDS.toNanos(2)) {
       final StatFs stat = new StatFs(f.getPath());
       final long bytesAvailable = stat.getBlockSizeLong() * stat.getAvailableBlocksLong();
       spaceAvailableGb = ((double) bytesAvailable) * 1e-9;
 
-      lastSpaceQueryTimeMicros = currentTimeMicros;
+      lastSpaceQueryTimeNanos = currentTimeNanos;
     }
     return spaceAvailableGb;
   }
@@ -160,6 +179,10 @@ public class SensorDataSaver extends CameraCaptureSession.CaptureCallback implem
     // Reset the in-sequence frame numbering.
     firstFrameNumberInSequence = -1;
 
+
+    Log.i("SensorDataSaver", "elapsedRealtimeNanos - nanoTime difference values: " +
+        Arrays.toString(elapsedNanoTimeDiffCache));
+
     recordingStatusChangeLock.unlock();
   }
 
@@ -180,7 +203,6 @@ public class SensorDataSaver extends CameraCaptureSession.CaptureCallback implem
             headingsWriter.name("pitch").value(event.values[1]);
             headingsWriter.name("roll").value(event.values[2]);
             headingsWriter.name(TIME_USEC).value(TimeUnit.NANOSECONDS.toMicros(event.timestamp));
-            headingsWriter.name(SYSTEM_TIME_MSEC).value(System.currentTimeMillis());
             headingsWriter.endObject();
           }
         } catch (IOException e) {
@@ -199,7 +221,6 @@ public class SensorDataSaver extends CameraCaptureSession.CaptureCallback implem
             accelerationsWriter.name("z").value(event.values[2]);
             accelerationsWriter.name(TIME_USEC)
                 .value(TimeUnit.NANOSECONDS.toMicros(event.timestamp));
-            accelerationsWriter.name(SYSTEM_TIME_MSEC).value(System.currentTimeMillis());
             accelerationsWriter.endObject();
           }
         } catch (IOException e) {
@@ -228,8 +249,7 @@ public class SensorDataSaver extends CameraCaptureSession.CaptureCallback implem
         locationsWriter.name("speed_m_s").value(location.getSpeed());
         locationsWriter.name("bearing_degrees").value(location.getBearing());
         locationsWriter.name("location_time_msec").value(location.getTime());
-        locationsWriter.name(SYSTEM_TIME_MSEC).value(System.currentTimeMillis());
-        locationsWriter.name("time_since_boot_usec")
+        locationsWriter.name(TIME_USEC)
             .value(TimeUnit.NANOSECONDS.toMicros(location.getElapsedRealtimeNanos()));
         locationsWriter.endObject();
       }
@@ -260,16 +280,23 @@ public class SensorDataSaver extends CameraCaptureSession.CaptureCallback implem
           firstFrameNumberInSequence = globalFrameNumber;
         }
         final long currentFrameNumberInSequence = globalFrameNumber - firstFrameNumberInSequence;
-        final long frameSensorMicros =
-            TimeUnit.NANOSECONDS.toMicros(result.get(CaptureResult.SENSOR_TIMESTAMP));
-
+        final long frameSensorNanos = result.get(CaptureResult.SENSOR_TIMESTAMP);
         framesWriter.beginObject();
         framesWriter.name("frame_id").value(currentFrameNumberInSequence);
-        framesWriter.name(TIME_USEC).value(frameSensorMicros);
+        framesWriter.name("sensor_timestamp").value(frameSensorNanos);
+        // On both Nexus 5 and Nexus 5X the frame timestamps appear to come from System.nanoTime()
+        // (which does not advance at sleep), while all the other sensor timestamps come from
+        // SystemClock.elapsedRealtimeNanos(), which is advanced all the time.
+        // Assuming this is so on all devices, add the difference to the frame timestamp here
+        // to move it to elapsedRealtimeNanos() reference to be directly comparable with all the
+        // other sensors.
+        final long timeUsec =
+            TimeUnit.NANOSECONDS.toMicros(frameSensorNanos + elapsedRealtimeNanoTimeDiff);
+        framesWriter.name(TIME_USEC).value(timeUsec);
         framesWriter.endObject();
 
-        prevFrameSystemMicros = currentFrameSystemMicros;
-        currentFrameSystemMicros = frameSensorMicros;
+        prevFrameSystemNanos = currentFrameSystemNanos;
+        currentFrameSystemNanos = frameSensorNanos;
 
         // Update FPS text view.
         if (textViewFps != null) {
@@ -279,7 +306,7 @@ public class SensorDataSaver extends CameraCaptureSession.CaptureCallback implem
         // Update focus distance and stuff.
         if (textViewCamera != null) {
           final int whiteBalanceMode = result.get(CaptureResult.CONTROL_AWB_MODE);
-          final double gbAvailable = getGbAvailable(recordingDir, frameSensorMicros);
+          final double gbAvailable = getGbAvailable(recordingDir, frameSensorNanos);
           final String cameraText = String
               .format(Locale.US, "FOC: %s,  ISO: %s,  WB: %s,  Free space: %.02f Gb",
                   getFocalLengthText(result), getIsoSensitivity(result),
