@@ -15,15 +15,6 @@ DEFINE_double(sigma, 0.5,
 DEFINE_string(out_json, "",
               "Copy of frames data with added interpolated velocities.");
 
-namespace {
-std::unique_ptr<nlohmann::json> ReadJsonFile(const std::string &filename) {
-  std::ifstream file_stream(filename);
-  std::unique_ptr<nlohmann::json> result(new nlohmann::json());
-  file_stream >> *result;
-  return std::move(result);
-}
-}
-
 int main(int argc, char **argv) {
   google::InitGoogleLogging(argv[0]);
   google::ParseCommandLineFlags(&argc, &argv, true);
@@ -35,12 +26,13 @@ int main(int argc, char **argv) {
 
   // Read raw GPS data.
   std::unique_ptr<nlohmann::json> locations_json =
-      ReadJsonFile(FLAGS_locations_json);
+      pilotguru::ReadJsonFile(FLAGS_locations_json);
   const auto &locations = (*locations_json)[pilotguru::kLocations];
   CHECK(!locations.empty());
 
   // Read raw frame timestamps data.
-  std::unique_ptr<nlohmann::json> frames_json = ReadJsonFile(FLAGS_frames_json);
+  std::unique_ptr<nlohmann::json> frames_json =
+      pilotguru::ReadJsonFile(FLAGS_frames_json);
   const auto &frames = (*frames_json)[pilotguru::kFrames];
   CHECK(!frames.empty());
 

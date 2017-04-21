@@ -55,6 +55,8 @@ void WriteTrajectoryToFile(
     const cv::Mat *horizontal_plane /* optional */,
     const std::vector<cv::Mat> *projected_directions /* optional */,
     const vector<double> *turn_angles /* optional */, int frame_id_offset);
+
+std::unique_ptr<nlohmann::json> ReadJsonFile(const std::string &filename);
 } // namespace pilotguru
 
 #endif // PILOTGURU_IO_JSON_CONVERTERS_HPP_

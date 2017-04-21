@@ -47,11 +47,25 @@ DEFINE_int64(max_out_frames, -1, "If positive, the maximum number of frames to "
                                  "trajectory has more frames, the remaining "
                                  "ones will be ignored.");
 
+namespace {
+void RenderRotation(cv::Mat *out_frame, int offset_rows, int offset_cols,
+                    const cv::Mat &steering_wheel, double turn_degrees) {
+  CHECK_NOTNULL(out_frame);
+  cv::Mat out_steer =
+      out_frame->rowRange(offset_rows, offset_rows + steering_wheel.rows)
+          .colRange(offset_cols, offset_cols + steering_wheel.cols);
+  cv::Mat rotation_matrix = cv::getRotationMatrix2D(
+      cv::Point2f(steering_wheel.cols / 2, steering_wheel.rows / 2),
+      turn_degrees, 1);
+  cv::warpAffine(steering_wheel, out_steer, rotation_matrix,
+                 steering_wheel.size(), cv::INTER_LINEAR);
+}
+}
+
 int main(int argc, char **argv) {
   // Verify that the version of the library that we linked against is
   // compatible with the version of the headers we compiled against.
   google::InitGoogleLogging(argv[0]);
-
   google::ParseCommandLineFlags(&argc, &argv, true);
   google::InstallFailureSignalHandler();
 
@@ -67,10 +81,9 @@ int main(int argc, char **argv) {
   const cv::Mat steering_wheel = steering_wheel_bgr.clone();
   cv::cvtColor(steering_wheel_bgr, steering_wheel, cv::COLOR_BGR2RGB);
 
-  std::ifstream trajectory_file(FLAGS_trajectory_json);
-  nlohmann::json trajectory_json;
-  trajectory_file >> trajectory_json;
-  const auto &trajectory = trajectory_json[pilotguru::kTrajectory];
+  std::unique_ptr<nlohmann::json> trajectory_json =
+      pilotguru::ReadJsonFile(FLAGS_trajectory_json);
+  const auto &trajectory = (*trajectory_json)[pilotguru::kTrajectory];
 
   pilotguru::ImageSequenceVideoFileSink sink(FLAGS_out_video, 30 /* fps */);
 
@@ -85,8 +98,9 @@ int main(int argc, char **argv) {
     const ORB_SLAM2::TimestampedImage frame = image_source->next();
     const int64 frame_id = (*trajectory_it)[pilotguru::kFrameId];
     if (frame.frame_id < frame_id) {
-      // The frame is earlier than the current trajectory point. Advance the
-      // frame, but not the trajectory iterator, to get the frames to catch up.
+      // The video frame is earlier than the current trajectory point. Advance
+      // the frame, but not the trajectory iterator, to get the frames to catch
+      // up.
       continue;
     }
     CHECK_EQ(frame.frame_id, frame_id);
@@ -112,18 +126,11 @@ int main(int argc, char **argv) {
     CHECK_EQ(out_frame->cols, std::max(frame.image.cols, steering_wheel.cols));
     cv::Mat out_video =
         out_frame->rowRange(0, frame.image.rows).colRange(0, frame.image.cols);
-    cv::Mat out_steer =
-        out_frame
-            ->rowRange(frame.image.rows, frame.image.rows + steering_wheel.rows)
-            .colRange(0, steering_wheel.cols);
-
     frame.image.copyTo(out_video);
 
-    cv::Mat rotation_matrix = cv::getRotationMatrix2D(
-        cv::Point2f(steering_wheel.cols / 2, steering_wheel.rows / 2),
-        turn * FLAGS_scale, 1);
-    cv::warpAffine(steering_wheel, out_steer, rotation_matrix,
-                   steering_wheel.size(), cv::INTER_LINEAR);
+    RenderRotation(out_frame.get(), frame.image.rows, 0, steering_wheel,
+                   turn * FLAGS_scale);
+
     sink.consume(*out_frame);
 
     ++total_rendered_frames;

@@ -152,4 +152,11 @@ void WriteTrajectoryToFile(
   std::ofstream trajectory_ostream(filename);
   trajectory_ostream << trajectory_json.dump(2) << std::endl;
 }
+
+std::unique_ptr<nlohmann::json> ReadJsonFile(const std::string &filename) {
+  std::ifstream file_stream(filename);
+  std::unique_ptr<nlohmann::json> result(new nlohmann::json());
+  file_stream >> *result;
+  return std::move(result);
+}
 }
