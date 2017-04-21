@@ -13,8 +13,12 @@ namespace pilotguru {
 void SmoothHeadingDirections(
     std::vector<ORB_SLAM2::PoseWithTimestamp> *trajectory, int sigma);
 
-vector<double> SmoothTimeSeries(const vector<double> &timestamps,
-                                const vector<double> &values, double sigma);
+std::vector<double> SmoothTimeSeries(
+    const std::vector<double> &data_values,
+    const std::vector<double>
+        &data_timestamps /* corresponding to data_values, must be ordered */,
+    const std::vector<double> &target_timestamps /* must be ordered */,
+    double sigma /* in units of time */);
 
 } // namespace pilotguru
 

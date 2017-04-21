@@ -7,6 +7,8 @@
 #include <opencv2/core/core.hpp>
 
 namespace pilotguru {
+constexpr char kFrames[] = "frames";
+constexpr char kLocations[] = "locations";
 constexpr char kPlane[] = "plane";
 constexpr char kTrajectory[] = "trajectory";
 constexpr char kTimeUsec[] = "time_usec";
@@ -14,6 +16,7 @@ constexpr char kIsLost[] = "is_lost";
 constexpr char kFrameId[] = "frame_id";
 constexpr char kPose[] = "pose";
 constexpr char kPlanarDirection[] = "planar_direction";
+constexpr char kSpeedMS[] = "speed_m_s";
 constexpr char kTurnAngle[] = "turn_angle";
 
 constexpr char kTranslation[] = "translation";
