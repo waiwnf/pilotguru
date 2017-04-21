@@ -73,7 +73,7 @@ SmoothTimeSeries(const std::vector<double> &data_values,
       ++left_idx;
     }
     while (right_idx + 1 < data_values.size() &&
-           (data_timestamps.at(right_idx + 1) - target_time) < 3 * sigma) {
+           (data_timestamps.at(right_idx) - target_time) < 3 * sigma) {
       ++right_idx;
     }
 
