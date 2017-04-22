@@ -61,6 +61,65 @@ void RenderRotation(cv::Mat *out_frame, int offset_rows, int offset_cols,
   cv::warpAffine(steering_wheel, out_steer, rotation_matrix,
                  steering_wheel.size(), cv::INTER_LINEAR);
 }
+
+void RenderVelocity(cv::Mat *out_frame, int offset_rows, int offset_cols,
+                    int window_rows, int window_cols, int velocity_km_h) {
+  CHECK_NOTNULL(out_frame);
+  cv::Mat out_velocity =
+      out_frame->rowRange(offset_rows, offset_rows + window_rows)
+          .colRange(offset_cols, offset_cols + window_cols);
+  out_velocity = cv::Scalar(0, 0, 0);
+  std::stringstream ss;
+  ss << velocity_km_h;
+  const std::string digits_text = ss.str();
+  const double digits_text_scale = 3.0;
+  const double units_text_scale = 0.8;
+  const int text_line_thickness = 3;
+  const cv::Scalar text_color(255, 255, 255);
+  int baseLine = 0;
+  const cv::Size digits_size =
+      cv::getTextSize(digits_text, cv::FONT_HERSHEY_SIMPLEX, digits_text_scale,
+                      text_line_thickness, &baseLine);
+  // Velocity value.
+  const int element_margin = 10;
+  cv::putText(out_velocity, ss.str(),
+              cv::Point(element_margin, window_rows - element_margin),
+              cv::FONT_HERSHEY_SIMPLEX, digits_text_scale, text_color,
+              text_line_thickness);
+  // Velocity units in a smaller font.
+  cv::putText(out_velocity, " km/h",
+              cv::Point(element_margin + digits_size.width,
+                        window_rows - element_margin),
+              cv::FONT_HERSHEY_SIMPLEX, units_text_scale, text_color,
+              text_line_thickness);
+
+  // Draw the vertical speedometer bar rectangle.
+  const int max_speedometer_km_h = 100;
+  const int full_speedometer_height =
+      out_velocity.rows - digits_size.height - 3 * element_margin;
+  const int speedometer_bar_horizontal_margin = 30;
+  // Number of rows from below to fill corresponding to the current velocity.
+  const int marked_speedometer_height =
+      std::max(static_cast<int>(static_cast<double>(full_speedometer_height *
+                                                    velocity_km_h) /
+                                static_cast<double>(max_speedometer_km_h)),
+               1);
+  // Full speedometer bar outline.
+  cv::rectangle(out_velocity,
+                cv::Point(speedometer_bar_horizontal_margin, element_margin),
+                cv::Point(out_velocity.cols - speedometer_bar_horizontal_margin,
+                          element_margin + full_speedometer_height),
+                text_color);
+  // Filling in the velocity indication.
+  cv::Mat marked_speedometer_bar =
+      out_velocity
+          .rowRange(element_margin + full_speedometer_height -
+                        marked_speedometer_height,
+                    element_margin + full_speedometer_height)
+          .colRange(speedometer_bar_horizontal_margin,
+                    out_velocity.cols - speedometer_bar_horizontal_margin);
+  marked_speedometer_bar = text_color;
+}
 }
 
 int main(int argc, char **argv) {
@@ -110,7 +169,7 @@ int main(int argc, char **argv) {
     const bool render_steering =
         (trajectory != nullptr) && trajectory_idx < trajectory->size() &&
         trajectory->at(trajectory_idx)[pilotguru::kFrameId] <= frame.frame_id;
-    
+
     const bool render_velocity =
         (velocities != nullptr) && velocity_idx < velocities->size() &&
         velocities->at(velocity_idx)[pilotguru::kSpeedMS] <= frame.frame_id;
@@ -145,11 +204,11 @@ int main(int argc, char **argv) {
       ++trajectory_idx;
     }
 
-    double velocity = 0;
+    double velocity_m_s = 0;
     if (render_velocity) {
       const auto &velocity_point = velocities->at(velocity_idx);
       CHECK_EQ(frame.frame_id, velocity_point[pilotguru::kFrameId]);
-      velocity = velocity_point[pilotguru::kSpeedMS];
+      velocity_m_s = velocity_point[pilotguru::kSpeedMS];
       ++velocity_idx;
     }
 
@@ -168,8 +227,9 @@ int main(int argc, char **argv) {
     }
 
     if (render_velocity) {
-      RenderRotation(out_frame.get(), frame.image.rows, steering_wheel.cols, steering_wheel,
-                     -velocity * 10.0);
+      RenderVelocity(out_frame.get(), frame.image.rows, steering_wheel.cols,
+                     steering_wheel.rows, steering_wheel.cols,
+                     static_cast<int>(velocity_m_s * 3.6));
     }
 
     sink.consume(*out_frame);
