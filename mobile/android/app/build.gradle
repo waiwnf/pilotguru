@@ -4,10 +4,10 @@ android {
     compileSdkVersion 25
     buildToolsVersion '25.0.2'
     defaultConfig {
-        applicationId "de.weis.multisensor_grabber"
-        minSdkVersion 21
-        targetSdkVersion 21
-        versionCode 10
+        applicationId "ru.pilotguru.recorder"
+        minSdkVersion 23
+        targetSdkVersion 23
+        versionCode 1
         versionName "0.1"
         testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
     }

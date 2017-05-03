@@ -5,7 +5,7 @@
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:keepScreenOn="true"
-    tools:context="de.weis.multisensor_grabber.MainActivity">
+    tools:context="ru.pilotguru.recorder.MainActivity">
 
     <FrameLayout
         android:layout_width="match_parent"

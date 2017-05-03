@@ -1,4 +1,4 @@
-package de.weis.multisensor_grabber;
+package ru.pilotguru.recorder;
 
 import android.app.Activity;
 import android.content.Context;

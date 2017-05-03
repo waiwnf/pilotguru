@@ -1,4 +1,4 @@
-package de.weis.multisensor_grabber;
+package ru.pilotguru.recorder;
 
 public class SettingsConstants {
   public static final String PREF_WHITE_BALANCE = "pref_wb";

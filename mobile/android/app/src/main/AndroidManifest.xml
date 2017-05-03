@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="de.weis.multisensor_grabber"
+    package="ru.pilotguru.recorder"
     >
 
     <uses-permission android:name="android.permission.CAMERA" />

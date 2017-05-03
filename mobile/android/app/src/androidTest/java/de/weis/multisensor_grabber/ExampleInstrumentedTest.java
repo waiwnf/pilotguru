@@ -1,4 +1,4 @@
-package de.weis.multisensor_grabber;
+package ru.pilotguru.recorder;
 
 import android.content.Context;
 import android.support.test.InstrumentationRegistry;
@@ -21,6 +21,6 @@ public class ExampleInstrumentedTest {
     // Context of the app under test.
     Context appContext = InstrumentationRegistry.getTargetContext();
 
-    assertEquals("de.weis.multisensor_grabber", appContext.getPackageName());
+    assertEquals("ru.pilotguru.recorder", appContext.getPackageName());
   }
 }

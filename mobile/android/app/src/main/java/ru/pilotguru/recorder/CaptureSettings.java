@@ -1,4 +1,4 @@
-package de.weis.multisensor_grabber;
+package ru.pilotguru.recorder;
 
 import android.content.SharedPreferences;
 import android.hardware.camera2.CameraAccessException;
@@ -12,9 +12,9 @@ import android.view.Surface;
 
 import static android.hardware.camera2.CameraMetadata.CONTROL_AF_MODE_OFF;
 import static android.hardware.camera2.CameraMetadata.CONTROL_AWB_MODE_AUTO;
-import static de.weis.multisensor_grabber.SettingsConstants.PREF_FIXED_ISO;
-import static de.weis.multisensor_grabber.SettingsConstants.PREF_ISO;
-import static de.weis.multisensor_grabber.SettingsConstants.PREF_WHITE_BALANCE;
+import static ru.pilotguru.recorder.SettingsConstants.PREF_FIXED_ISO;
+import static ru.pilotguru.recorder.SettingsConstants.PREF_ISO;
+import static ru.pilotguru.recorder.SettingsConstants.PREF_WHITE_BALANCE;
 
 public class CaptureSettings {
   private static final SparseIntArray ORIENTATIONS = new SparseIntArray();

@@ -1,4 +1,4 @@
-package de.weis.multisensor_grabber;
+package ru.pilotguru.recorder;
 
 import android.content.Context;
 import android.content.SharedPreferences;
@@ -22,9 +22,9 @@ import java.util.List;
 import static android.hardware.camera2.CameraCharacteristics.CONTROL_AWB_AVAILABLE_MODES;
 import static android.hardware.camera2.CameraMetadata.CONTROL_AWB_MODE_AUTO;
 
-import static de.weis.multisensor_grabber.SettingsConstants.PREF_FIXED_ISO;
-import static de.weis.multisensor_grabber.SettingsConstants.PREF_ISO;
-import static de.weis.multisensor_grabber.SettingsConstants.PREF_WHITE_BALANCE;
+import static ru.pilotguru.recorder.SettingsConstants.PREF_FIXED_ISO;
+import static ru.pilotguru.recorder.SettingsConstants.PREF_ISO;
+import static ru.pilotguru.recorder.SettingsConstants.PREF_WHITE_BALANCE;
 
 /**
  * Created by weis on 27.12.16.
