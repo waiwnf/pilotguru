@@ -172,7 +172,7 @@ int main(int argc, char **argv) {
 
     const bool render_velocity =
         (velocities != nullptr) && velocity_idx < velocities->size() &&
-        velocities->at(velocity_idx)[pilotguru::kSpeedMS] <= frame.frame_id;
+        velocities->at(velocity_idx)[pilotguru::kFrameId] <= frame.frame_id;
 
     if (!render_steering && !render_velocity) {
       // The video frame is earlier than the current trajectory point. Advance
