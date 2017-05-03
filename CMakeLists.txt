@@ -27,6 +27,7 @@ find_package(OpenCV 2.4.3 REQUIRED)
 add_library(pilotgurulib SHARED
   ${PROJECT_SOURCE_DIR}/src/io/image_sequence_reader.cc
   ${PROJECT_SOURCE_DIR}/src/io/image_sequence_writer.cc
+  ${PROJECT_SOURCE_DIR}/src/interpolation/align_time_series.cc
   ${PROJECT_SOURCE_DIR}/src/io/json_converters.cc
   ${PROJECT_SOURCE_DIR}/src/slam/horizontal_flatten.cc
   ${PROJECT_SOURCE_DIR}/src/slam/track_image_sequence.cc
