@@ -158,7 +158,7 @@ public class MainActivity extends Activity {
           final int displayRotationEnum = getWindowManager().getDefaultDisplay().getRotation();
           final Surface videoRecorderSurface = recorder
               .start(effectiveCamcorderProfile(), textViewFps, textViewCamera, displayRotationEnum,
-                  getSensorOrientationDegrees());
+                  getCameraCharacteristics());
           createCameraSession(cameraDevice, Arrays.asList(videoRecorderSurface),
               recorder.getSensorDataSaver());
         } catch (CameraAccessException e) {
@@ -368,12 +368,10 @@ public class MainActivity extends Activity {
     }
   }
 
-  private int getSensorOrientationDegrees() throws CameraAccessException {
+  private CameraCharacteristics getCameraCharacteristics() throws CameraAccessException {
     final String cameraId = cameraDevice.getId();
     final CameraManager cameraManager = (CameraManager) getSystemService(Context.CAMERA_SERVICE);
-    final CameraCharacteristics cameraCharacteristics =
-        cameraManager.getCameraCharacteristics(cameraId);
-    return cameraCharacteristics.get(CameraCharacteristics.SENSOR_ORIENTATION);
+    return cameraManager.getCameraCharacteristics(cameraId);
   }
 
   private void configureTransform(CamcorderProfile camcorderProfile, int viewWidth,

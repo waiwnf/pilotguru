@@ -2,6 +2,7 @@ package ru.pilotguru.recorder;
 
 import android.app.Activity;
 import android.content.Context;
+import android.hardware.camera2.CameraCharacteristics;
 import android.media.CamcorderProfile;
 import android.media.MediaRecorder;
 import android.media.MediaScannerConnection;
@@ -28,8 +29,7 @@ public class SensorAndVideoRecorder {
 
   public Surface start(@NonNull CamcorderProfile profile, TextView textViewFps,
                        TextView textViewCamera, int displayRotationEnum /* Display.getRotation() */,
-                       int sensorOrientationDegrees /* CameraCharacteristics.SENSOR_ORIENTATION */)
-      throws IOException {
+                       CameraCharacteristics cameraCharacteristics) throws IOException {
     if (sensorRecorder.isRecording()) {
       throw new AssertionError(
           "Attempted to start recording, but recording is already in progress");
@@ -40,7 +40,7 @@ public class SensorAndVideoRecorder {
     final File recordingDir =
         new File(storageDir, dateFormat.format(new Date(sequenceStartMillis)));
     recordingDir.mkdirs();
-    sensorRecorder.start(recordingDir, textViewFps, textViewCamera);
+    sensorRecorder.start(recordingDir, textViewFps, textViewCamera, cameraCharacteristics);
 
     videoFile = new File(recordingDir, "video.mp4");
     videoRecorder.reset();
@@ -51,7 +51,9 @@ public class SensorAndVideoRecorder {
     videoRecorder.setVideoEncodingBitRate(profile.videoBitRate);
     videoRecorder.setVideoEncoder(profile.videoCodec);
     videoRecorder.setOutputFile(videoFile.getAbsolutePath());
-    videoRecorder.setOrientationHint(sensorOrientationDegrees - displayRotationEnum * 90);
+    videoRecorder.setOrientationHint(
+        cameraCharacteristics.get(CameraCharacteristics.SENSOR_ORIENTATION) -
+            displayRotationEnum * 90);
     videoRecorder.prepare();
     videoRecorder.start();
 

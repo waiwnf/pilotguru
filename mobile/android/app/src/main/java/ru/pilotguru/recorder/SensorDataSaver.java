@@ -6,6 +6,8 @@ import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.camera2.CameraCaptureSession;
+import android.hardware.camera2.CameraCharacteristics;
+import android.hardware.camera2.CameraMetadata;
 import android.hardware.camera2.CaptureRequest;
 import android.hardware.camera2.CaptureResult;
 import android.hardware.camera2.TotalCaptureResult;
@@ -65,14 +67,8 @@ public class SensorDataSaver extends CameraCaptureSession.CaptureCallback implem
   // Most recent cached filesystem free space result in Gb.
   private double spaceAvailableGb = 0;
 
-  // Allocate storage for multiple attempts at computing the difference between
-  // SystemClock.elapsedRealtimeNanos() (which is not paused when sleeping) and System.nanoTime()
-  // (which is paused in deep sleep).
-  // We want to compute the difference repeatedly several times to warm up the caches and achieve
-  // better accuracy. This array stores results for all the attempts to avoid the compiler
-  // optimizing away the iterations with unused results.
-  private long[] elapsedNanoTimeDiffCache = new long[5];
-  private long elapsedRealtimeNanoTimeDiff;
+  // The difference between timestamp bases for camera frames and all the other sensors (GPS, gyro).
+  private long cameraTimestampsShiftWrtSensors = 0;
 
   // Multiple video recording sequences have unified frame id space. We want to have every sequence
   // have its frames be counted from 0 onwards. We will store the first frame id of the current
@@ -83,7 +79,8 @@ public class SensorDataSaver extends CameraCaptureSession.CaptureCallback implem
     this.parentActivity = parentActivity;
   }
 
-  public void start(@NonNull File recordingDir, TextView textViewFps, TextView textViewCamera) {
+  public void start(@NonNull File recordingDir, TextView textViewFps, TextView textViewCamera,
+                    CameraCharacteristics cameraCharacteristics) {
     try {
       recordingStatusChangeLock.lock();
       if (isRecording) {
@@ -95,12 +92,39 @@ public class SensorDataSaver extends CameraCaptureSession.CaptureCallback implem
       this.textViewCamera = textViewCamera;
       this.recordingDir = recordingDir;
 
-      // Compute the timer difference repeatedly to warm up the caches.
-      for (int i = 0; i < elapsedNanoTimeDiffCache.length; ++i) {
-        elapsedNanoTimeDiffCache[i] = SystemClock.elapsedRealtimeNanos() - System.nanoTime();
+      final int cameraTimestampSource =
+          cameraCharacteristics.get(CameraCharacteristics.SENSOR_INFO_TIMESTAMP_SOURCE);
+      switch (cameraTimestampSource) {
+        case CameraMetadata.SENSOR_INFO_TIMESTAMP_SOURCE_UNKNOWN:
+          // Assume that the camera timer is based on System.nanoTime(). This is the case on Nexus 5
+          // and Nexus 5X.
+
+          // Allocate storage for multiple attempts at computing the difference between
+          // SystemClock.elapsedRealtimeNanos() (which is not paused when sleeping) and
+          // System.nanoTime() (which is paused in deep sleep).
+          // We want to compute the difference repeatedly several times to warm up the caches and
+          // achieve better accuracy.
+          final long[] elapsedNanoTimeDiffCache = new long[5];
+          for (int i = 0; i < elapsedNanoTimeDiffCache.length; ++i) {
+            elapsedNanoTimeDiffCache[i] = SystemClock.elapsedRealtimeNanos() - System.nanoTime();
+          }
+          // Log all the cached timer differences to prevent the compiler from optimizing away the
+          // function calls.
+          Log.i("SensorDataSaver", "elapsedRealtimeNanos - nanoTime difference values: " +
+              Arrays.toString(elapsedNanoTimeDiffCache));
+
+          // Use the las estimate, which should be more accurate than the first.
+          cameraTimestampsShiftWrtSensors =
+              elapsedNanoTimeDiffCache[elapsedNanoTimeDiffCache.length - 1];
+          break;
+
+        case CameraMetadata.SENSOR_INFO_TIMESTAMP_SOURCE_REALTIME:
+          cameraTimestampsShiftWrtSensors = 0;
+          break;
+
+        default:
+          throw new AssertionError("Unknown camera timestamps source: " + cameraTimestampSource);
       }
-      // Use the las estimate, which should be more accurate than the first.
-      elapsedRealtimeNanoTimeDiff = elapsedNanoTimeDiffCache[elapsedNanoTimeDiffCache.length - 1];
 
       rotationsWriter = initJsonListWriter(recordingDir, ROTATIONS);
       accelerationsWriter = initJsonListWriter(recordingDir, ACCELERATIONS);
@@ -178,10 +202,6 @@ public class SensorDataSaver extends CameraCaptureSession.CaptureCallback implem
 
     // Reset the in-sequence frame numbering.
     firstFrameNumberInSequence = -1;
-
-
-    Log.i("SensorDataSaver", "elapsedRealtimeNanos - nanoTime difference values: " +
-        Arrays.toString(elapsedNanoTimeDiffCache));
 
     recordingStatusChangeLock.unlock();
   }
@@ -272,14 +292,8 @@ public class SensorDataSaver extends CameraCaptureSession.CaptureCallback implem
         framesWriter.beginObject();
         framesWriter.name("frame_id").value(currentFrameNumberInSequence);
         framesWriter.name("sensor_timestamp").value(frameSensorNanos);
-        // On both Nexus 5 and Nexus 5X the frame timestamps appear to come from System.nanoTime()
-        // (which does not advance at sleep), while all the other sensor timestamps come from
-        // SystemClock.elapsedRealtimeNanos(), which is advanced all the time.
-        // Assuming this is so on all devices, add the difference to the frame timestamp here
-        // to move it to elapsedRealtimeNanos() reference to be directly comparable with all the
-        // other sensors.
         final long timeUsec =
-            TimeUnit.NANOSECONDS.toMicros(frameSensorNanos + elapsedRealtimeNanoTimeDiff);
+            TimeUnit.NANOSECONDS.toMicros(frameSensorNanos + cameraTimestampsShiftWrtSensors);
         framesWriter.name(TIME_USEC).value(timeUsec);
         framesWriter.endObject();
 
