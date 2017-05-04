@@ -35,14 +35,14 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 public class SensorDataSaver extends CameraCaptureSession.CaptureCallback implements
     SensorEventListener, LocationListener {
-  public static String HEADINGS = "headings";
+  public static String ROTATIONS = "rotations";
   public static String ACCELERATIONS = "accelerations";
   public static String LOCATIONS = "locations";
   public static String FRAMES = "frames";
 
   public static String TIME_USEC = "time_usec";
 
-  private JsonWriter headingsWriter = null, accelerationsWriter = null, locationsWriter = null,
+  private JsonWriter rotationsWriter = null, accelerationsWriter = null, locationsWriter = null,
       framesWriter = null;
   private List<String> jsonFiles = new LinkedList<>();
 
@@ -102,7 +102,7 @@ public class SensorDataSaver extends CameraCaptureSession.CaptureCallback implem
       // Use the las estimate, which should be more accurate than the first.
       elapsedRealtimeNanoTimeDiff = elapsedNanoTimeDiffCache[elapsedNanoTimeDiffCache.length - 1];
 
-      headingsWriter = initJsonListWriter(recordingDir, HEADINGS);
+      rotationsWriter = initJsonListWriter(recordingDir, ROTATIONS);
       accelerationsWriter = initJsonListWriter(recordingDir, ACCELERATIONS);
       locationsWriter = initJsonListWriter(recordingDir, LOCATIONS);
       framesWriter = initJsonListWriter(recordingDir, FRAMES);
@@ -169,7 +169,7 @@ public class SensorDataSaver extends CameraCaptureSession.CaptureCallback implem
     }
     isRecording = false;
 
-    finishJsonListWriter(headingsWriter, HEADINGS);
+    finishJsonListWriter(rotationsWriter, ROTATIONS);
     finishJsonListWriter(accelerationsWriter, ACCELERATIONS);
     finishJsonListWriter(locationsWriter, LOCATIONS);
     finishJsonListWriter(framesWriter, FRAMES);
@@ -192,42 +192,31 @@ public class SensorDataSaver extends CameraCaptureSession.CaptureCallback implem
 
   // SensorEventListener: gyro and accelerations.
 
+  private void writeXYZSensor(Lock lock, SensorEvent event, JsonWriter writer, String sensorName) {
+    try {
+      lock.lock();
+      if (isRecording) {
+        writer.beginObject();
+        writer.name("x").value(event.values[0]);
+        writer.name("y").value(event.values[1]);
+        writer.name("z").value(event.values[2]);
+        writer.name(TIME_USEC).value(TimeUnit.NANOSECONDS.toMicros(event.timestamp));
+        writer.endObject();
+      }
+    } catch (IOException e) {
+      Errors.dieOnException(parentActivity, e, "Error writing " + sensorName + " JSON.");
+    } finally {
+      lock.unlock();
+    }
+  }
+
   public void onSensorChanged(SensorEvent event) {
     switch (event.sensor.getType()) {
       case Sensor.TYPE_GYROSCOPE:
-        try {
-          gyroLock.lock();
-          if (isRecording) {
-            headingsWriter.beginObject();
-            headingsWriter.name("yaw").value(event.values[0]);
-            headingsWriter.name("pitch").value(event.values[1]);
-            headingsWriter.name("roll").value(event.values[2]);
-            headingsWriter.name(TIME_USEC).value(TimeUnit.NANOSECONDS.toMicros(event.timestamp));
-            headingsWriter.endObject();
-          }
-        } catch (IOException e) {
-          Errors.dieOnException(parentActivity, e, "Error writing headings JSON.");
-        } finally {
-          gyroLock.unlock();
-        }
+        writeXYZSensor(gyroLock, event, rotationsWriter, ROTATIONS);
         break;
       case Sensor.TYPE_ACCELEROMETER:
-        try {
-          accelerometerLock.lock();
-          if (isRecording) {
-            accelerationsWriter.beginObject();
-            accelerationsWriter.name("x").value(event.values[0]);
-            accelerationsWriter.name("y").value(event.values[1]);
-            accelerationsWriter.name("z").value(event.values[2]);
-            accelerationsWriter.name(TIME_USEC)
-                .value(TimeUnit.NANOSECONDS.toMicros(event.timestamp));
-            accelerationsWriter.endObject();
-          }
-        } catch (IOException e) {
-          Errors.dieOnException(parentActivity, e, "Error writing accelerations JSON.");
-        } finally {
-          accelerometerLock.unlock();
-        }
+        writeXYZSensor(accelerometerLock, event, accelerationsWriter, ACCELERATIONS);
         break;
       default:
         break;
@@ -248,7 +237,6 @@ public class SensorDataSaver extends CameraCaptureSession.CaptureCallback implem
         locationsWriter.name("accuracy_m").value(location.getAccuracy());
         locationsWriter.name("speed_m_s").value(location.getSpeed());
         locationsWriter.name("bearing_degrees").value(location.getBearing());
-        locationsWriter.name("location_time_msec").value(location.getTime());
         locationsWriter.name(TIME_USEC)
             .value(TimeUnit.NANOSECONDS.toMicros(location.getElapsedRealtimeNanos()));
         locationsWriter.endObject();
