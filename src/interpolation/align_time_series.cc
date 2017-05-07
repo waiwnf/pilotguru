@@ -111,4 +111,51 @@ MergeTimeSeries(const std::vector<const std::vector<long> *> &in_timestamps) {
 
   return result;
 }
+
+double InterpolationInterval::DurationSec() const {
+  CHECK_LE(start_usec, end_usec);
+  return static_cast<double>(end_usec - start_usec) * 1e-6;
+}
+
+std::vector<std::vector<InterpolationInterval>>
+MakeInterpolationIntervals(const std::vector<long> &reference_timestamps,
+                           const std::vector<long> &interpolation_timestamps) {
+  CheckTimestampsIncreasing(reference_timestamps);
+  CheckTimestampsIncreasing(interpolation_timestamps);
+
+  std::vector<std::vector<InterpolationInterval>> result;
+  long latest_ts =
+      std::min(interpolation_timestamps.front(), reference_timestamps.front());
+  for (size_t reference_idx = 0, interpolation_idx = 0;
+       reference_idx < reference_timestamps.size(); ++reference_idx) {
+    const long reference_ts = reference_timestamps.at(reference_idx);
+    // All intervals iontersecting with the current reference interval.
+    std::vector<InterpolationInterval> intervals;
+    while (interpolation_idx < interpolation_timestamps.size() &&
+           interpolation_timestamps.at(interpolation_idx) <= reference_ts) {
+      const long interpolation_ts =
+          interpolation_timestamps.at(interpolation_idx);
+      if (interpolation_ts > latest_ts) {
+        intervals.push_back(
+            {reference_idx, interpolation_idx, latest_ts, interpolation_ts});
+      }
+      latest_ts = interpolation_ts;
+      ++interpolation_idx;
+    }
+    // We have reached an interpolation interval that ends after the current
+    // reference interval ends. But the beginning of that interpolation interval
+    // may still intersect with the current reference interval. Add a
+    // corresponding intersection if it is nonempty.
+    if (interpolation_idx > 0 &&
+        interpolation_idx < interpolation_timestamps.size() &&
+        reference_ts > latest_ts) {
+      intervals.push_back(
+          {reference_idx, interpolation_idx, latest_ts, reference_ts});
+    }
+    latest_ts = reference_ts;
+    result.push_back(intervals);
+  }
+
+  return result;
+}
 }

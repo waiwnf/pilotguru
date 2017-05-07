@@ -33,6 +33,39 @@ namespace pilotguru {
 //
 std::vector<std::vector<size_t>>
 MergeTimeSeries(const std::vector<const std::vector<long> *> &in_timestamps);
+
+// Timing datastructures for fitting fine-grained motion to a series of coarse
+// 'reference' measurements. The use case is to fit a trajectory defined by
+// noisy
+// fine-grained information (e.g. accelerometer readings at ~200Hz) while
+// matching the averages on coarse intervals (GPS measurements at ~1Hz) and
+// thereby calibrate the accelerometer data "online".
+
+// An interval (start_usec, end_usec] corresponding to an intersection of the
+// reference measurement interval (i.e. an interval between two neighboring GPS
+// measurements) with an interpolation interval (an interval between neighboring
+// accelerometer/gyroscope readings).
+//
+// Reference and interpolation intervals are represented as indices into
+// corresponding vectors of measurement timestamps (external to this struct). By
+// convention an interval is represented by the index of its ending timestep.
+struct InterpolationInterval {
+  // Index of the end timestamp of the reference interval.
+  size_t reference_end_time_index;
+  // Index of the end timestamp of the interpolation interval.
+  size_t interpolation_end_time_index;
+  long start_usec;
+  long end_usec;
+
+  double DurationSec() const;
+};
+
+// Make all intervals (see InterpolationInterval above) corresponding to
+// intersection of the intervals defined by reference timestamps and
+// interpolation timestamps.
+std::vector<std::vector<InterpolationInterval>>
+MakeInterpolationIntervals(const std::vector<long> &reference_timestamps,
+                           const std::vector<long> &interpolation_timestamps);
 }
 
 #endif // PILOTGURU_INTERPOLATION_ALIGN_TIME_SERIES_HPP_
