@@ -22,6 +22,7 @@ DEFINE_double(l1_weight, 0.0, "");
 DEFINE_double(l2_weight, 0.0, "");
 DEFINE_double(distance_weight, 1.0, "");
 DEFINE_double(accelerations_weight, 1.0, "");
+DEFINE_double(accelerations_smoothness_weight, 1.0, "");
 DEFINE_double(lr, 1e-1, "");
 DEFINE_double(decay, 1.0, "");
 DEFINE_double(iters, 1000, "");
@@ -32,6 +33,23 @@ struct TimestampedVelocity {
   long time_usec;
 };
 
+double IntervalInSeconds(long start_time_usec, long end_time_usec) {
+  return static_cast<double>(end_time_usec - start_time_usec) * 1e-6;
+}
+
+std::vector<std::vector<pilotguru::InterpolationInterval>>
+MakeGPSIndexToInterpolatedIntervals(
+    const std::vector<TimestampedVelocity> &gps_velocities,
+    const std::vector<long> &interpolation_timestamps) {
+  std::vector<long> gps_timestamps;
+  for (const TimestampedVelocity &gps : gps_velocities) {
+    gps_timestamps.push_back(gps.time_usec);
+  }
+
+  return pilotguru::MakeInterpolationIntervals(gps_timestamps,
+                                               interpolation_timestamps);
+}
+
 class GPSInterpolationObjective : public pilotguru::LossFunction {
 public:
   GPSInterpolationObjective(
@@ -40,17 +58,15 @@ public:
       const std::vector<long>
           &interpolation_timestamps /* must be sorted by time */,
       double l1_weight, double l2_weight, double velocity_penalty_weight,
-      double acceleration_penalty_weight)
+      double acceleration_penalty_weight, double acceleration_smoothness_weight)
       : gps_velocities_(gps_velocities),
         interpolation_timestamps_(interpolation_timestamps),
         l1_weight_(l1_weight), l2_weight_(l2_weight),
         velocity_penalty_weight_(velocity_penalty_weight),
         acceleration_penalty_weight_(acceleration_penalty_weight),
-        gps_to_interpolated_indices_(MakeGPSIndexToInterpolatedIndices(
-            gps_velocities, interpolation_timestamps)),
-        interval_durations_sec_(
-            IntervalDurationsSeconds(gps_velocities, interpolation_timestamps,
-                                     gps_to_interpolated_indices_)) {
+        acceleration_smoothness_weight_(acceleration_smoothness_weight),
+        gps_to_interpolated_intervals_(MakeGPSIndexToInterpolatedIntervals(
+            gps_velocities, interpolation_timestamps)) {
     CHECK_GE(l1_weight_, 0.0);
     CHECK_GE(l2_weight_, 0.0);
     CHECK_GT(l1_weight_ + l2_weight_, 0.0);
@@ -62,9 +78,11 @@ public:
   // respecive times.
   std::vector<double> InitToAverages() const {
     std::vector<double> result(interpolation_timestamps_.size(), 0.0);
-    for (size_t interval = 0; interval < gps_velocities_.size(); ++interval) {
-      for (const size_t i : gps_to_interpolated_indices_.at(interval)) {
-        result.at(i) = gps_velocities_.at(interval).velocity;
+    for (size_t gps_idx = 0; gps_idx < gps_velocities_.size(); ++gps_idx) {
+      for (const pilotguru::InterpolationInterval &i :
+           gps_to_interpolated_intervals_.at(gps_idx)) {
+        result.at(i.interpolation_end_time_index) =
+            gps_velocities_.at(gps_idx).velocity;
       }
     }
     return result;
@@ -84,17 +102,19 @@ public:
     double objective = 0.0;
 
     // Distance match and gradients.
-    for (size_t interval = 0; interval < gps_velocities_.size(); ++interval) {
-      const std::vector<size_t> &interval_indices =
-          gps_to_interpolated_indices_.at(interval);
+    for (size_t gps_index = 0; gps_index < gps_velocities_.size();
+         ++gps_index) {
+      const std::vector<pilotguru::InterpolationInterval> &intervals =
+          gps_to_interpolated_intervals_.at(gps_index);
       double integrated_distance = 0, gps_duration = 0;
-      for (const size_t i : interval_indices) {
-        integrated_distance += in.at(i) * interval_durations_sec_.at(i);
-        gps_duration += interval_durations_sec_.at(i); // TODO factor out.
+      for (const pilotguru::InterpolationInterval &interval : intervals) {
+        integrated_distance += in.at(interval.interpolation_end_time_index) *
+                               interval.DurationSec();
+        gps_duration += interval.DurationSec(); // TODO factor out.
       }
 
       const double gps_distance =
-          gps_velocities_.at(interval).velocity * gps_duration;
+          gps_velocities_.at(gps_index).velocity * gps_duration;
       const double distance_diff = integrated_distance - gps_distance;
       const double distance_diff_sign = distance_diff > 0 ? 1.0 : -1.0;
 
@@ -105,19 +125,48 @@ public:
 
       // Gradient of the travelled distance mismatch wrt the interpolated
       // velocities.
-      for (const size_t i : interval_indices) {
-        gradient->at(i) += l1_weight_ * velocity_penalty_weight_ *
-                           distance_diff_sign * interval_durations_sec_.at(i);
-        gradient->at(i) += 2.0 * l2_weight_ * velocity_penalty_weight_ *
-                           distance_diff * interval_durations_sec_.at(i);
+      for (const pilotguru::InterpolationInterval &interval : intervals) {
+        gradient->at(interval.interpolation_end_time_index) +=
+            l1_weight_ * velocity_penalty_weight_ * distance_diff_sign *
+            interval.DurationSec();
+        gradient->at(interval.interpolation_end_time_index) +=
+            2.0 * l2_weight_ * velocity_penalty_weight_ * distance_diff *
+            interval.DurationSec();
       }
     }
 
+    // Accelerations.
+    for (size_t i = 1; i < interpolation_timestamps_.size(); ++i) {
+      const double inverse_duration =
+          1.0 / IntervalInSeconds(interpolation_timestamps_.at(i - 1),
+                                  interpolation_timestamps_.at(i));
+      const double acceleration = (in.at(i) - in.at(i - 1)) * inverse_duration;
+      const int acceleration_sign = acceleration > 0 ? 1 : -1;
+
+      objective +=
+          l1_weight_ * acceleration_penalty_weight_ * std::abs(acceleration);
+      objective += l2_weight_ * acceleration_penalty_weight_ * acceleration *
+                   acceleration;
+
+      gradient->at(i - 1) -= l1_weight_ * acceleration_penalty_weight_ *
+                             acceleration_sign * inverse_duration;
+      gradient->at(i - 1) -= 2.0 * l2_weight_ * acceleration_penalty_weight_ *
+                             acceleration * inverse_duration;
+
+      gradient->at(i) += l1_weight_ * acceleration_penalty_weight_ *
+                         acceleration_sign * inverse_duration;
+      gradient->at(i) += 2.0 * l2_weight_ * acceleration_penalty_weight_ *
+                         acceleration * inverse_duration;
+    }
+
     // Accelerations smoothness.
-    for (size_t i = 1; i < interval_durations_sec_.size() - 1; ++i) {
-      const double inverse_duration_prev = 1.0 / interval_durations_sec_.at(i);
+    for (size_t i = 1; i < interpolation_timestamps_.size() - 1; ++i) {
+      const double inverse_duration_prev =
+          1.0 / IntervalInSeconds(interpolation_timestamps_.at(i - 1),
+                                  interpolation_timestamps_.at(i));
       const double inverse_duration_next =
-          1.0 / interval_durations_sec_.at(i + 1);
+          1.0 / IntervalInSeconds(interpolation_timestamps_.at(i),
+                                  interpolation_timestamps_.at(i + 1));
       const double acceleration_prev =
           (in.at(i) - in.at(i - 1)) * inverse_duration_prev;
       const double acceleration_next =
@@ -125,25 +174,27 @@ public:
       const double acceleration_diff = acceleration_next - acceleration_prev;
       const int acceleration_sign = acceleration_diff > 0 ? 1 : -1;
 
-      objective += l1_weight_ * acceleration_penalty_weight_ *
+      objective += l1_weight_ * acceleration_smoothness_weight_ *
                    std::abs(acceleration_diff);
-      objective += l2_weight_ * acceleration_penalty_weight_ *
+      objective += l2_weight_ * acceleration_smoothness_weight_ *
                    acceleration_diff * acceleration_diff;
 
-      gradient->at(i - 1) += l1_weight_ * acceleration_penalty_weight_ *
+      gradient->at(i - 1) += l1_weight_ * acceleration_smoothness_weight_ *
                              acceleration_sign * inverse_duration_prev;
-      gradient->at(i - 1) += 2.0 * l2_weight_ * acceleration_penalty_weight_ *
+      gradient->at(i - 1) += 2.0 * l2_weight_ *
+                             acceleration_smoothness_weight_ *
                              acceleration_diff * inverse_duration_prev;
 
-      gradient->at(i + 1) += l1_weight_ * acceleration_penalty_weight_ *
+      gradient->at(i + 1) += l1_weight_ * acceleration_smoothness_weight_ *
                              acceleration_sign * inverse_duration_next;
-      gradient->at(i + 1) += 2.0 * l2_weight_ * acceleration_penalty_weight_ *
+      gradient->at(i + 1) += 2.0 * l2_weight_ *
+                             acceleration_smoothness_weight_ *
                              acceleration_diff * inverse_duration_next;
 
-      gradient->at(i) -= l1_weight_ * acceleration_penalty_weight_ *
+      gradient->at(i) -= l1_weight_ * acceleration_smoothness_weight_ *
                          acceleration_sign *
                          (inverse_duration_prev + inverse_duration_next);
-      gradient->at(i) -= 2.0 * l2_weight_ * acceleration_penalty_weight_ *
+      gradient->at(i) -= 2.0 * l2_weight_ * acceleration_smoothness_weight_ *
                          acceleration_diff *
                          (inverse_duration_prev + inverse_duration_next);
     }
@@ -152,68 +203,14 @@ public:
   }
 
 private:
-  // Makes a vector
-  // [gps velocity index] -> [indices of interpolation timestamps on the
-  // interval between that GPS sample and the previous one].
-  static std::vector<std::vector<size_t>> MakeGPSIndexToInterpolatedIndices(
-      const std::vector<TimestampedVelocity>
-          &gps_velocities /* must be sorted by time */,
-      const std::vector<long> &interpolation_timestamps) {
-    std::vector<std::vector<size_t>> result;
-    size_t timestamp_index = 0;
-    for (const TimestampedVelocity &gps : gps_velocities) {
-      std::vector<size_t> interval_indices;
-      while (timestamp_index < interpolation_timestamps.size() &&
-             interpolation_timestamps.at(timestamp_index) <= gps.time_usec) {
-        interval_indices.push_back(timestamp_index);
-        ++timestamp_index;
-      }
-      result.push_back(interval_indices);
-    }
-
-    return result;
-  }
-
-  static vector<double> IntervalDurationsSeconds(
-      const std::vector<TimestampedVelocity> &gps_velocities,
-      const std::vector<long> &interpolation_timestamps,
-      const std::vector<std::vector<size_t>> &gps_to_interpolated_indices) {
-    size_t total_interpolation_points = 0;
-    for (const auto &interval_indices : gps_to_interpolated_indices) {
-      total_interpolation_points += interval_indices.size();
-    }
-    vector<double> durations(total_interpolation_points, 0.0);
-
-    long prev_time_usec = interpolation_timestamps.at(0);
-    for (size_t interval = 0; interval < gps_velocities.size(); ++interval) {
-      const std::vector<size_t> &interval_indices =
-          gps_to_interpolated_indices.at(interval);
-      for (size_t interpolated_idx : interval_indices) {
-        durations.at(interpolated_idx) = IntervalInSeconds(
-            prev_time_usec, interpolation_timestamps.at(interpolated_idx));
-        prev_time_usec = interpolation_timestamps.at(interpolated_idx);
-      }
-      if (!interval_indices.empty()) {
-        durations.at(interval_indices.back()) += IntervalInSeconds(
-            prev_time_usec, gps_velocities.at(interval).time_usec);
-        prev_time_usec = gps_velocities.at(interval).time_usec;
-      }
-    }
-
-    return durations;
-  }
-
-  static double IntervalInSeconds(long start_time_usec, long end_time_usec) {
-    return static_cast<double>(end_time_usec - start_time_usec) * 1e-6;
-  }
-
   const std::vector<TimestampedVelocity> &gps_velocities_;
   const std::vector<long> &interpolation_timestamps_;
   const double l1_weight_, l2_weight_;
-  const double velocity_penalty_weight_, acceleration_penalty_weight_;
+  const double velocity_penalty_weight_, acceleration_penalty_weight_,
+      acceleration_smoothness_weight_;
 
-  const std::vector<std::vector<size_t>> gps_to_interpolated_indices_;
-  const std::vector<double> interval_durations_sec_;
+  const std::vector<std::vector<pilotguru::InterpolationInterval>>
+      gps_to_interpolated_intervals_;
 };
 } // namespace
 
@@ -271,9 +268,10 @@ int main(int argc, char **argv) {
 
   GPSInterpolationObjective loss(
       gps_data, frame_timestamps_usec, FLAGS_l1_weight, FLAGS_l2_weight,
-      FLAGS_distance_weight, FLAGS_accelerations_weight);
+      FLAGS_distance_weight, FLAGS_accelerations_weight,
+      FLAGS_accelerations_smoothness_weight);
   pilotguru::GradientDescent optimizer(
-      FLAGS_lr, FLAGS_decay, -0.2 /* min grad clip */, 0.2 /* max grad clip */);
+      FLAGS_lr, FLAGS_decay, -10 /* min grad clip */, 10 /* max grad clip */);
   std::vector<double> params = loss.InitToAverages();
   optimizer.optimize(loss, &params, FLAGS_iters /* iters */);
 
