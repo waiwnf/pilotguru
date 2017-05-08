@@ -27,6 +27,13 @@ namespace pilotguru {
 std::vector<std::vector<size_t>>
 MergeTimeSeries(const std::vector<const std::vector<long> *> &in_timestamps);
 
+// Gets effective timestamp for a merged time series event. The effective
+// timestamp is the latest of the component timestamps for the event.
+// See MergeTimeSeries() above.
+long GetEffectiveTimeStamp(
+    const std::vector<const std::vector<long> *> &component_timestamps,
+    const std::vector<size_t> &event_indices);
+
 // Timing datastructures for fitting fine-grained motion to a series of coarse
 // 'reference' measurements. The use case is to fit a trajectory defined by
 // noisy

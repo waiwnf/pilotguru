@@ -112,6 +112,21 @@ MergeTimeSeries(const std::vector<const std::vector<long> *> &in_timestamps) {
   return result;
 }
 
+long GetEffectiveTimeStamp(
+    const std::vector<const std::vector<long> *> &component_timestamps,
+    const std::vector<size_t> &event_indices) {
+  CHECK(!component_timestamps.empty());
+  CHECK_EQ(component_timestamps.size(), event_indices.size());
+  long result = std::numeric_limits<long>::min();
+  for (size_t i = 0; i < component_timestamps.size(); ++i) {
+    CHECK_NOTNULL(component_timestamps.at(i));
+    CHECK_LT(event_indices.at(i), component_timestamps.at(i)->size());
+    result =
+        std::max(result, component_timestamps.at(i)->at(event_indices.at(i)));
+  }
+  return result;
+}
+
 double InterpolationInterval::DurationSec() const {
   CHECK_LE(start_usec, end_usec);
   return static_cast<double>(end_usec - start_usec) * 1e-6;
