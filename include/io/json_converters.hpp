@@ -16,6 +16,7 @@ constexpr char kIsLost[] = "is_lost";
 constexpr char kFrameId[] = "frame_id";
 constexpr char kPose[] = "pose";
 constexpr char kPlanarDirection[] = "planar_direction";
+constexpr char kRotations[] = "rotations";
 constexpr char kSpeedMS[] = "speed_m_s";
 constexpr char kTurnAngle[] = "turn_angle";
 

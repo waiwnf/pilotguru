@@ -36,6 +36,7 @@ add_library(pilotgurulib SHARED
 )
 
 add_executable(calibrate src/calibrate.cc)
+add_executable(integrate_motion src/integrate_motion.cc)
 add_executable(interpolate_velocity src/interpolate_velocity.cc)
 add_executable(optical_trajectories src/optical_trajectories.cc)
 add_executable(project_translations src/project_translations.cc)
@@ -43,12 +44,15 @@ add_executable(render_turning src/render_turning.cc)
 add_executable(smooth_heading_directions src/smooth_heading_directions.cc)
 
 add_dependencies(pilotgurulib ORB_SLAM2)
+add_dependencies(integrate_motion pilotgurulib ORB_SLAM2)
+add_dependencies(interpolate_velocity pilotgurulib ORB_SLAM2)
 add_dependencies(optical_trajectories pilotgurulib ORB_SLAM2)
 add_dependencies(project_translations pilotgurulib ORB_SLAM2)
 add_dependencies(render_turning pilotgurulib ORB_SLAM2)
 add_dependencies(smooth_heading_directions pilotgurulib ORB_SLAM2)
 
 target_link_libraries(calibrate ${OpenCV_LIBS} glog gflags)
+target_link_libraries(integrate_motion pilotgurulib ORB_SLAM2 glog gflags)
 target_link_libraries(interpolate_velocity pilotgurulib ORB_SLAM2 glog gflags)
 target_link_libraries(optical_trajectories pilotgurulib ORB_SLAM2 ${OpenCV_LIBS} glog gflags)
 target_link_libraries(project_translations pilotgurulib ORB_SLAM2 ${OpenCV_LIBS} glog gflags)
