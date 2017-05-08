@@ -25,6 +25,7 @@ ${CMAKE_CURRENT_BINARY_DIR}/thirdparty/orb-slam2  # For generated proto files.
 find_package(OpenCV 2.4.3 REQUIRED)
 
 add_library(pilotgurulib SHARED
+  ${PROJECT_SOURCE_DIR}/src/geometry/geometry.cc
   ${PROJECT_SOURCE_DIR}/src/io/image_sequence_reader.cc
   ${PROJECT_SOURCE_DIR}/src/io/image_sequence_writer.cc
   ${PROJECT_SOURCE_DIR}/src/interpolation/align_time_series.cc

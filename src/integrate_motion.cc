@@ -8,6 +8,7 @@
 
 #include <json.hpp>
 
+#include <geometry/geometry.hpp>
 #include <interpolation/align_time_series.hpp>
 #include <io/json_converters.hpp>
 #include <slam/smoothing.hpp>
@@ -81,25 +82,11 @@ int main(int argc, char **argv) {
 
     // Integrate rotation.
     const auto &rotation_rate = rotations.at(current.at(0));
-    const double rate_x_rad_s = rotation_rate[pilotguru::kX];
-    const double rate_y_rad_s = rotation_rate[pilotguru::kY];
-    const double rate_z_rad_s = rotation_rate[pilotguru::kZ];
-    const double rate_overall_rad_s =
-        sqrt(rate_x_rad_s * rate_x_rad_s + rate_y_rad_s * rate_y_rad_s +
-             rate_z_rad_s * rate_z_rad_s);
-    if (rate_overall_rad_s > 1e-5) {
-      const double half_theta = rate_overall_rad_s * interval_sec * 0.5;
-      const double sin_half_theta_normalized =
-          sin(half_theta) / rate_overall_rad_s;
-
-      const double dw = cos(half_theta);
-      const double dx = rate_x_rad_s * sin_half_theta_normalized;
-      const double dy = rate_y_rad_s * sin_half_theta_normalized;
-      const double dz = rate_z_rad_s * sin_half_theta_normalized;
-      const Eigen::Quaterniond d_rotation(dw, dx, dy, dz);
-      const Eigen::Quaterniond &overall_rotation = integrated_rotations.back();
-      integrated_rotations.push_back(overall_rotation * d_rotation);
-    }
+    const Eigen::Quaterniond d_rotation = pilotguru::RotationMotionToQuaternion(
+        rotation_rate[pilotguru::kX], rotation_rate[pilotguru::kY],
+        rotation_rate[pilotguru::kZ], interval_sec);
+    const Eigen::Quaterniond &overall_rotation = integrated_rotations.back();
+    integrated_rotations.push_back(overall_rotation * d_rotation);
   }
 
   LOG(INFO) << "Final rotation.  w: " << integrated_rotations.back().w()
