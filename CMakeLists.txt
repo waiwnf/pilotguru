@@ -18,6 +18,7 @@ ${PROJECT_SOURCE_DIR}/include
 ${PROJECT_SOURCE_DIR}/thirdparty/orb-slam2/include
 ${PROJECT_SOURCE_DIR}/thirdparty/DBoW2
 ${PROJECT_SOURCE_DIR}/thirdparty/g2o
+${PROJECT_SOURCE_DIR}/thirdparty/LBFGS
 ${EIGEN3_INCLUDE_DIR}
 ${CMAKE_CURRENT_BINARY_DIR}/thirdparty/orb-slam2  # For generated proto files.
 )
