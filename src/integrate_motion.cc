@@ -122,13 +122,13 @@ int main(int argc, char **argv) {
   nlohmann::json out_json;
   out_json[pilotguru::kFrames] = {};
   auto &out_frames = out_json[pilotguru::kFrames];
-  for (size_t acceleration_idx = 0; acceleration_idx < accelerations.size();
-       ++acceleration_idx) {
+  for (size_t i = 1; i < sensor_events.size(); ++i) {
+    const std::vector<size_t> current = sensor_events.at(i);
+    const long current_time_usec =
+        pilotguru::GetEffectiveTimeStamp(component_timestamps, current);
     nlohmann::json velocity_json;
-    velocity_json[pilotguru::kTimeUsec] =
-        accelerations.at(acceleration_idx)[pilotguru::kTimeUsec];
-    velocity_json[pilotguru::kSpeedMS] =
-        integrated_velocities.at(acceleration_idx).norm();
+    velocity_json[pilotguru::kTimeUsec] = current_time_usec;
+    velocity_json[pilotguru::kSpeedMS] = integrated_velocities.at(i).norm();
     out_frames.push_back(velocity_json);
   }
 
