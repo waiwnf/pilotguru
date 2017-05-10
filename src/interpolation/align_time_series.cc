@@ -150,7 +150,7 @@ MakeInterpolationIntervals(const std::vector<long> &reference_timestamps,
            interpolation_timestamps.at(interpolation_idx) <= reference_ts) {
       const long interpolation_ts =
           interpolation_timestamps.at(interpolation_idx);
-      if (interpolation_ts > latest_ts) {
+      if (interpolation_ts > latest_ts && interpolation_idx > 0) {
         intervals.push_back(
             {reference_idx, interpolation_idx, latest_ts, interpolation_ts});
       }
