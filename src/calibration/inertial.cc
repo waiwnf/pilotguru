@@ -89,6 +89,7 @@ double AccelerometerCalibrator::eval(const std::vector<double> &in,
   Eigen::Vector3d integrated_velocity = initial_velocity;
   Eigen::Matrix3d total_time_weighted_rotation = Eigen::Matrix3d::Zero();
   long total_time_usec = 0;
+
   for (const std::vector<InterpolationInterval> &intervals :
        reference_intervals_) {
     // Total effective shift in 3D for this interval between two reference
@@ -105,34 +106,33 @@ double AccelerometerCalibrator::eval(const std::vector<double> &in,
 
     // Iterate over all inertial measurements on the given GPS reference
     // interval.
-    for (const InterpolationInterval &interval : intervals) {
-      const double interval_sec =
-          static_cast<double>(interval.end_usec - interval.start_usec) * 1e-6;
 
+    std::vector<IntervalIntegrationOutcome> integrated_intervals;
+    for (const InterpolationInterval &interval : intervals) {
       const std::vector<size_t> &sensor_indices =
           sensor_events_.at(interval.interpolation_end_time_index);
-      const TimestampedRotationVelocity &raw_rotation =
+      const TimestampedRotationVelocity &timestamped_raw_rotation =
           rotation_velocities_.at(sensor_indices.at(0));
       const TimestampedAcceleration &raw_acceleration =
           accelerations_.at(sensor_indices.at(1));
 
-      // Acceleration.
+      const Eigen::Quaterniond raw_rotation = RotationMotionToQuaternion(
+          timestamped_raw_rotation.rate_x_rad_s,
+          timestamped_raw_rotation.rate_y_rad_s,
+          timestamped_raw_rotation.rate_z_rad_s, interval.DurationSec());
       const Eigen::Vector3d acceleration_local_raw =
           Eigen::Vector3d(raw_acceleration.acc_x, raw_acceleration.acc_y,
                           raw_acceleration.acc_z);
-      // Local bias.
-      const Eigen::Vector3d acceleration_local_calibrated =
-          acceleration_local_raw + acceleration_local_bias;
-      // Rotate to the fixed reference frame.
-      const Eigen::Vector3d acceleration_rotated =
-          integrated_rotation._transformVector(acceleration_local_calibrated);
-      // Fixed reference frame bias (~gravity).
-      const Eigen::Vector3d acceleration_global =
-          acceleration_rotated + acceleration_global_bias;
-      // First integration yields velocity.
-      integrated_velocity += acceleration_global * interval_sec;
 
-      // Second integration yields the shift.
+      const IntervalIntegrationOutcome integration_outcome = IntegrateMotion(
+          integrated_rotation, integrated_velocity, raw_rotation,
+          acceleration_local_raw, acceleration_global_bias,
+          acceleration_local_bias, interval.DurationUsec());
+      integrated_intervals.push_back(integration_outcome);
+
+      integrated_rotation = integration_outcome.orientation;
+      integrated_velocity = integration_outcome.velocity;
+
       // Notice that we are summing up the shifts in 3D to get the effective
       // straight line shift in the end to match the GPS assumption of straight
       // line travel. This does not seem to matter much in practice though,
@@ -140,25 +140,17 @@ double AccelerometerCalibrator::eval(const std::vector<double> &in,
       //
       // TODO: This is not quite right - we should be taking the average of
       // before and after velocities here.
-      integrated_travel += interval_sec * integrated_velocity;
+      integrated_travel +=
+          interval.DurationSec() * integration_outcome.velocity;
 
       // Add up GPS derived travel distance assuming fixed velocity and straight
       // line travel.
       reference_distance +=
-          interval_sec *
+          interval.DurationSec() *
           reference_velocities_.at(interval.reference_end_time_index).velocity;
-
-      // Integrate rotation too to be used for the next interval.
-      const Eigen::Quaterniond d_rotation = RotationMotionToQuaternion(
-          raw_rotation.rate_x_rad_s, raw_rotation.rate_y_rad_s,
-          raw_rotation.rate_z_rad_s, interval_sec);
-      const Eigen::Quaterniond new_integrated_rotation =
-          integrated_rotation * d_rotation;
-      integrated_rotation = new_integrated_rotation;
-      interval_integrated_rotations.push_back(integrated_rotation);
     }
 
-    // Integrated shif computed, now we can get the loss function value.
+    // Integrated shift computed, now we can get the loss function value.
     const double distance_diff = integrated_travel.norm() - reference_distance;
     result += distance_diff * distance_diff;
 
@@ -167,12 +159,11 @@ double AccelerometerCalibrator::eval(const std::vector<double> &in,
                                             integrated_travel /
                                             (integrated_travel.norm() + 1e-5);
 
-    for (size_t i = 0; i < intervals.size(); ++i) {
-      const InterpolationInterval &interval = intervals.at(i);
-
-      long interval_usec = interval.end_usec - interval.start_usec;
-      const double interval_sec = static_cast<double>(interval_usec) * 1e-6;
-      total_time_usec += interval_usec;
+    for (const IntervalIntegrationOutcome &integration_outcome :
+         integrated_intervals) {
+      const double interval_sec =
+          static_cast<double>(integration_outcome.duration_usec) * 1e-6;
+      total_time_usec += integration_outcome.duration_usec;
       const double total_time_sec = static_cast<double>(total_time_usec) * 1e-6;
 
       // Derivative wrt the acceleration bias in the fixed reference frame.
@@ -188,12 +179,13 @@ double AccelerometerCalibrator::eval(const std::vector<double> &in,
       // time, so we need to use the rotation matrix to go from gradient in
       // fixed frame to gradient in local frame.
       const Eigen::Matrix3d d_rotation_matrix =
-          interval_integrated_rotations.at(i).toRotationMatrix();
+          integration_outcome.orientation.toRotationMatrix();
       // First time integration to get velocity.
       total_time_weighted_rotation += (d_rotation_matrix * interval_sec);
       // Second time integration to get distance.
       const Eigen::Vector3d dloss_dbias_local =
-          interval_sec * total_time_weighted_rotation.transpose() * d_loss_d_travel;
+          interval_sec * total_time_weighted_rotation.transpose() *
+          d_loss_d_travel;
       gradient->at(3) += dloss_dbias_local.x();
       gradient->at(4) += dloss_dbias_local.y();
       gradient->at(5) += dloss_dbias_local.z();
@@ -230,5 +222,10 @@ double AccelerometerCalibrator::operator()(const Eigen::VectorXd &x,
     grad[i] = grad_vec.at(i);
   }
   return result;
+}
+
+const std::vector<std::vector<size_t>> &
+AccelerometerCalibrator::MergedSensorEvents() const {
+  return sensor_events_;
 }
 }

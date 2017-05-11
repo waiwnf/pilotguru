@@ -66,6 +66,8 @@ public:
   // For the LBFGS implementation.
   double operator()(const Eigen::VectorXd &x, Eigen::VectorXd &grad);
 
+  const std::vector<std::vector<size_t>>& MergedSensorEvents() const;
+
 private:
   const std::vector<TimestampedVelocity> &reference_velocities_;
   const std::vector<TimestampedRotationVelocity> &rotation_velocities_;
