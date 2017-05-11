@@ -70,6 +70,9 @@ public:
 
   const std::vector<std::vector<size_t>> &MergedSensorEvents() const;
 
+  // Index is into MergedSensorEvents();
+  long GetSensorEventTimestamp(const size_t sensor_event_index) const;
+
   // Keys are indices into MergedSensorEvents().
   const std::map<size_t, MotionIntegrationOutcome>
   IntegrateTrajectory(const Eigen::Vector3d &acceleration_global_bias,
@@ -80,6 +83,9 @@ private:
   const std::vector<TimestampedVelocity> &reference_velocities_;
   const std::vector<TimestampedRotationVelocity> &rotation_velocities_;
   const std::vector<TimestampedAcceleration> &accelerations_;
+
+  // Events timestamps.
+  const std::vector<long> rotation_times_, accelerations_times_;
 
   // Merged rotations and accelerations time series.
   const std::vector<std::vector<size_t>> sensor_events_;

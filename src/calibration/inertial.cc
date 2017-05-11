@@ -20,16 +20,6 @@ std::vector<long> ExtractTimestamps(const std::vector<T> &events) {
   return result;
 }
 
-// Merge the accelerations and rotations time series.
-std::vector<std::vector<size_t>> InitSensorEvents(
-    const std::vector<TimestampedRotationVelocity> &rotation_velocities,
-    const std::vector<TimestampedAcceleration> &accelerations) {
-  const std::vector<long> rotation_times =
-      ExtractTimestamps(rotation_velocities);
-  const std::vector<long> acceleration_times = ExtractTimestamps(accelerations);
-  return MergeTimeSeries({&rotation_times, &acceleration_times});
-}
-
 // Init the interpolation intervals for the merged accelerations+rotations time
 // series wrt the reference time series of GPS measurements.
 std::vector<std::vector<InterpolationInterval>> InitInterpolationIntervals(
@@ -59,7 +49,10 @@ AccelerometerCalibrator::AccelerometerCalibrator(
     const std::vector<TimestampedAcceleration> &accelerations)
     : reference_velocities_(reference_velocities),
       rotation_velocities_(rotation_velocities), accelerations_(accelerations),
-      sensor_events_(InitSensorEvents(rotation_velocities_, accelerations_)),
+      rotation_times_(ExtractTimestamps(rotation_velocities)),
+      accelerations_times_(ExtractTimestamps(accelerations)),
+      sensor_events_(
+          MergeTimeSeries({&rotation_times_, &accelerations_times_})),
       reference_intervals_(
           InitInterpolationIntervals(reference_velocities, rotation_velocities,
                                      accelerations, sensor_events_)) {}
@@ -227,6 +220,13 @@ double AccelerometerCalibrator::operator()(const Eigen::VectorXd &x,
 const std::vector<std::vector<size_t>> &
 AccelerometerCalibrator::MergedSensorEvents() const {
   return sensor_events_;
+}
+
+long AccelerometerCalibrator::GetSensorEventTimestamp(
+    const size_t sensor_event_index) const {
+  CHECK_LT(sensor_event_index, sensor_events_.size());
+  return GetEffectiveTimeStamp({&rotation_times_, &accelerations_times_},
+                               sensor_events_.at(sensor_event_index));
 }
 
 const std::map<size_t, MotionIntegrationOutcome>
