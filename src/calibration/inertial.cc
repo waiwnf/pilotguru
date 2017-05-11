@@ -228,4 +228,63 @@ const std::vector<std::vector<size_t>> &
 AccelerometerCalibrator::MergedSensorEvents() const {
   return sensor_events_;
 }
+
+const std::map<size_t, IntervalIntegrationOutcome>
+AccelerometerCalibrator::IntegrateTrajectory(
+    const Eigen::Vector3d &acceleration_global_bias,
+    const Eigen::Vector3d &acceleration_local_bias,
+    const Eigen::Vector3d &initial_velocity) {
+  std::map<size_t, IntervalIntegrationOutcome> result;
+
+  Eigen::Quaterniond integrated_rotation(1.0, 0.0, 0.0, 0.0);
+  Eigen::Vector3d integrated_velocity = initial_velocity;
+
+  for (const std::vector<InterpolationInterval> &intervals :
+       reference_intervals_) {
+    for (const InterpolationInterval &interval : intervals) {
+      size_t interpolation_index = interval.interpolation_end_time_index;
+      const std::vector<size_t> &sensor_indices =
+          sensor_events_.at(interpolation_index);
+      const TimestampedRotationVelocity &timestamped_raw_rotation =
+          rotation_velocities_.at(sensor_indices.at(0));
+      const TimestampedAcceleration &raw_acceleration =
+          accelerations_.at(sensor_indices.at(1));
+
+      const Eigen::Quaterniond raw_rotation = RotationMotionToQuaternion(
+          timestamped_raw_rotation.rate_x_rad_s,
+          timestamped_raw_rotation.rate_y_rad_s,
+          timestamped_raw_rotation.rate_z_rad_s, interval.DurationSec());
+      const Eigen::Vector3d acceleration_local_raw =
+          Eigen::Vector3d(raw_acceleration.acc_x, raw_acceleration.acc_y,
+                          raw_acceleration.acc_z);
+
+      const IntervalIntegrationOutcome integration_outcome = IntegrateMotion(
+          integrated_rotation, integrated_velocity, raw_rotation,
+          acceleration_local_raw, acceleration_global_bias,
+          acceleration_local_bias, interval.DurationUsec());
+
+      integrated_rotation = integration_outcome.orientation;
+      integrated_velocity = integration_outcome.velocity;
+
+      // See whether there is already a result for this interpolation index.
+      // If yes, that value is only a partial result because the interpolation
+      // interval has been broken up by the reference intervals boundary.
+      auto existing_outcome = result.find(interpolation_index);
+      if (existing_outcome == result.end()) {
+        // No result for this interpolation index, just put in the newly
+        // computed values.
+        result.insert({interpolation_index, integration_outcome});
+      } else {
+        // Result for this interpolation index already exists. Update the
+        // trajectory data, and sum up the interval durations.
+        existing_outcome->second.orientation = integration_outcome.orientation;
+        existing_outcome->second.velocity = integration_outcome.velocity;
+        existing_outcome->second.duration_usec +=
+            integration_outcome.duration_usec;
+      }
+    }
+  }
+
+  return result;
+}
 }

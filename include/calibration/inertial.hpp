@@ -12,10 +12,12 @@
 // coarse-grained GPS data to achieve much higher temporal resolution.
 // GPS data typically comes at ~1Hz, while accelerometer can get up to ~500Hz.
 
+#include <map>
 #include <vector>
 
 #include <Eigen/Core>
 
+#include <geometry/geometry.hpp>
 #include <interpolation/align_time_series.hpp>
 #include <optimization/loss_function.hpp>
 
@@ -44,10 +46,10 @@ struct TimestampedAcceleration {
 //
 // Given the parameters ([acceleration bias in fixed reference frame],
 // [accelerometer bias in device reference frame], [initial velocity]),
-// computes 
-// 
+// computes
+//
 //   sum_i (gps_distance[i] - motion_integrated_distance[i])^2
-// 
+//
 // where i is the index of an interval between two neighboring GPS measurements.
 // The gradient wrt parameters is also computed.
 class AccelerometerCalibrator : public LossFunction {
@@ -66,7 +68,13 @@ public:
   // For the LBFGS implementation.
   double operator()(const Eigen::VectorXd &x, Eigen::VectorXd &grad);
 
-  const std::vector<std::vector<size_t>>& MergedSensorEvents() const;
+  const std::vector<std::vector<size_t>> &MergedSensorEvents() const;
+
+  // Keys are indices into MergedSensorEvents().
+  const std::map<size_t, IntervalIntegrationOutcome>
+  IntegrateTrajectory(const Eigen::Vector3d &acceleration_global_bias,
+                      const Eigen::Vector3d &acceleration_local_bias,
+                      const Eigen::Vector3d &initial_velocity);
 
 private:
   const std::vector<TimestampedVelocity> &reference_velocities_;
