@@ -20,7 +20,7 @@ Eigen::Quaterniond RotationMotionToQuaternion(double rate_x_rad_s,
   return {dw, dx, dy, dz};
 }
 
-IntervalIntegrationOutcome
+MotionIntegrationOutcome
 IntegrateMotion(const Eigen::Quaterniond &start_orientation,
                 const Eigen::Vector3d &start_velocity,
                 const Eigen::Quaterniond &raw_rotation,

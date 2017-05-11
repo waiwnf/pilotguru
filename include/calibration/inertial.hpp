@@ -71,7 +71,7 @@ public:
   const std::vector<std::vector<size_t>> &MergedSensorEvents() const;
 
   // Keys are indices into MergedSensorEvents().
-  const std::map<size_t, IntervalIntegrationOutcome>
+  const std::map<size_t, MotionIntegrationOutcome>
   IntegrateTrajectory(const Eigen::Vector3d &acceleration_global_bias,
                       const Eigen::Vector3d &acceleration_local_bias,
                       const Eigen::Vector3d &initial_velocity);

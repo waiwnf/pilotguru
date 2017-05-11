@@ -107,7 +107,7 @@ double AccelerometerCalibrator::eval(const std::vector<double> &in,
     // Iterate over all inertial measurements on the given GPS reference
     // interval.
 
-    std::vector<IntervalIntegrationOutcome> integrated_intervals;
+    std::vector<MotionIntegrationOutcome> integrated_intervals;
     for (const InterpolationInterval &interval : intervals) {
       const std::vector<size_t> &sensor_indices =
           sensor_events_.at(interval.interpolation_end_time_index);
@@ -124,7 +124,7 @@ double AccelerometerCalibrator::eval(const std::vector<double> &in,
           Eigen::Vector3d(raw_acceleration.acc_x, raw_acceleration.acc_y,
                           raw_acceleration.acc_z);
 
-      const IntervalIntegrationOutcome integration_outcome = IntegrateMotion(
+      const MotionIntegrationOutcome integration_outcome = IntegrateMotion(
           integrated_rotation, integrated_velocity, raw_rotation,
           acceleration_local_raw, acceleration_global_bias,
           acceleration_local_bias, interval.DurationUsec());
@@ -159,7 +159,7 @@ double AccelerometerCalibrator::eval(const std::vector<double> &in,
                                             integrated_travel /
                                             (integrated_travel.norm() + 1e-5);
 
-    for (const IntervalIntegrationOutcome &integration_outcome :
+    for (const MotionIntegrationOutcome &integration_outcome :
          integrated_intervals) {
       const double interval_sec =
           static_cast<double>(integration_outcome.duration_usec) * 1e-6;
@@ -229,12 +229,12 @@ AccelerometerCalibrator::MergedSensorEvents() const {
   return sensor_events_;
 }
 
-const std::map<size_t, IntervalIntegrationOutcome>
+const std::map<size_t, MotionIntegrationOutcome>
 AccelerometerCalibrator::IntegrateTrajectory(
     const Eigen::Vector3d &acceleration_global_bias,
     const Eigen::Vector3d &acceleration_local_bias,
     const Eigen::Vector3d &initial_velocity) {
-  std::map<size_t, IntervalIntegrationOutcome> result;
+  std::map<size_t, MotionIntegrationOutcome> result;
 
   Eigen::Quaterniond integrated_rotation(1.0, 0.0, 0.0, 0.0);
   Eigen::Vector3d integrated_velocity = initial_velocity;
@@ -258,7 +258,7 @@ AccelerometerCalibrator::IntegrateTrajectory(
           Eigen::Vector3d(raw_acceleration.acc_x, raw_acceleration.acc_y,
                           raw_acceleration.acc_z);
 
-      const IntervalIntegrationOutcome integration_outcome = IntegrateMotion(
+      const MotionIntegrationOutcome integration_outcome = IntegrateMotion(
           integrated_rotation, integrated_velocity, raw_rotation,
           acceleration_local_raw, acceleration_global_bias,
           acceleration_local_bias, interval.DurationUsec());
