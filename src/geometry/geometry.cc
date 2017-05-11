@@ -1,5 +1,7 @@
 #include <geometry/geometry.hpp>
 
+#include <glog/logging.h>
+
 namespace pilotguru {
 Eigen::Quaterniond RotationMotionToQuaternion(double rate_x_rad_s,
                                               double rate_y_rad_s,
