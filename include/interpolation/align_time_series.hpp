@@ -58,6 +58,7 @@ struct InterpolationInterval {
   long end_usec;
 
   double DurationSec() const;
+  long DurationUsec() const;
 };
 
 // Make all intervals (see InterpolationInterval above) corresponding to

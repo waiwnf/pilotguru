@@ -132,6 +132,11 @@ double InterpolationInterval::DurationSec() const {
   return static_cast<double>(end_usec - start_usec) * 1e-6;
 }
 
+long InterpolationInterval::DurationUsec() const {
+  CHECK_LE(start_usec, end_usec);
+  return end_usec - start_usec;
+}
+
 std::vector<std::vector<InterpolationInterval>>
 MakeInterpolationIntervals(const std::vector<long> &reference_timestamps,
                            const std::vector<long> &interpolation_timestamps) {
@@ -150,7 +155,8 @@ MakeInterpolationIntervals(const std::vector<long> &reference_timestamps,
            interpolation_timestamps.at(interpolation_idx) <= reference_ts) {
       const long interpolation_ts =
           interpolation_timestamps.at(interpolation_idx);
-      if (interpolation_ts > latest_ts && interpolation_idx > 0) {
+      if (interpolation_ts > latest_ts && interpolation_idx > 0 &&
+          reference_idx > 0) {
         intervals.push_back(
             {reference_idx, interpolation_idx, latest_ts, interpolation_ts});
       }
@@ -161,7 +167,7 @@ MakeInterpolationIntervals(const std::vector<long> &reference_timestamps,
     // reference interval ends. But the beginning of that interpolation interval
     // may still intersect with the current reference interval. Add a
     // corresponding intersection if it is nonempty.
-    if (interpolation_idx > 0 &&
+    if (interpolation_idx > 0 && reference_idx > 0 &&
         interpolation_idx < interpolation_timestamps.size() &&
         reference_ts > latest_ts) {
       intervals.push_back(
