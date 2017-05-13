@@ -1,14 +1,14 @@
 # Pilotguru Recorder
 
+Available for free [on Play Store](https://play.google.com/store/apps/details?id=ru.pilotguru.recorder).
+
+![Screenshot](https://raw.githubusercontent.com/waiwnf/pilotguru/master/mobile/android/img/readme/pilotguru-screenshot.png)
+
 This is an Android app to record video and sensor ([GPS](https://developer.android.com/guide/topics/location/strategies.html), [accelerometer and gyroscope](https://developer.android.com/guide/topics/sensors/sensors_motion.html)) data. Every video frame and sensor reading gets a timestamp (written to a separate JSON file for every sensor) so that all the data can be then aligned in time for post-processing.
 
 The goal here is to record raw data for training a car autopilot from demonstration. See the [pilotguru project](https://github.com/waiwnf/pilotguru) site for details on the postprocessing of the raw sensor data and (forthcoming) autopilot model training.
 
 Pilotguru Recorder is based on [Multi-Sensor Grabber](https://github.com/TobiasWeis/android-multisensorgrabber-2) by [Tobias Weis](http://www.ccc.cs.uni-frankfurt.de/people/tobias-weis/), though the sensor handling logic has been significantly reworked. The main changes were to switch from saving raw frames to encoding a video file, and to use Android sensor timing annotations for better accuracy.
-
-Playstore: [TODO]
-
-Screenshot: [TODO]
 
 ## Output format
 
