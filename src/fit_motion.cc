@@ -23,6 +23,7 @@
 
 #include <json.hpp>
 
+#include <calibration/rotation.hpp>
 #include <calibration/velocity.hpp>
 #include <geometry/geometry.hpp>
 #include <io/json_converters.hpp>
@@ -31,7 +32,8 @@
 DEFINE_string(rotations_json, "", "Rotations.");
 DEFINE_string(accelerations_json, "", "Accelerations.");
 DEFINE_string(locations_json, "", "GPS locations.");
-DEFINE_string(out_json, "", "Resulting integrated headings");
+DEFINE_string(velocity_out_json, "", "");
+DEFINE_string(steering_out_json, "", "");
 
 DEFINE_int64(locations_batch_size, 40,
              "Size of sliding window (in terms of the number of GPS "
@@ -88,7 +90,8 @@ int main(int argc, char **argv) {
   CHECK(!FLAGS_rotations_json.empty());
   CHECK(!FLAGS_accelerations_json.empty());
   CHECK(!FLAGS_locations_json.empty());
-  CHECK(!FLAGS_out_json.empty());
+  CHECK(!FLAGS_velocity_out_json.empty());
+  CHECK(!FLAGS_steering_out_json.empty());
   CHECK_GT(FLAGS_optimization_iters, 0);
   CHECK_GT(FLAGS_locations_batch_size, 0);
   CHECK_GT(FLAGS_locations_shift_step, 0);
@@ -104,6 +107,29 @@ int main(int argc, char **argv) {
           FLAGS_accelerations_json, pilotguru::kAccelerations);
   const std::vector<pilotguru::TimestampedVelocity> gps_velocities =
       ReadGpsVelocities(FLAGS_locations_json);
+
+  const cv::Mat axes =
+      pilotguru::GetPrincipalRotationAxes(rotations, 500000, 0.01, 5);
+  const cv::Vec3d vertical_axis(axes.at<float>(0, 0), axes.at<float>(0, 1),
+                                axes.at<float>(0, 2));
+  const std::vector<double> steering_angles =
+      GetHorizontalTurnAngles(rotations, vertical_axis);
+  CHECK_EQ(steering_angles.size() + 1, rotations.size());
+
+  nlohmann::json steering_out_json;
+  steering_out_json[pilotguru::kVelocities] = {};
+  auto &steering_out_events = steering_out_json["steering"];
+  for (size_t rotation_idx = 1; rotation_idx < rotations.size();
+       ++rotation_idx) {
+    nlohmann::json steering_event_json;
+    steering_event_json[pilotguru::kTimeUsec] =
+        rotations.at(rotation_idx).time_usec;
+    steering_event_json[pilotguru::kTurnAngle] =
+        steering_angles.at(rotation_idx - 1);
+    steering_out_events.push_back(steering_event_json);
+  }
+  std::ofstream steering_ostream(FLAGS_steering_out_json);
+  steering_ostream << steering_out_json.dump(2) << std::endl;
 
   // Optimizer parameters are the same for all iterations.
   LBFGSpp::LBFGSParam<double> param;
@@ -185,18 +211,18 @@ int main(int argc, char **argv) {
       FLAGS_post_smoothing_sigma_sec);
 
   // Write timestamped velocity measurements to JSON.
-  nlohmann::json out_json;
-  out_json[pilotguru::kVelocities] = {};
-  auto &out_frames = out_json[pilotguru::kVelocities];
+  nlohmann::json velocity_out_json;
+  velocity_out_json[pilotguru::kVelocities] = {};
+  auto &velocity_out_events = velocity_out_json[pilotguru::kVelocities];
   for (size_t i = 0; i < smoothed_velocities.size(); ++i) {
     nlohmann::json velocity_event_json;
     velocity_event_json[pilotguru::kTimeUsec] = timestamps_usec.at(i);
     velocity_event_json[pilotguru::kSpeedMS] = smoothed_velocities.at(i);
-    out_frames.push_back(velocity_event_json);
+    velocity_out_events.push_back(velocity_event_json);
   }
 
-  std::ofstream result_ostream(FLAGS_out_json);
-  result_ostream << out_json.dump(2) << std::endl;
+  std::ofstream velocity_ostream(FLAGS_velocity_out_json);
+  velocity_ostream << velocity_out_json.dump(2) << std::endl;
 
   return EXIT_SUCCESS;
 }
