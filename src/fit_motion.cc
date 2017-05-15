@@ -23,7 +23,7 @@
 
 #include <json.hpp>
 
-#include <calibration/inertial.hpp>
+#include <calibration/velocity.hpp>
 #include <geometry/geometry.hpp>
 #include <io/json_converters.hpp>
 #include <slam/smoothing.hpp>

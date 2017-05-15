@@ -1,5 +1,5 @@
-#ifndef PILOTGURU_CALIBRATION_INERTIAL_HPP_
-#define PILOTGURU_CALIBRATION_INERTIAL_HPP_
+#ifndef PILOTGURU_CALIBRATION_VELOCITY_HPP_
+#define PILOTGURU_CALIBRATION_VELOCITY_HPP_
 
 // Logic for auto-calibrating GPS (gravity subtraction and device debiasing) and
 // gyroscope data using GPS reference points. Infers calibration parameters:
@@ -17,29 +17,12 @@
 
 #include <Eigen/Core>
 
+#include <calibration/data.hpp>
 #include <geometry/geometry.hpp>
 #include <interpolation/align_time_series.hpp>
 #include <optimization/loss_function.hpp>
 
 namespace pilotguru {
-
-// Absolute velocity magnitude from GPS data, in m/sec.
-struct TimestampedVelocity {
-  double velocity;
-  long time_usec;
-};
-
-// Rotation velocities around the 3 device axes, in radians/sec.
-struct TimestampedRotationVelocity {
-  double rate_x_rad_s, rate_y_rad_s, rate_z_rad_s;
-  long time_usec;
-};
-
-// Accelerations along the device axes, in m/sec.
-struct TimestampedAcceleration {
-  double acc_x, acc_y, acc_z;
-  long time_usec;
-};
 
 // Loss function for an L2 difference between the travel distances derived from
 // GPS and integrated from accelerometer and gyroscope data.
@@ -96,4 +79,4 @@ private:
 };
 }
 
-#endif // PILOTGURU_CALIBRATION_INERTIAL_HPP_
+#endif // PILOTGURU_CALIBRATION_VELOCITY_HPP_

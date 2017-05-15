@@ -1,4 +1,4 @@
-#include <calibration/inertial.hpp>
+#include <calibration/velocity.hpp>
 
 #include <geometry/geometry.hpp>
 #include <logging/strings.hpp>
