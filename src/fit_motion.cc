@@ -38,11 +38,11 @@ DEFINE_int64(locations_batch_size, 40,
              "measurements) to use for calibration. This should not be too "
              "large, as the results become less accurate for long windows "
              "because of accumulating IMU drift.");
-DEFINE_int64(locations_shift_step, 10,
+DEFINE_int64(locations_shift_step, 5,
              "Step size (in terms of number of GPS measurements) by which to "
              "shift the sliding window for the subsequent calibration runs.");
 DEFINE_double(
-    optimization_iters, 200,
+    optimization_iters, 500,
     "Max number of L-BFGS iterations to use for every calibration run.");
 DEFINE_double(post_smoothing_sigma_sec, 0.003,
               "Smoothing Gaussian kernel width (in seconds) for the final "
@@ -92,7 +92,7 @@ int main(int argc, char **argv) {
   CHECK_GT(FLAGS_optimization_iters, 0);
   CHECK_GT(FLAGS_locations_batch_size, 0);
   CHECK_GT(FLAGS_locations_shift_step, 0);
-  CHECK_GE(FLAGS_locations_batch_size, 2 * FLAGS_locations_shift_step);
+  CHECK_GE(FLAGS_locations_batch_size, FLAGS_locations_shift_step);
   CHECK_GT(FLAGS_post_smoothing_sigma_sec, 0);
 
   // Read input JSONs.
@@ -116,8 +116,7 @@ int main(int argc, char **argv) {
   // within that reference interval.
   std::map<size_t, std::vector<double>> integrated_velocities;
   for (size_t reference_start_idx = 0;
-       reference_start_idx + 2 * FLAGS_locations_shift_step <
-       gps_velocities.size();
+       reference_start_idx < gps_velocities.size();
        reference_start_idx += FLAGS_locations_shift_step) {
     const size_t reference_end_idx =
         std::min(reference_start_idx + FLAGS_locations_batch_size,
@@ -187,13 +186,13 @@ int main(int argc, char **argv) {
 
   // Write timestamped velocity measurements to JSON.
   nlohmann::json out_json;
-  out_json[pilotguru::kFrames] = {};
-  auto &out_frames = out_json[pilotguru::kFrames];
+  out_json[pilotguru::kVelocities] = {};
+  auto &out_frames = out_json[pilotguru::kVelocities];
   for (size_t i = 0; i < smoothed_velocities.size(); ++i) {
-    nlohmann::json velocity_json;
-    velocity_json[pilotguru::kTimeUsec] = timestamps_usec.at(i);
-    velocity_json[pilotguru::kSpeedMS] = smoothed_velocities.at(i);
-    out_frames.push_back(velocity_json);
+    nlohmann::json velocity_event_json;
+    velocity_event_json[pilotguru::kTimeUsec] = timestamps_usec.at(i);
+    velocity_event_json[pilotguru::kSpeedMS] = smoothed_velocities.at(i);
+    out_frames.push_back(velocity_event_json);
   }
 
   std::ofstream result_ostream(FLAGS_out_json);
