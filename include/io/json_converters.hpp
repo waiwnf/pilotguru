@@ -20,6 +20,7 @@ constexpr char kPlanarDirection[] = "planar_direction";
 constexpr char kRotations[] = "rotations";
 constexpr char kSpeedMS[] = "speed_m_s";
 constexpr char kTurnAngle[] = "turn_angle";
+constexpr char kVelocities[] = "velocities";
 
 constexpr char kTranslation[] = "translation";
 constexpr char kW[] = "w";
