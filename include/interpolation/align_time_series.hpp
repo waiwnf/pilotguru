@@ -10,7 +10,7 @@ namespace pilotguru {
 // A helper for merging multiple time series with non-aligned timestamps.
 //
 // Takes in one vector of timestamps per component time series.
-// Produces a vector, where each element is a vector of indices into the
+// Produces a series, where each element is a vector of indices into the
 // corresponding component time series vector. The effective timestamp of every
 // result element is the latest timestamp among the component time series.
 
@@ -24,15 +24,21 @@ namespace pilotguru {
 // (2,2)  (effective time 4)
 // (2,3)  (effective time 5)
 // (3,4)  (effective time 6)
-std::vector<std::vector<size_t>>
-MergeTimeSeries(const std::vector<const std::vector<long> *> &in_timestamps);
+class MergedTimeSeries {
+public:
+  MergedTimeSeries(
+      const std::vector<const std::vector<long> *> &component_timestamps);
 
-// Gets effective timestamp for a merged time series event. The effective
-// timestamp is the latest of the component timestamps for the event.
-// See MergeTimeSeries() above.
-long GetEffectiveTimeStamp(
-    const std::vector<const std::vector<long> *> &component_timestamps,
-    const std::vector<size_t> &event_indices);
+  const std::vector<std::vector<size_t>> &MergedEvents() const;
+
+  // Gets effective timestamp for a merged time series event. The effective
+  // timestamp is the latest of the component timestamps for the event.
+  long MergedEventTimeUsec(size_t event_index) const;
+
+private:
+  const std::vector<const std::vector<long> *> component_timestamps_;
+  const std::vector<std::vector<size_t>> merged_events_;
+};
 
 // Timing datastructures for fitting fine-grained motion to a series of coarse
 // 'reference' measurements. The use case is to fit a trajectory defined by

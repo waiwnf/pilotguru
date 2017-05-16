@@ -196,7 +196,8 @@ int main(int argc, char **argv) {
   // Average the velocities among the sliding windows falling on every IMU
   // measurement.
   for (auto &point : integrated_velocities) {
-    timestamps_usec.push_back(calibrator.GetSensorEventTimestamp(point.first));
+    timestamps_usec.push_back(
+        calibrator.ImuTimes().MergedEventTimeUsec(point.first));
     timestamps_sec.push_back(
         static_cast<double>(timestamps_usec.back() - timestamps_usec.front()) *
         1e-6);

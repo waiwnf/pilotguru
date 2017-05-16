@@ -24,22 +24,16 @@ std::vector<long> ExtractTimestamps(const std::vector<T> &events) {
 // series wrt the reference time series of GPS measurements.
 std::vector<std::vector<InterpolationInterval>> InitInterpolationIntervals(
     const std::vector<TimestampedVelocity> &reference_velocities,
-    const std::vector<TimestampedRotationVelocity> &rotation_velocities,
-    const std::vector<TimestampedAcceleration> &accelerations,
-    const std::vector<std::vector<size_t>> &merged_events) {
-  const std::vector<long> rotation_times =
-      ExtractTimestamps(rotation_velocities);
-  const std::vector<long> acceleration_times = ExtractTimestamps(accelerations);
-
-  std::vector<long> merged_times;
-  for (const std::vector<size_t> &merged_event : merged_events) {
-    merged_times.push_back(GetEffectiveTimeStamp(
-        {&rotation_times, &acceleration_times}, merged_event));
+    const MergedTimeSeries &imu_events) {
+  std::vector<long> imu_times;
+  for (size_t imu_index = 0; imu_index < imu_events.MergedEvents().size();
+       ++imu_index) {
+    imu_times.push_back(imu_events.MergedEventTimeUsec(imu_index));
   }
 
   const std::vector<long> reference_timestamps =
       ExtractTimestamps(reference_velocities);
-  return MakeInterpolationIntervals(reference_timestamps, merged_times);
+  return MakeInterpolationIntervals(reference_timestamps, imu_times);
 }
 }
 
@@ -51,11 +45,9 @@ AccelerometerCalibrator::AccelerometerCalibrator(
       rotation_velocities_(rotation_velocities), accelerations_(accelerations),
       rotation_times_(ExtractTimestamps(rotation_velocities)),
       accelerations_times_(ExtractTimestamps(accelerations)),
-      sensor_events_(
-          MergeTimeSeries({&rotation_times_, &accelerations_times_})),
+      imu_times_({&rotation_times_, &accelerations_times_}),
       reference_intervals_(
-          InitInterpolationIntervals(reference_velocities, rotation_velocities,
-                                     accelerations, sensor_events_)) {}
+          InitInterpolationIntervals(reference_velocities, imu_times_)) {}
 
 double AccelerometerCalibrator::eval(const std::vector<double> &in,
                                      std::vector<double> *gradient) {
@@ -103,7 +95,7 @@ double AccelerometerCalibrator::eval(const std::vector<double> &in,
     std::vector<MotionIntegrationOutcome> integrated_intervals;
     for (const InterpolationInterval &interval : intervals) {
       const std::vector<size_t> &sensor_indices =
-          sensor_events_.at(interval.interpolation_end_time_index);
+          imu_times_.MergedEvents().at(interval.interpolation_end_time_index);
       const TimestampedRotationVelocity &timestamped_raw_rotation =
           rotation_velocities_.at(sensor_indices.at(0));
       const TimestampedAcceleration &raw_acceleration =
@@ -217,16 +209,8 @@ double AccelerometerCalibrator::operator()(const Eigen::VectorXd &x,
   return result;
 }
 
-const std::vector<std::vector<size_t>> &
-AccelerometerCalibrator::MergedSensorEvents() const {
-  return sensor_events_;
-}
-
-long AccelerometerCalibrator::GetSensorEventTimestamp(
-    const size_t sensor_event_index) const {
-  CHECK_LT(sensor_event_index, sensor_events_.size());
-  return GetEffectiveTimeStamp({&rotation_times_, &accelerations_times_},
-                               sensor_events_.at(sensor_event_index));
+const MergedTimeSeries &AccelerometerCalibrator::ImuTimes() const {
+  return imu_times_;
 }
 
 const std::map<size_t, MotionIntegrationOutcome>
@@ -244,7 +228,7 @@ AccelerometerCalibrator::IntegrateTrajectory(
     for (const InterpolationInterval &interval : intervals) {
       size_t interpolation_index = interval.interpolation_end_time_index;
       const std::vector<size_t> &sensor_indices =
-          sensor_events_.at(interpolation_index);
+          imu_times_.MergedEvents().at(interpolation_index);
       const TimestampedRotationVelocity &timestamped_raw_rotation =
           rotation_velocities_.at(sensor_indices.at(0));
       const TimestampedAcceleration &raw_acceleration =

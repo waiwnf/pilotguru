@@ -51,16 +51,13 @@ public:
   // For the LBFGS implementation.
   double operator()(const Eigen::VectorXd &x, Eigen::VectorXd &grad);
 
-  const std::vector<std::vector<size_t>> &MergedSensorEvents() const;
-
-  // Index is into MergedSensorEvents();
-  long GetSensorEventTimestamp(const size_t sensor_event_index) const;
-
   // Keys are indices into MergedSensorEvents().
   const std::map<size_t, MotionIntegrationOutcome>
   IntegrateTrajectory(const Eigen::Vector3d &acceleration_global_bias,
                       const Eigen::Vector3d &acceleration_local_bias,
                       const Eigen::Vector3d &initial_velocity);
+
+  const MergedTimeSeries& ImuTimes() const; 
 
 private:
   const std::vector<TimestampedVelocity> &reference_velocities_;
@@ -71,7 +68,7 @@ private:
   const std::vector<long> rotation_times_, accelerations_times_;
 
   // Merged rotations and accelerations time series.
-  const std::vector<std::vector<size_t>> sensor_events_;
+  const MergedTimeSeries imu_times_;
 
   // Intervals of the merged rotations/accelerations wrt reference velocities.
   const std::vector<std::vector<pilotguru::InterpolationInterval>>
