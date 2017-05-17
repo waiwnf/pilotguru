@@ -125,6 +125,9 @@ int main(int argc, char **argv) {
   const std::vector<pilotguru::TimestampedVelocity> gps_velocities =
       ReadGpsVelocities(FLAGS_locations_json);
 
+  // Infer the main principal rotation axis (assumed to be the vertical axis of
+  // the vehicle) and project all rotations onto that axis to get approximate
+  // rotations in the horizontal plane (corresponding to steering).
   const cv::Mat axes =
       pilotguru::GetPrincipalRotationAxes(rotations, 500000, 0.1, 3);
   const cv::Vec3d vertical_axis(axes.at<float>(0, 0), axes.at<float>(0, 1),
@@ -133,20 +136,14 @@ int main(int argc, char **argv) {
       GetHorizontalTurnAngles(rotations, vertical_axis);
   CHECK_EQ(steering_angles.size(), rotations.size());
 
-  nlohmann::json steering_out_json;
-  steering_out_json[pilotguru::kVelocities] = {};
-  auto &steering_out_events = steering_out_json["steering"];
-  for (size_t rotation_idx = 0; rotation_idx < rotations.size();
-       ++rotation_idx) {
-    nlohmann::json steering_event_json;
-    steering_event_json[pilotguru::kTimeUsec] =
-        rotations.at(rotation_idx).time_usec;
-    steering_event_json[pilotguru::kTurnAngle] =
-        steering_angles.at(rotation_idx);
-    steering_out_events.push_back(steering_event_json);
-  }
-  std::ofstream steering_ostream(FLAGS_steering_out_json);
-  steering_ostream << steering_out_json.dump(2) << std::endl;
+  // Save the projected horizontal rtotations.
+  const std::vector<long> rotation_timestamps =
+      pilotguru::ExtractTimestamps(rotations);
+  pilotguru::JsonWriteTimestampedRealData(
+      rotation_timestamps, steering_angles, FLAGS_steering_out_json,
+      pilotguru::kSteering, pilotguru::kTurnAngle);
+
+  // Accelerometer autocalibration and forward velocity inference.
 
   // Optimizer parameters are the same for all iterations.
   LBFGSpp::LBFGSParam<double> param;
@@ -228,19 +225,9 @@ int main(int argc, char **argv) {
       averaged_integrated_velocities, timestamps_sec, timestamps_sec,
       FLAGS_post_smoothing_sigma_sec);
 
-  // Write timestamped velocity measurements to JSON.
-  nlohmann::json velocity_out_json;
-  velocity_out_json[pilotguru::kVelocities] = {};
-  auto &velocity_out_events = velocity_out_json[pilotguru::kVelocities];
-  for (size_t i = 0; i < smoothed_velocities.size(); ++i) {
-    nlohmann::json velocity_event_json;
-    velocity_event_json[pilotguru::kTimeUsec] = timestamps_usec.at(i);
-    velocity_event_json[pilotguru::kSpeedMS] = smoothed_velocities.at(i);
-    velocity_out_events.push_back(velocity_event_json);
-  }
-
-  std::ofstream velocity_ostream(FLAGS_velocity_out_json);
-  velocity_ostream << velocity_out_json.dump(2) << std::endl;
+  pilotguru::JsonWriteTimestampedRealData(
+      timestamps_usec, smoothed_velocities, FLAGS_velocity_out_json,
+      pilotguru::kVelocities, pilotguru::kSpeedMS);
 
   return EXIT_SUCCESS;
 }
