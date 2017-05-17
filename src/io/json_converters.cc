@@ -77,7 +77,16 @@ void SetTrajectory(nlohmann::json *json_root,
                                       direction.at<double>(0, 1)};
     }
     if (turn_angles != nullptr) {
-      point_json[kTurnAngle] = turn_angles->at(point_idx);
+      if (point_idx == 0) {
+        point_json[kTurnAngle] = 0;
+      } else {
+        const double rotation_time_sec =
+            static_cast<double>(point.time_usec -
+                                trajectory.at(point_idx - 1).time_usec) *
+            1e-6;
+        point_json[kTurnAngle] =
+            turn_angles->at(point_idx) / (rotation_time_sec + 1e-10);
+      }
     }
 
     (*json_root)[kTrajectory].push_back(point_json);
