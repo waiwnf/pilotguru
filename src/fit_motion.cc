@@ -109,23 +109,23 @@ int main(int argc, char **argv) {
       ReadGpsVelocities(FLAGS_locations_json);
 
   const cv::Mat axes =
-      pilotguru::GetPrincipalRotationAxes(rotations, 500000, 0.01, 5);
+      pilotguru::GetPrincipalRotationAxes(rotations, 500000, 0.1, 3);
   const cv::Vec3d vertical_axis(axes.at<float>(0, 0), axes.at<float>(0, 1),
                                 axes.at<float>(0, 2));
   const std::vector<double> steering_angles =
       GetHorizontalTurnAngles(rotations, vertical_axis);
-  CHECK_EQ(steering_angles.size() + 1, rotations.size());
+  CHECK_EQ(steering_angles.size(), rotations.size());
 
   nlohmann::json steering_out_json;
   steering_out_json[pilotguru::kVelocities] = {};
   auto &steering_out_events = steering_out_json["steering"];
-  for (size_t rotation_idx = 1; rotation_idx < rotations.size();
+  for (size_t rotation_idx = 0; rotation_idx < rotations.size();
        ++rotation_idx) {
     nlohmann::json steering_event_json;
     steering_event_json[pilotguru::kTimeUsec] =
         rotations.at(rotation_idx).time_usec;
     steering_event_json[pilotguru::kTurnAngle] =
-        steering_angles.at(rotation_idx - 1);
+        steering_angles.at(rotation_idx);
     steering_out_events.push_back(steering_event_json);
   }
   std::ofstream steering_ostream(FLAGS_steering_out_json);
