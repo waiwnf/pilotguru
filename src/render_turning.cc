@@ -1,7 +1,7 @@
-// From a video file and a JSON file with a 3D trajectory produced by
-// optical_trajectories.cc, generates a video tiled with a steering wheel
-// picture that rotates according to the horizontal angular velocity from the
-// JSON file.
+// From a video file and a JSON file with veocity and angular velocity on the
+// horizontal plane produced by fit_motion.cc, generates a video tiled with a
+// steering wheel picture rotating according to the horizontal angular velocity
+// and a digital speedometer field.
 
 #include <fstream>
 #include <iostream>
@@ -14,6 +14,7 @@
 
 #include <opencv2/imgproc/imgproc.hpp>
 
+#include <interpolation/time_series.hpp>
 #include <io/image_sequence_reader.hpp>
 #include <io/image_sequence_writer.hpp>
 #include <io/json_converters.hpp>
@@ -23,22 +24,17 @@ DEFINE_bool(vertical_flip, false,
             "Whether to flip the input frames vertically.");
 DEFINE_bool(horizontal_flip, false,
             "Whether to flip input video frames horizontally.");
-DEFINE_string(trajectory_json, "",
-              "JSON file with the trajectory for (a subsequence of) the input "
-              "video. See optical_trajectories.cc to generate the trajectory "
-              "from video automatically using SLAM.");
-DEFINE_string(velocity_json, "", "");
-DEFINE_double(scale, 6000.0, "Scale factor to go from angular velocity in "
-                             "radians (from the 3D trajectory in the JSON "
-                             "file) to the rotation angle of the steering "
-                             "wheel (in degrees) for visualization.");
-DEFINE_double(learning_rate, 1.0,
-              "Temporal smoothing parameter for the rendered steering wheel. "
-              "Must be between 0 and 1. ! corresponds to no smoothing at all, "
-              "0 corresponds to no change. The formula is "
-              "steering_wheel_angle_[next frame] = learning_rate * scale * "
-              "angular_velocity_from_json + (1 - learning_rate) * "
-              "steering_wheel_angle_[prev frame].");
+DEFINE_string(frames_json, "", "JSON file with video frames timestamps. Comes "
+                               "from the raw PilotGuru Recorder data.");
+DEFINE_string(velocities_json, "", "JSON file with timestamped absolute "
+                                   "velocities. Comes from fit_motion output.");
+DEFINE_string(rotations_json, "", "JSON file with timestamped angular "
+                                  "velocities in the horizontal plane (i.e. "
+                                  "steering). Comes from fit_motion output.");
+DEFINE_double(rotations_scale, 200.0,
+              "Scale factor to go from angular velocity in radians (from the "
+              "--rotations_json file) to the rotation angle of the steering "
+              "wheel (in degrees) for visualization.");
 DEFINE_string(steering_wheel, "",
               "A file with the steering wheel image to use.");
 DEFINE_string(out_video, "", "Output video file to write.");
@@ -120,6 +116,14 @@ void RenderVelocity(cv::Mat *out_frame, int offset_rows, int offset_cols,
                     out_velocity.cols - speedometer_bar_horizontal_margin);
   marked_speedometer_bar = text_color;
 }
+
+cv::Mat LoadImageBgr2Rgb(const std::string &filename) {
+  const cv::Mat image_bgr = cv::imread(filename, CV_LOAD_IMAGE_COLOR);
+  CHECK(!image_bgr.empty());
+  const cv::Mat image = image_bgr.clone();
+  cv::cvtColor(image_bgr, image, cv::COLOR_BGR2RGB);
+  return image;
+}
 }
 
 int main(int argc, char **argv) {
@@ -135,49 +139,61 @@ int main(int argc, char **argv) {
       pilotguru::MakeImageSequenceSource(FLAGS_in_video, FLAGS_vertical_flip,
                                          FLAGS_horizontal_flip);
 
-  const cv::Mat steering_wheel_bgr =
-      cv::imread(FLAGS_steering_wheel, CV_LOAD_IMAGE_COLOR);
-  CHECK(!steering_wheel_bgr.empty());
-  const cv::Mat steering_wheel = steering_wheel_bgr.clone();
-  cv::cvtColor(steering_wheel_bgr, steering_wheel, cv::COLOR_BGR2RGB);
+  const cv::Mat steering_wheel = LoadImageBgr2Rgb(FLAGS_steering_wheel);
 
-  std::unique_ptr<nlohmann::json> trajectory_json(nullptr);
-  nlohmann::json *trajectory = nullptr;
-  if (!FLAGS_trajectory_json.empty()) {
-    trajectory_json = pilotguru::ReadJsonFile(FLAGS_trajectory_json);
-    trajectory = &(*trajectory_json)[pilotguru::kTrajectory];
-  }
+  CHECK(!FLAGS_frames_json.empty());
+  std::unique_ptr<nlohmann::json> frames_json =
+      pilotguru::ReadJsonFile(FLAGS_frames_json);
+  const nlohmann::json &frames = (*frames_json)[pilotguru::kFrames];
 
-  std::unique_ptr<nlohmann::json> velocity_json(nullptr);
-  nlohmann::json *velocities = nullptr;
-  if (!FLAGS_velocity_json.empty()) {
-    velocity_json = pilotguru::ReadJsonFile(FLAGS_velocity_json);
-    velocities = &(*velocity_json)[pilotguru::kFrames];
-  }
+  std::unique_ptr<pilotguru::RealTimeSeries> steering(
+      FLAGS_rotations_json.empty() ? nullptr : new pilotguru::RealTimeSeries(
+                                                   FLAGS_rotations_json,
+                                                   pilotguru::kSteering,
+                                                   pilotguru::kTurnAngle));
+
+  std::unique_ptr<pilotguru::RealTimeSeries> velocities(
+      FLAGS_velocities_json.empty() ? nullptr : new pilotguru::RealTimeSeries(
+                                                    FLAGS_velocities_json,
+                                                    pilotguru::kVelocities,
+                                                    pilotguru::kSpeedMS));
 
   pilotguru::ImageSequenceVideoFileSink sink(FLAGS_out_video, 30 /* fps */);
 
   std::unique_ptr<cv::Mat> out_frame(nullptr);
-  double turn = 0;
   int total_rendered_frames = 0;
   int skipped_frames = 0;
-  size_t trajectory_idx = 0, velocity_idx = 0;
-  while (image_source->hasNext() &&
-         (total_rendered_frames < FLAGS_max_out_frames ||
-          FLAGS_max_out_frames < 0)) {
+  pilotguru::RealTimeSeries::ValueLookupResult frame_velocity{0, false, 0};
+  pilotguru::RealTimeSeries::ValueLookupResult frame_steering{0, false, 0};
+  for (size_t frame_idx = 0; image_source->hasNext() &&
+                             (total_rendered_frames < FLAGS_max_out_frames ||
+                              FLAGS_max_out_frames < 0);
+       ++frame_idx) {
     const ORB_SLAM2::TimestampedImage frame = image_source->next();
-    const bool render_steering =
-        (trajectory != nullptr) && trajectory_idx < trajectory->size() &&
-        trajectory->at(trajectory_idx)[pilotguru::kFrameId] <= frame.frame_id;
+    if (skipped_frames < FLAGS_frames_to_skip) {
+      ++skipped_frames;
+      continue;
+    }
+    // We need interframe time difference to have a nontrivia;l interval for
+    // averaging velocity and steering angle over, so skip the first frame.
+    if (frame_idx == 0) {
+      continue;
+    }
 
-    const bool render_velocity =
-        (velocities != nullptr) && velocity_idx < velocities->size() &&
-        velocities->at(velocity_idx)[pilotguru::kFrameId] <= frame.frame_id;
+    const long frame_usec = frames.at(frame_idx)[pilotguru::kTimeUsec];
+    const long prev_frame_usec = frames.at(frame_idx - 1)[pilotguru::kTimeUsec];
+    if (steering != nullptr) {
+      frame_steering = steering->TimeAveragedValue(prev_frame_usec, frame_usec,
+                                                   frame_steering.end_index);
+    }
 
-    if (!render_steering && !render_velocity) {
-      // The video frame is earlier than the current trajectory point. Advance
-      // the frame, but not the trajectory iterator, to get the frames to catch
-      // up.
+    if (velocities != nullptr) {
+      frame_velocity = velocities->TimeAveragedValue(
+          prev_frame_usec, frame_usec, frame_velocity.end_index);
+    }
+
+    if (!frame_steering.is_valid && !frame_velocity.is_valid) {
+      // The video frame is out of bounds for the velocity/steering time series.
       continue;
     }
 
@@ -185,7 +201,9 @@ int main(int argc, char **argv) {
       out_frame.reset(new cv::Mat(
           frame.image.rows + steering_wheel.rows,
           std::max(frame.image.cols, steering_wheel.cols), CV_8UC3));
+      *out_frame = cv::Scalar_<unsigned char>(0, 0, 0);
     }
+
     // Double check the sizes match in case the out_frame was initialized on an
     // earlier iteration.
     CHECK_EQ(out_frame->rows, frame.image.rows + steering_wheel.rows);
@@ -194,42 +212,15 @@ int main(int argc, char **argv) {
         out_frame->rowRange(0, frame.image.rows).colRange(0, frame.image.cols);
     frame.image.copyTo(out_video);
 
-    // Read off the raw turn angle and advance the turn angles index.
-    double raw_turn = 0;
-    if (render_steering) {
-      // Read off the raw value
-      const auto &point = trajectory->at(trajectory_idx);
-      CHECK_EQ(frame.frame_id, point[pilotguru::kFrameId]);
-      raw_turn = point[pilotguru::kTurnAngle];
-      ++trajectory_idx;
-    }
-
-    double velocity_m_s = 0;
-    if (render_velocity) {
-      const auto &velocity_point = velocities->at(velocity_idx);
-      CHECK_EQ(frame.frame_id, velocity_point[pilotguru::kFrameId]);
-      velocity_m_s = velocity_point[pilotguru::kSpeedMS];
-      ++velocity_idx;
-    }
-
-    // This goes after advancing all the annotations iterators to make sure
-    // we skip annotations also along with the raw frames.
-    if (skipped_frames < FLAGS_frames_to_skip) {
-      ++skipped_frames;
-      continue;
-    }
-
-    if (render_steering) {
-      turn =
-          (1.0 - FLAGS_learning_rate) * turn + FLAGS_learning_rate * raw_turn;
+    if (frame_steering.is_valid) {
       RenderRotation(out_frame.get(), frame.image.rows, 0, steering_wheel,
-                     turn * FLAGS_scale);
+                     frame_steering.value * FLAGS_rotations_scale);
     }
 
-    if (render_velocity) {
+    if (frame_velocity.is_valid) {
       RenderVelocity(out_frame.get(), frame.image.rows, steering_wheel.cols,
                      steering_wheel.rows, steering_wheel.cols,
-                     static_cast<int>(velocity_m_s * 3.6));
+                     static_cast<int>(frame_velocity.value * 3.6));
     }
 
     sink.consume(*out_frame);
