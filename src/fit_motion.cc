@@ -29,11 +29,28 @@
 #include <io/json_converters.hpp>
 #include <slam/smoothing.hpp>
 
-DEFINE_string(rotations_json, "", "Rotations.");
-DEFINE_string(accelerations_json, "", "Accelerations.");
-DEFINE_string(locations_json, "", "GPS locations.");
-DEFINE_string(velocity_out_json, "", "");
-DEFINE_string(steering_out_json, "", "");
+DEFINE_string(rotations_json, "",
+              "JSON file with raw timestamped 3D rotations from the "
+              "smartphone gyroscope. Comes from PilotGuru Recorder raw data.");
+DEFINE_string(accelerations_json, "",
+              "JSON file with raw timestamped 3D accelerations from the "
+              "smartphone gyroscope. Comes from PilotGuru Recorder raw data. "
+              "Preliminary accelerometer calibration is not necessary, nor "
+              "detecting and subtracting the gravity component. This binary "
+              "auto-calibrates the data by matching velocity magnitudes with "
+              "GPS data.");
+DEFINE_string(locations_json, "", "JSON file with GPS locations and derived "
+                                  "absolute velocities. Comes from PilotGuru "
+                                  "Recorder raw data.");
+DEFINE_string(velocity_out_json, "", "JSON file to write timestamped absolute "
+                                     "velocities derived from accelerometer "
+                                     "data calibrated using GPS coarse-grained "
+                                     "velocities.");
+DEFINE_string(steering_out_json, "",
+              "JSON file to write rotations in the inferred horizontal plane, "
+              "intended to closely match the 3D rotation component due to "
+              "vehicle steering. Horizontal plane is detected via main "
+              "principal axis of the raw 3D rotations from the gyro data.");
 
 DEFINE_int64(locations_batch_size, 40,
              "Size of sliding window (in terms of the number of GPS "
