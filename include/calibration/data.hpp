@@ -1,7 +1,9 @@
 #ifndef PILOTGURU_CALIBRATION_DATA_HPP_
 #define PILOTGURU_CALIBRATION_DATA_HPP_
 
-// Datastructures for storing timestamped sensor data.
+#include <vector>
+
+// Datastructures and helpers for storing timestamped sensor data.
 
 namespace pilotguru {
 
@@ -22,6 +24,17 @@ struct TimestampedAcceleration {
   double acc_x, acc_y, acc_z;
   long time_usec;
 };
+
+// From a vector of structs, extracts a vector of timestamps to pass to
+// MergeTimeSeries() later.
+template <typename T>
+std::vector<long> ExtractTimestamps(const std::vector<T> &events) {
+  std::vector<long> result;
+  for (const T &event : events) {
+    result.push_back(event.time_usec);
+  }
+  return result;
+}
 
 } // namespace pilotguru
 

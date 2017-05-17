@@ -9,17 +9,6 @@
 
 namespace pilotguru {
 namespace {
-// From a vector of structs, extracts a vector of timestamps to pass to
-// MergeTimeSeries() later.
-template <typename T>
-std::vector<long> ExtractTimestamps(const std::vector<T> &events) {
-  std::vector<long> result;
-  for (const T &event : events) {
-    result.push_back(event.time_usec);
-  }
-  return result;
-}
-
 // Init the interpolation intervals for the merged accelerations+rotations time
 // series wrt the reference time series of GPS measurements.
 std::vector<std::vector<InterpolationInterval>> InitInterpolationIntervals(
