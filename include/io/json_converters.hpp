@@ -61,6 +61,12 @@ void WriteTrajectoryToFile(
     const vector<double> *turn_angles /* optional */, int frame_id_offset);
 
 std::unique_ptr<nlohmann::json> ReadJsonFile(const std::string &filename);
+
+void JsonWriteTimestampedRealData(const std::vector<long> &times_usec,
+                                  const std::vector<double> &values,
+                                  const std::string &filename,
+                                  const std::string &root_element_name,
+                                  const std::string &value_name);
 } // namespace pilotguru
 
 #endif // PILOTGURU_IO_JSON_CONVERTERS_HPP_

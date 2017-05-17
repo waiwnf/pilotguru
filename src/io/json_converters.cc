@@ -159,4 +159,24 @@ std::unique_ptr<nlohmann::json> ReadJsonFile(const std::string &filename) {
   file_stream >> *result;
   return std::move(result);
 }
+
+void JsonWriteTimestampedRealData(const std::vector<long> &times_usec,
+                                  const std::vector<double> &values,
+                                  const std::string &filename,
+                                  const std::string &root_element_name,
+                                  const std::string &value_name) {
+  CHECK_EQ(times_usec.size(), values.size());
+
+  nlohmann::json out_json;
+  out_json[root_element_name] = {};
+  auto &out_events = out_json[root_element_name];
+  for (size_t event_idx = 0; event_idx < values.size(); ++event_idx) {
+    nlohmann::json event_json;
+    event_json[pilotguru::kTimeUsec] = times_usec.at(event_idx);
+    event_json[value_name] = values.at(event_idx);
+    out_events.push_back(event_json);
+  }
+  std::ofstream json_ostream(filename);
+  json_ostream << out_json.dump(2) << std::endl;
+}
 }
