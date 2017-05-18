@@ -141,7 +141,7 @@ int main(int argc, char **argv) {
       pilotguru::ExtractTimestamps(rotations);
   pilotguru::JsonWriteTimestampedRealData(
       rotation_timestamps, steering_angles, FLAGS_steering_out_json,
-      pilotguru::kSteering, pilotguru::kTurnAngle);
+      pilotguru::kSteering, pilotguru::kAngularVelocity);
 
   // Accelerometer autocalibration and forward velocity inference.
 

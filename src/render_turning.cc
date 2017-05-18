@@ -150,7 +150,7 @@ int main(int argc, char **argv) {
       FLAGS_rotations_json.empty() ? nullptr : new pilotguru::RealTimeSeries(
                                                    FLAGS_rotations_json,
                                                    pilotguru::kSteering,
-                                                   pilotguru::kTurnAngle));
+                                                   pilotguru::kAngularVelocity));
 
   std::unique_ptr<pilotguru::RealTimeSeries> velocities(
       FLAGS_velocities_json.empty() ? nullptr : new pilotguru::RealTimeSeries(

@@ -78,13 +78,13 @@ void SetTrajectory(nlohmann::json *json_root,
     }
     if (turn_angles != nullptr) {
       if (point_idx == 0) {
-        point_json[kTurnAngle] = 0;
+        point_json[kAngularVelocity] = 0;
       } else {
         const double rotation_time_sec =
             static_cast<double>(point.time_usec -
                                 trajectory.at(point_idx - 1).time_usec) *
             1e-6;
-        point_json[kTurnAngle] =
+        point_json[kAngularVelocity] =
             turn_angles->at(point_idx) / (rotation_time_sec + 1e-10);
       }
     }
@@ -106,6 +106,7 @@ void ParseTrajectory(const nlohmann::json &trajectory_json,
     CHECK(turn_angles->empty());
   }
 
+  long prev_time_usec = trajectory_json[kTrajectory].front()[kTimeUsec];
   for (const auto &point_json : trajectory_json[kTrajectory]) {
     trajectory->emplace_back();
     ORB_SLAM2::PoseWithTimestamp &point = trajectory->back();
@@ -122,7 +123,11 @@ void ParseTrajectory(const nlohmann::json &trajectory_json,
     }
 
     if (turn_angles != nullptr) {
-      turn_angles->push_back(point_json[kTurnAngle]);
+      const double interval_sec =
+          static_cast<double>(point.time_usec - prev_time_usec) * 1e-6;
+      const double angular_velocity = point_json[kAngularVelocity];
+      turn_angles->push_back(angular_velocity * interval_sec);
+      prev_time_usec = point.time_usec;
     }
   }
 }
