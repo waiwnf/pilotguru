@@ -38,10 +38,13 @@ RUN apt-get update
 
 RUN apt-get -y install \
     gdb \
-    code \
     libxss1 \
     xterm \
     sudo \
     libgconf-2-4 \
     valgrind \
     clang-format 
+
+RUN apt-get  update
+
+RUN apt-get -y install code
