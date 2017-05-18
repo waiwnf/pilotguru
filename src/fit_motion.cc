@@ -47,10 +47,11 @@ DEFINE_string(locations_json, "", "JSON file with GPS locations and derived "
 
 // Outputs
 
-DEFINE_string(velocity_out_json, "", "JSON file to write timestamped absolute "
-                                     "velocities derived from accelerometer "
-                                     "data calibrated using GPS coarse-grained "
-                                     "velocities.");
+DEFINE_string(velocities_out_json, "",
+              "JSON file to write timestamped absolute "
+              "velocities derived from accelerometer "
+              "data calibrated using GPS coarse-grained "
+              "velocities.");
 DEFINE_string(steering_out_json, "",
               "JSON file to write rotations in the inferred horizontal plane, "
               "intended to closely match the 3D rotation component due to "
@@ -121,7 +122,7 @@ int main(int argc, char **argv) {
   CHECK(!FLAGS_rotations_json.empty());
   CHECK(!FLAGS_accelerations_json.empty());
   CHECK(!FLAGS_locations_json.empty());
-  CHECK(!FLAGS_velocity_out_json.empty());
+  CHECK(!FLAGS_velocities_out_json.empty());
   CHECK(!FLAGS_steering_out_json.empty());
   CHECK_GE(FLAGS_rotations_principal_axis_min_magnitude_threshold, 0);
   CHECK_GT(FLAGS_optimization_iters, 0);
@@ -242,7 +243,7 @@ int main(int argc, char **argv) {
       FLAGS_post_smoothing_sigma_sec);
 
   pilotguru::JsonWriteTimestampedRealData(
-      timestamps_usec, smoothed_velocities, FLAGS_velocity_out_json,
+      timestamps_usec, smoothed_velocities, FLAGS_velocities_out_json,
       pilotguru::kVelocities, pilotguru::kSpeedMS);
 
   return EXIT_SUCCESS;

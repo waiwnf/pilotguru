@@ -28,14 +28,14 @@ DEFINE_string(frames_json, "", "JSON file with video frames timestamps. Comes "
                                "from the raw PilotGuru Recorder data.");
 DEFINE_string(velocities_json, "", "JSON file with timestamped absolute "
                                    "velocities. Comes from fit_motion output.");
-DEFINE_string(rotations_json, "", "JSON file with timestamped angular "
+DEFINE_string(steering_json, "", "JSON file with timestamped angular "
                                   "velocities in the horizontal plane (i.e. "
                                   "steering). Comes from fit_motion output.");
-DEFINE_double(rotations_scale, 200.0,
+DEFINE_double(steering_scale, 200.0,
               "Scale factor to go from angular velocity in radians (from the "
               "--rotations_json file) to the rotation angle of the steering "
               "wheel (in degrees) for visualization.");
-DEFINE_double(rotations_smoothing_sigma, 0.1,
+DEFINE_double(steering_smoothing_sigma, 0.1,
               "Steering angular velocity smoothing sigma, in seconds. If "
               "positive, steering angular velocity is smoothed out with this "
               "sigma before rendering.");
@@ -151,12 +151,12 @@ int main(int argc, char **argv) {
   const nlohmann::json &frames = (*frames_json)[pilotguru::kFrames];
 
   std::unique_ptr<pilotguru::RealTimeSeries> steering(nullptr);
-  if (!FLAGS_rotations_json.empty()) {
-    steering.reset(new pilotguru::RealTimeSeries(FLAGS_rotations_json,
+  if (!FLAGS_steering_json.empty()) {
+    steering.reset(new pilotguru::RealTimeSeries(FLAGS_steering_json,
                                                  pilotguru::kSteering,
                                                  pilotguru::kAngularVelocity));
-    if (FLAGS_rotations_smoothing_sigma > 0) {
-      steering->GaussianSmooth(FLAGS_rotations_smoothing_sigma);
+    if (FLAGS_steering_smoothing_sigma > 0) {
+      steering->GaussianSmooth(FLAGS_steering_smoothing_sigma);
     }
   }
 
@@ -222,7 +222,7 @@ int main(int argc, char **argv) {
 
     if (frame_steering.is_valid) {
       RenderRotation(out_frame.get(), frame.image.rows, 0, steering_wheel,
-                     frame_steering.value * FLAGS_rotations_scale);
+                     frame_steering.value * FLAGS_steering_scale);
     }
 
     if (frame_velocity.is_valid) {
