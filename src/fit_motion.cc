@@ -29,6 +29,8 @@
 #include <io/json_converters.hpp>
 #include <slam/smoothing.hpp>
 
+// Inputs
+
 DEFINE_string(rotations_json, "",
               "JSON file with raw timestamped 3D rotations from the "
               "smartphone gyroscope. Comes from PilotGuru Recorder raw data.");
@@ -42,6 +44,9 @@ DEFINE_string(accelerations_json, "",
 DEFINE_string(locations_json, "", "JSON file with GPS locations and derived "
                                   "absolute velocities. Comes from PilotGuru "
                                   "Recorder raw data.");
+
+// Outputs
+
 DEFINE_string(velocity_out_json, "", "JSON file to write timestamped absolute "
                                      "velocities derived from accelerometer "
                                      "data calibrated using GPS coarse-grained "
@@ -52,6 +57,15 @@ DEFINE_string(steering_out_json, "",
               "vehicle steering. Horizontal plane is detected via main "
               "principal axis of the raw 3D rotations from the gyro data.");
 
+// Inference parameters.
+
+DEFINE_double(rotations_principal_axis_min_magnitude_threshold, 0.01,
+              "Threshold for absolute rotation magnitudes for deriving "
+              "principal rotation axes (for inferring vertical axis and "
+              "horizontal steering plane). Before rotation axes clustering, "
+              "rotations are integrated over 0.5 second intervals, and "
+              "intervals with overall rotation magnitude less than this "
+              "threshold are ignored.");
 DEFINE_int64(locations_batch_size, 40,
              "Size of sliding window (in terms of the number of GPS "
              "measurements) to use for calibration. This should not be too "
@@ -109,6 +123,7 @@ int main(int argc, char **argv) {
   CHECK(!FLAGS_locations_json.empty());
   CHECK(!FLAGS_velocity_out_json.empty());
   CHECK(!FLAGS_steering_out_json.empty());
+  CHECK_GE(FLAGS_rotations_principal_axis_min_magnitude_threshold, 0);
   CHECK_GT(FLAGS_optimization_iters, 0);
   CHECK_GT(FLAGS_locations_batch_size, 0);
   CHECK_GT(FLAGS_locations_shift_step, 0);
@@ -128,8 +143,9 @@ int main(int argc, char **argv) {
   // Infer the main principal rotation axis (assumed to be the vertical axis of
   // the vehicle) and project all rotations onto that axis to get approximate
   // rotations in the horizontal plane (corresponding to steering).
-  const cv::Mat axes =
-      pilotguru::GetPrincipalRotationAxes(rotations, 500000, 0.1, 3);
+  const cv::Mat axes = pilotguru::GetPrincipalRotationAxes(
+      rotations, 500000, FLAGS_rotations_principal_axis_min_magnitude_threshold,
+      3);
   const cv::Vec3d vertical_axis(axes.at<float>(0, 0), axes.at<float>(0, 1),
                                 axes.at<float>(0, 2));
   const std::vector<double> steering_angles =
