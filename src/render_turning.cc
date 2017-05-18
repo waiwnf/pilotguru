@@ -35,6 +35,10 @@ DEFINE_double(rotations_scale, 200.0,
               "Scale factor to go from angular velocity in radians (from the "
               "--rotations_json file) to the rotation angle of the steering "
               "wheel (in degrees) for visualization.");
+DEFINE_double(rotations_smoothing_sigma, 0.1,
+              "Steering angular velocity smoothing sigma, in seconds. If "
+              "positive, steering angular velocity is smoothed out with this "
+              "sigma before rendering.");
 DEFINE_string(steering_wheel, "",
               "A file with the steering wheel image to use.");
 DEFINE_string(out_video, "", "Output video file to write.");
@@ -146,11 +150,15 @@ int main(int argc, char **argv) {
       pilotguru::ReadJsonFile(FLAGS_frames_json);
   const nlohmann::json &frames = (*frames_json)[pilotguru::kFrames];
 
-  std::unique_ptr<pilotguru::RealTimeSeries> steering(
-      FLAGS_rotations_json.empty() ? nullptr : new pilotguru::RealTimeSeries(
-                                                   FLAGS_rotations_json,
-                                                   pilotguru::kSteering,
-                                                   pilotguru::kAngularVelocity));
+  std::unique_ptr<pilotguru::RealTimeSeries> steering(nullptr);
+  if (!FLAGS_rotations_json.empty()) {
+    steering.reset(new pilotguru::RealTimeSeries(FLAGS_rotations_json,
+                                                 pilotguru::kSteering,
+                                                 pilotguru::kAngularVelocity));
+    if (FLAGS_rotations_smoothing_sigma > 0) {
+      steering->GaussianSmooth(FLAGS_rotations_smoothing_sigma);
+    }
+  }
 
   std::unique_ptr<pilotguru::RealTimeSeries> velocities(
       FLAGS_velocities_json.empty() ? nullptr : new pilotguru::RealTimeSeries(
