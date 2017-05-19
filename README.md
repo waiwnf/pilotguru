@@ -15,7 +15,7 @@
     - [Local calibration](#local-calibration)
     - [Inferred velocity data format](#inferred-velocity-data-format)
   + [Steering angle](#steering-details)
-    - [Computation details](#steering-computation-details")
+    - [Computation details](#steering-computation-details)
     - [Steering angular velocity data format](#steering-data-format)
 
 ## What? <a name="what"/>
