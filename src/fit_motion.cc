@@ -60,13 +60,6 @@ DEFINE_string(steering_out_json, "",
 
 // Inference parameters.
 
-DEFINE_double(rotations_principal_axis_min_magnitude_threshold, 0.01,
-              "Threshold for absolute rotation magnitudes for deriving "
-              "principal rotation axes (for inferring vertical axis and "
-              "horizontal steering plane). Before rotation axes clustering, "
-              "rotations are integrated over 0.5 second intervals, and "
-              "intervals with overall rotation magnitude less than this "
-              "threshold are ignored.");
 DEFINE_int64(locations_batch_size, 40,
              "Size of sliding window (in terms of the number of GPS "
              "measurements) to use for calibration. This should not be too "
@@ -124,7 +117,6 @@ int main(int argc, char **argv) {
   CHECK(!FLAGS_locations_json.empty());
   CHECK(!FLAGS_velocities_out_json.empty());
   CHECK(!FLAGS_steering_out_json.empty());
-  CHECK_GE(FLAGS_rotations_principal_axis_min_magnitude_threshold, 0);
   CHECK_GT(FLAGS_optimization_iters, 0);
   CHECK_GT(FLAGS_locations_batch_size, 0);
   CHECK_GT(FLAGS_locations_shift_step, 0);
@@ -144,11 +136,11 @@ int main(int argc, char **argv) {
   // Infer the main principal rotation axis (assumed to be the vertical axis of
   // the vehicle) and project all rotations onto that axis to get approximate
   // rotations in the horizontal plane (corresponding to steering).
-  const cv::Mat axes = pilotguru::GetPrincipalRotationAxes(
-      rotations, 500000, FLAGS_rotations_principal_axis_min_magnitude_threshold,
-      3);
-  const cv::Vec3d vertical_axis(axes.at<float>(0, 0), axes.at<float>(0, 1),
-                                axes.at<float>(0, 2));
+  const cv::Mat pca_axes =
+      pilotguru::GetPrincipalRotationAxes(rotations, 500000);
+  const cv::Vec3d vertical_axis(pca_axes.at<double>(0, 0),
+                                pca_axes.at<double>(0, 1),
+                                pca_axes.at<double>(0, 2));
   const std::vector<double> steering_angles =
       GetHorizontalTurnAngles(rotations, vertical_axis);
   CHECK_EQ(steering_angles.size(), rotations.size());
