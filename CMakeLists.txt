@@ -39,6 +39,7 @@ add_library(pilotgurulib SHARED
   ${PROJECT_SOURCE_DIR}/src/slam/smoothing.cc
 )
 
+add_executable(annotate_frames src/annotate_frames.cc)
 add_executable(calibrate src/calibrate.cc)
 add_executable(fit_motion src/fit_motion.cc)
 add_executable(integrate_motion src/integrate_motion.cc)
@@ -49,6 +50,7 @@ add_executable(render_motion src/render_motion.cc)
 add_executable(smooth_heading_directions src/smooth_heading_directions.cc)
 
 add_dependencies(pilotgurulib ORB_SLAM2)
+add_dependencies(annotate_frames pilotgurulib)
 add_dependencies(fit_motion pilotgurulib ORB_SLAM2)
 add_dependencies(integrate_motion pilotgurulib ORB_SLAM2)
 add_dependencies(interpolate_velocity pilotgurulib ORB_SLAM2)
@@ -57,6 +59,7 @@ add_dependencies(project_translations pilotgurulib ORB_SLAM2)
 add_dependencies(render_motion pilotgurulib ORB_SLAM2)
 add_dependencies(smooth_heading_directions pilotgurulib ORB_SLAM2)
 
+target_link_libraries(annotate_frames pilotgurulib ORB_SLAM2 ${OpenCV_LIBS} glog gflags)
 target_link_libraries(calibrate ${OpenCV_LIBS} glog gflags)
 target_link_libraries(fit_motion pilotgurulib ORB_SLAM2 glog gflags)
 target_link_libraries(integrate_motion pilotgurulib ORB_SLAM2 glog gflags)
