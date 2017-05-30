@@ -21,6 +21,26 @@ import numpy as np
 def OutFileName(out_dir, frame_id, data_id):
   return os.path.join(args.out_dir, 'frame-%06d-%s.npy') % (frame_id, data_id)
 
+def Crop(img, top, bottom, left, right):
+  """Crops given number of pixels from the edges of the image in HWC format."""
+
+  assert left >= 0
+  assert right >= 0
+  assert top >= 0
+  assert bottom >= 0
+  assert (top + bottom) < img.shape[0]
+  assert (left + right) < img.shape[1]
+
+  return img[top:(img.shape[0] - bottom), left:(img.shape[1] - right), ...]
+
+def MaybeResize(img, height, width):
+  if height <= 0 and width <= 0:
+    return img
+  else:
+    effective_height = height if height > 0 else img.shape[0]
+    effective_width = width if width > 0 else img.shape[1]
+    return scipy.misc.imresize(img, (effective_height, effective_width))
+
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()
   parser.add_argument(
@@ -44,6 +64,17 @@ if __name__ == '__main__':
     help='Only writes out data for every --frames_step\'s frame. ' +
       'Used to reduce the effective frame rate and have fewer very similar ' +
       'redundant examples.')
+  
+  # Crop settings
+  parser.add_argument('--crop_top', type=int, default=0)
+  parser.add_argument('--crop_bottom', type=int, default=0)
+  parser.add_argument('--crop_left', type=int, default=0)
+  parser.add_argument('--crop_right', type=int, default=0)
+
+  # Post-crop resize settings.
+  parser.add_argument('--target_height', type=int, default=-1)
+  parser.add_argument('--target_width', type=int, default=-1)
+
   args = parser.parse_args()
 
   tempdir = tempfile.mkdtemp()
@@ -81,8 +112,14 @@ if __name__ == '__main__':
 
       # Raw image is in HWC order.
       frame_image_raw = scipy.misc.imread(frame_image_name, mode='RGB')
+      frame_image_cropped = Crop(
+          frame_image_raw,
+          args.crop_top, args.crop_bottom, args.crop_left, args.crop_right)
+      frame_image_resized = MaybeResize(
+          frame_image_cropped, args.target_height, args.target_width)
+
       # Transpose to CHW for pytorch.
-      frame_image = np.transpose(frame_image_raw, (2,0,1))
+      frame_image = np.transpose(frame_image_resized, (2,0,1))
 
       image_out_name = OutFileName(args.out_dir, frame_id, 'img')
       np.save(image_out_name, frame_image)
