@@ -10,55 +10,91 @@ def ConvOutShape(in_shape, kernel_size, stride=1, padding=0, dilation=1):
   return [
       ConvOutSize(x, kernel_size, stride, padding, dilation) for x in in_shape]
 
-def AddConv2d(shapes, out_channels, kernel_size):
-  prev_shape = shapes[-1]
-  in_channels = prev_shape[0]
-  out_shape = [out_channels] + ConvOutShape(prev_shape[1:], kernel_size)
-  shapes.append(out_shape)
-  
-  return nn.Conv2d(in_channels, out_channels, kernel_size)
+def MakeConv2d(in_shape, out_channels, kernel_size):
+  in_channels = in_shape[0]
+  out_shape = [out_channels] + ConvOutShape(in_shape[1:], kernel_size)
+  return nn.Conv2d(in_channels, out_channels, kernel_size), out_shape
 
-def AddMaxPool2d(shapes, kernel_size):
-  prev_shape = shapes[-1]
-  in_channels = prev_shape[0]
-  out_shape = [in_channels] + ConvOutShape(
-      prev_shape[1:], kernel_size, stride=kernel_size)
-  shapes.append(out_shape)
-  
-  return nn.MaxPool2d(kernel_size, kernel_size)
+def MakeMaxPool2d(in_shape, kernel_size):
+  in_channels = in_shape[0]
+  out_shape = ([in_channels] + 
+      ConvOutShape(in_shape[1:], kernel_size, stride=kernel_size))
+  return nn.MaxPool2d(kernel_size, kernel_size), out_shape
 
-class ToyConvNet(nn.Module):
+def MakeRelu(in_shape):
+  out_shape = in_shape
+  layer = lambda x : nn.functional.relu(x)
+  return layer, out_shape
+
+def MakeLinear(in_shape, out_size):
+  assert len(in_shape) == 1
+  return nn.Linear(in_shape[0], out_size), [out_size]
+
+def MakeFlatten(in_shape):
+  assert len(in_shape) > 0
+  out_size = 1
+  for x in in_shape:
+    out_size *= x
+  layer = lambda x : x.view(-1, out_size)
+  return layer, [out_size]
+
+class SequentialNet(nn.Module):
+  def __init__(self, in_shape):
+    super(SequentialNet, self).__init__()
+    self.layers = []
+    self.out_shapes = [in_shape]
+  
+  def OutShape(self):
+    return self.out_shapes[-1]
+  
+  def AddConv2d(self, out_channels, kernel_size):
+    return self.AddLayer(MakeConv2d(self.OutShape(), out_channels, kernel_size))
+
+  def AddMaxPool2d(self, kernel_size):
+    return self.AddLayer(MakeMaxPool2d(self.OutShape(), kernel_size))
+
+  def AddRelu(self):
+    return self.AddLayer(MakeRelu(self.OutShape()))
+
+  def AddLinear(self, out_size):
+    return self.AddLayer(MakeLinear(self.OutShape(), out_size))
+  
+  def AddFlatten(self):
+    return self.AddLayer(MakeFlatten(self.OutShape()))
+
+  def AddLayer(self, layer_tuple):
+    layer, out_shape = layer_tuple
+    self.layers.append(layer)
+    self.out_shapes.append(out_shape)
+    return layer
+  
+  def forward(self, x):
+    result = x
+    for layer in self.layers:
+      result = layer(result)
+    return result
+
+
+class ToyConvNet(SequentialNet):
   """Simple 3-conv + 3-fc model, mostly for debugging purposes."""
 
   def __init__(self, in_shape):
-    super(ToyConvNet, self).__init__()
-    self.shapes = [in_shape]
+    super(ToyConvNet, self).__init__(in_shape)
 
-    self.conv1 = AddConv2d(self.shapes, 6, 5)
-    self.pool1 = AddMaxPool2d(self.shapes, 2)
+    self.conv1 = self.AddConv2d(6, 5)
+    self.AddRelu()
+    self.pool1 = self.AddMaxPool2d(2)
 
-    self.conv2 = AddConv2d(self.shapes, 16, 5)
-    self.pool2 = AddMaxPool2d(self.shapes, 2)
-    
-    self.conv3 = AddConv2d(self.shapes, 1, 1)
-    self.pool3 = AddMaxPool2d(self.shapes, 2)
+    self.conv2 = self.AddConv2d(16, 5)
+    self.AddRelu()
+    self.pool2 = self.AddMaxPool2d(2)
 
-    conv_out_shape = self.shapes[-1]
-    self.fc_in_elements = (
-        conv_out_shape[0] * conv_out_shape[1] * conv_out_shape[2])
-    
-    self.fc1 = nn.Linear(self.fc_in_elements, 120)
-    self.fc2 = nn.Linear(120, 84)
-    self.fc3 = nn.Linear(84, 1)
+    self.conv3 = self.AddConv2d(1, 5)
+    self.AddRelu()
+    self.pool3 = self.AddMaxPool2d(2)
 
+    self.AddFlatten()
 
-  def forward(self, x):
-    x = self.pool1(nn.functional.relu(self.conv1(x)))
-    x = self.pool1(nn.functional.relu(self.conv2(x)))
-    x = self.pool1(nn.functional.relu(self.conv3(x)))
-    x = x.view(-1, self.fc_in_elements)
-    x = nn.functional.relu(self.fc1(x))
-    x = nn.functional.relu(self.fc2(x))
-    x = self.fc3(x)
-    return x
-
+    self.fc1 = self.AddLinear(120)
+    self.fc2 = self.AddLinear(84)
+    self.fc3 = self.AddLinear(1)
