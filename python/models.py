@@ -17,10 +17,11 @@ def TotalElements(shape):
     result = result * x
   return result
 
-def MakeConv2d(in_shape, out_channels, kernel_size):
+def MakeConv2d(in_shape, out_channels, kernel_size, stride):
   in_channels = in_shape[0]
-  out_shape = [out_channels] + ConvOutShape(in_shape[1:], kernel_size)
-  return nn.Conv2d(in_channels, out_channels, kernel_size), out_shape
+  out_shape = [out_channels] + ConvOutShape(in_shape[1:], kernel_size, stride)
+  layer = nn.Conv2d(in_channels, out_channels, kernel_size, stride=stride) 
+  return layer, out_shape
 
 def MakeMaxPool2d(in_shape, kernel_size):
   in_channels = in_shape[0]
@@ -47,6 +48,10 @@ def MakeBatchNorm2d(in_shape):
   assert len(in_shape) == 3
   return nn.BatchNorm2d(in_shape[0]), in_shape
 
+def MakeBatchNorm1d(in_shape):
+  assert len(in_shape) <= 2
+  return nn.BatchNorm1d(in_shape[0]), in_shape
+
 class SequentialNet(nn.Module):
   def __init__(self, in_shape):
     super(SequentialNet, self).__init__()
@@ -56,8 +61,8 @@ class SequentialNet(nn.Module):
   def OutShape(self):
     return self.out_shapes[-1]
   
-  def AddConv2d(self, out_channels, kernel_size):
-    return self.AddLayer(MakeConv2d(self.OutShape(), out_channels, kernel_size))
+  def AddConv2d(self, out_channels, kernel_size, stride=1):
+    return self.AddLayer(MakeConv2d(self.OutShape(), out_channels, kernel_size, stride))
 
   def AddMaxPool2d(self, kernel_size):
     return self.AddLayer(MakeMaxPool2d(self.OutShape(), kernel_size))
@@ -73,6 +78,9 @@ class SequentialNet(nn.Module):
   
   def AddBatchNorm2d(self):
     return self.AddLayer(MakeBatchNorm2d(self.OutShape()))
+  
+  def AddBatchNorm1d(self):
+    return self.AddLayer(MakeBatchNorm1d(self.OutShape()))
 
   def AddLayer(self, layer_tuple):
     layer, out_shape = layer_tuple
@@ -115,3 +123,45 @@ class ToyConvNet(SequentialNet):
     self.fc2 = self.AddLinear(84)
     self.AddRelu()
     self.fc3 = self.AddLinear(1)
+
+class NvidiaSingleFrameNet(SequentialNet):
+
+  def __init__(self, in_shape):
+    super(NvidiaSingleFrameNet, self).__init__(in_shape)
+    self.conv1 = self.AddConv2d(24, 5, stride=2)
+    self.c1bn = self.AddBatchNorm2d()
+    self.AddRelu()
+
+    self.conv2 = self.AddConv2d(36, 5, stride=2)
+    self.c2bn = self.AddBatchNorm2d()
+    self.AddRelu()
+
+    self.conv3 = self.AddConv2d(48, 5, stride=2)
+    self.c3bn = self.AddBatchNorm2d()
+    self.AddRelu()
+
+    self.conv4 = self.AddConv2d(64, 3)
+    self.c4bn = self.AddBatchNorm2d()
+    self.AddRelu()
+
+    self.conv5 = self.AddConv2d(64, 3)
+    self.c5bn = self.AddBatchNorm2d()
+    self.AddRelu()
+
+    self.AddFlatten()
+
+    self.fc1 = self.AddLinear(1164)
+    self.fc1bn = self.AddBatchNorm1d()
+    self.AddRelu()
+
+    self.fc2 = self.AddLinear(100)
+    self.fc2bn = self.AddBatchNorm1d()
+    self.AddRelu()
+
+    self.fc3 = self.AddLinear(50)
+    self.AddRelu()
+
+    self.fc4 = self.AddLinear(10)
+    self.AddRelu()
+
+    self.fc5 = self.AddLinear(1)

@@ -21,7 +21,7 @@ if __name__ == '__main__':
   trainloader = torch.utils.data.DataLoader(
       trainset, batch_size=args.batch_size, shuffle=True)
 
-  net = models.ToyConvNet([3, args.in_height, args.in_width])
+  net = models.NvidiaSingleFrameNet([3, args.in_height, args.in_width])
   net.cuda()
   
   loss = torch.nn.MSELoss()
