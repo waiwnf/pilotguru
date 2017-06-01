@@ -11,6 +11,7 @@ import torch.utils.data
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()
   parser.add_argument('--data_dirs', required=True)
+  parser.add_argument('--validation_data_dirs', required=True)
   parser.add_argument('--in_height', type=int, required=True)
   parser.add_argument('--in_width', type=int, required=True)
   parser.add_argument('--batch_size', type=int, required=True)
@@ -20,6 +21,10 @@ if __name__ == '__main__':
   trainset = io_helpers.ImageFrameDataset(args.data_dirs.split(','))
   trainloader = torch.utils.data.DataLoader(
       trainset, batch_size=args.batch_size, shuffle=True)
+  
+  valset = io_helpers.ImageFrameDataset(args.validation_data_dirs.split(','))
+  validation_loader = torch.utils.data.DataLoader(
+      valset, batch_size=args.batch_size, shuffle=True)
 
   net = models.NvidiaSingleFrameNet([3, args.in_height, args.in_width])
   net.cuda()
@@ -27,4 +32,4 @@ if __name__ == '__main__':
   loss = torch.nn.MSELoss()
   optimizer = torch.optim.Adam(net.parameters())
 
-  optimize.TrainModel(net, trainloader, loss, optimizer, args.epochs)
+  optimize.TrainModel(net, trainloader, validation_loader, loss, optimizer, args.epochs)
