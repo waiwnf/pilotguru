@@ -10,13 +10,33 @@
 import argparse
 import json
 import os
-import shutil
+import re
 import subprocess
-import tempfile
 
+import av
 import scipy.misc
-
 import numpy as np
+
+def VideoOrientationDegrees(filename):
+  '''Infers video rotation by parsing  avprobe output.'''
+  avprobe_outcome = subprocess.run(['avprobe', filename], stderr=subprocess.PIPE)
+  for line in avprobe_outcome.stderr.decode('utf-8').split('\n'):
+    match_result = re.match('^\s*rotate\s*:\s*([0-9]+)\s*$', line)
+    if match_result is not None:
+      return int(match_result.group(1))
+  return 0  # No rotation information is in the file, hence zero rotation.
+
+def Video90RotationTimes(rotation_degrees):
+  '''Converts rotation in degrees to number of 90-degree rotations.'''
+  assert rotation_degrees % 90 == 0
+  return (rotation_degrees % 360) / 90
+
+def RawVideoFrameGenerator(filename):
+  container = av.open(filename)
+  for packet in container.demux():
+    for frame in packet.decode():
+      if isinstance(frame, av.video.frame.VideoFrame):
+        yield frame
 
 def OutFileName(out_dir, frame_id, data_id):
   return os.path.join(args.out_dir, 'frame-%06d-%s.npy') % (frame_id, data_id)
@@ -77,17 +97,10 @@ if __name__ == '__main__':
 
   args = parser.parse_args()
 
-  tempdir = tempfile.mkdtemp()
-  print('Created temporary directory: %s' % (tempdir,))
-
-  # Extract all video frames as PNGs to the temporary directory.
-  out_frames_pattern = os.path.join(tempdir, 'frame-%06d.png')
-  subprocess.call(['ffmpeg', '-i', args.in_video, out_frames_pattern])
-
   # Compute per-frame steering angular velocity annotations from the raw 
   # angular velocity time series.
   annotate_frames_bin = os.path.join(args.binary_dir, 'annotate_frames')
-  steering_frames_json_name = os.path.join(tempdir, 'steering.json')
+  steering_frames_json_name = os.path.join(args.out_dir, 'steering.json')
   subprocess.call(
     [annotate_frames_bin,
       '--frames_json', args.in_frames_json,
@@ -98,7 +111,12 @@ if __name__ == '__main__':
   
   with open(steering_frames_json_name) as f:
     steering_frames_json = json.load(f)
-  
+
+  # Open the video file for reading the frames.
+  rotation_times = Video90RotationTimes(VideoOrientationDegrees(args.in_video))
+  frames_generator = RawVideoFrameGenerator(args.in_video)
+  current_raw_frame = next(frames_generator)
+
   # Id of previous frame for which the data was written out.
   prev_frame_id = None
   for frame in steering_frames_json['steering']:
@@ -106,14 +124,19 @@ if __name__ == '__main__':
     if prev_frame_id is None or (frame_id - prev_frame_id) >= args.frames_step:
       prev_frame_id = frame_id
       angular_velocity = frame['angular_velocity']
-      # FFMpeg frame ids are 1-based, so add 1 to our 0-based frame ids to get 
-      # the filename.
-      frame_image_name = out_frames_pattern % (frame_id + 1)
+  
+      # Skip video frames until we get to the requested frame id.
+      while current_raw_frame.index < frame_id:
+        current_raw_frame = next(frames_generator)
+      assert current_raw_frame.index == frame_id
 
       # Raw image is in HWC order.
-      frame_image_raw = scipy.misc.imread(frame_image_name, mode='RGB')
+      frame_image_raw = np.asarray(current_raw_frame.to_image())
+      # Rotate to allow for matrix orirentation in the camera.
+      frame_image_rotated = np.rot90(frame_image_raw, k=rotation_times)
+      # Crop to the ROI for the vision model.
       frame_image_cropped = Crop(
-          frame_image_raw,
+          frame_image_rotated,
           args.crop_top, args.crop_bottom, args.crop_left, args.crop_right)
       frame_image_resized = MaybeResize(
           frame_image_cropped, args.target_height, args.target_width)
@@ -121,10 +144,11 @@ if __name__ == '__main__':
       # Transpose to CHW for pytorch.
       frame_image = np.transpose(frame_image_resized, (2,0,1))
 
+      # Write out numpy array for the training example input.
       image_out_name = OutFileName(args.out_dir, frame_id, 'img')
       np.save(image_out_name, frame_image)
+      # Write out the PNG picture too for checking the inputs by hand.
+      scipy.misc.imsave(image_out_name + '.png', frame_image_resized)
+      # Steering angular velocity is the label.
       angular_out_name = OutFileName(args.out_dir, frame_id, 'angular')
       np.save(angular_out_name, np.array([angular_velocity], dtype=np.float32))
-
-  # Remove the intermediate PNGs and jsons.
-  shutil.rmtree(tempdir)

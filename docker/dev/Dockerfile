@@ -52,6 +52,9 @@ RUN pip3 install jupyter
 
 RUN apt-get -y install python3-scipy
 
+RUN apt-get -y install libavformat-dev libavcodec-dev libavdevice-dev libavutil-dev libswscale-dev libavresample-dev libavfilter-dev
+RUN pip3 install av
+
 RUN apt-get  update
 
 RUN apt-get -y install code
