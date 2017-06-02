@@ -52,6 +52,9 @@ def MakeBatchNorm1d(in_shape):
   assert len(in_shape) <= 2
   return nn.BatchNorm1d(in_shape[0]), in_shape
 
+def MakeDropout2d(in_shape, p):
+  return nn.Dropout2d(p), in_shape
+
 class SequentialNet(nn.Module):
   def __init__(self, in_shape):
     super(SequentialNet, self).__init__()
@@ -81,6 +84,9 @@ class SequentialNet(nn.Module):
   
   def AddBatchNorm1d(self):
     return self.AddLayer(MakeBatchNorm1d(self.OutShape()))
+  
+  def AddDrouput2d(self, p):
+    return self.AddLayer(MakeDropout2d(self.OutShape(), p))
 
   def AddLayer(self, layer_tuple):
     layer, out_shape = layer_tuple
@@ -126,27 +132,32 @@ class ToyConvNet(SequentialNet):
 
 class NvidiaSingleFrameNet(SequentialNet):
 
-  def __init__(self, in_shape):
+  def __init__(self, in_shape, drouput_prob):
     super(NvidiaSingleFrameNet, self).__init__(in_shape)
     self.conv1 = self.AddConv2d(24, 5, stride=2)
     self.c1bn = self.AddBatchNorm2d()
     self.AddRelu()
+    self.drop1 = self.AddDrouput2d(drouput_prob)
 
     self.conv2 = self.AddConv2d(36, 5, stride=2)
     self.c2bn = self.AddBatchNorm2d()
     self.AddRelu()
+    self.drop2 = self.AddDrouput2d(drouput_prob)
 
     self.conv3 = self.AddConv2d(48, 5, stride=2)
     self.c3bn = self.AddBatchNorm2d()
     self.AddRelu()
+    self.drop3 = self.AddDrouput2d(drouput_prob)
 
     self.conv4 = self.AddConv2d(64, 3)
     self.c4bn = self.AddBatchNorm2d()
     self.AddRelu()
+    self.drop4 = self.AddDrouput2d(drouput_prob)
 
     self.conv5 = self.AddConv2d(64, 3)
     self.c5bn = self.AddBatchNorm2d()
     self.AddRelu()
+    self.drop5 = self.AddDrouput2d(drouput_prob)
 
     self.AddFlatten()
 
