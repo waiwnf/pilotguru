@@ -37,6 +37,7 @@ def TrainModel(net, trainloader, validation_loader, loss, optimizer, epochs):
     examples_per_sec = total_examples / epoch_duration
     avg_loss = running_loss / total_examples
 
+    net.eval()
     validation_total_loss = 0.0
     validation_examples = 0
     for data in validation_loader:
@@ -46,6 +47,7 @@ def TrainModel(net, trainloader, validation_loader, loss, optimizer, epochs):
 
       validation_examples += inputs_var.size()[0]
       validation_total_loss += loss(outputs, labels_var).data[0] * inputs_var.size()[0]
+    net.train()
     
     validation_avg_loss = validation_total_loss / validation_examples
     
