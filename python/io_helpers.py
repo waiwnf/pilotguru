@@ -33,15 +33,6 @@ class NumpyFileDataset(torch.utils.data.Dataset):
   
   def __getitem__(self, idx):
     return np.load(self.data_files[idx]), np.load(self.label_files[idx])
-    img_raw = np.load(self.data_files[idx])
-    # Make sure input images are encoded as byte-per-channel.
-    assert img_raw.dtype == np.uint8
-    # Convert to float to feed into tensors, and normalize to [0, 1].
-    img = img_raw.astype(np.float32) / 255.0
-    # Load the corresponding label.
-    label = np.load(self.label_files[idx])
-    return img, label
-
 
 class ImageFrameDataset(NumpyFileDataset):
   """Dataset for data files with images (byte per channel).
