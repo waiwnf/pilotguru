@@ -13,23 +13,35 @@ if __name__ == '__main__':
   parser.add_argument('--data_dirs', required=True)
   parser.add_argument('--validation_data_dirs', required=True)
   parser.add_argument('--in_height', type=int, required=True)
-  parser.add_argument('--in_width', type=int, required=True)
   parser.add_argument('--batch_size', type=int, required=True)
   parser.add_argument('--epochs', type=int, required=True)
+  parser.add_argument('--target_width', type=int, required=True)
+  parser.add_argument('--dropout_prob', type=float, default=0.0)
+  parser.add_argument('--max_horizontal_shift_pixels', type=int, default=0)
+  parser.add_argument('--horizontal_label_shift_rate', type=float, default=0.0)
   args = parser.parse_args()
 
-  trainset = io_helpers.ImageFrameDataset(args.data_dirs.split(','))
+  plain_train_data = io_helpers.ImageFrameDataset(args.data_dirs.split(','))
+  trainset = io_helpers.SteeringShiftAugmenterDataset(
+      plain_train_data,
+      args.target_width,
+      args.max_horizontal_shift_pixels,
+      args.horizontal_label_shift_rate)
   trainloader = torch.utils.data.DataLoader(
       trainset, batch_size=args.batch_size, shuffle=True)
   
-  valset = io_helpers.ImageFrameDataset(args.validation_data_dirs.split(','))
+  valset = io_helpers.ImageFrameDataset(
+      args.validation_data_dirs.split(','),
+      target_crop_width=args.target_width)
   validation_loader = torch.utils.data.DataLoader(
-      valset, batch_size=args.batch_size, shuffle=True)
+      valset, batch_size=args.batch_size, shuffle=False)
 
-  net = models.NvidiaSingleFrameNet([3, args.in_height, args.in_width])
+  net = models.NvidiaSingleFrameNet(
+      [3, args.in_height, args.target_width], args.dropout_prob)
   net.cuda()
   
   loss = torch.nn.MSELoss()
   optimizer = torch.optim.Adam(net.parameters())
 
-  optimize.TrainModel(net, trainloader, validation_loader, loss, optimizer, args.epochs)
+  optimize.TrainModel(
+      net, trainloader, validation_loader, loss, optimizer, args.epochs)
