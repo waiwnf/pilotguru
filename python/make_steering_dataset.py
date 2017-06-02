@@ -8,6 +8,7 @@
 # etc).
 
 import argparse
+import collections
 import json
 import os
 import re
@@ -16,6 +17,43 @@ import subprocess
 import av
 import scipy.misc
 import numpy as np
+
+FrameData = collections.namedtuple(
+    'FrameData', 'frame_id angular_velocity speed_m_s')
+
+def FillFrameData(steering, velocity):
+  assert velocity is not None or steering is not None
+  if velocity is not None and steering is not None:
+    assert velocity['frame_id'] == steering['frame_id']
+  frame_id = velocity['frame_id'] if velocity is not None else steering['frame_id']
+  s = velocity['speed_m_s'] if velocity is not None else None
+  av = steering['angular_velocity'] if steering is not None else None
+  return FrameData(frame_id, av, s)
+
+def JoinFrameData(steering, velocities):
+  steering_idx = 0
+  velocities_idx = 0
+  result = []
+  while steering_idx < len(steering) or velocities_idx < len(velocities):
+    v = None if velocities_idx >= len(velocities) else velocities[velocities_idx]
+    s = None if steering_idx >= len(steering) else steering[steering_idx]
+    if v is None:
+      result.append(FillFrameData(s, None))
+      steering_idx += 1
+    elif s is None:
+      result.append(FillFrameData(None, v))
+      velocities_idx += 1
+    elif s['frame_id'] < v['frame_id']:
+      result.append(FillFrameData(s, None))
+      steering_idx += 1
+    elif s['frame_id'] > v['frame_id']:
+      result.append(FillFrameData(None, v))
+      velocities_idx += 1
+    else:
+      result.append(FillFrameData(s, v))
+      steering_idx += 1
+      velocities_idx += 1
+  return result
 
 def VideoOrientationDegrees(filename):
   '''Infers video rotation by parsing  avprobe output.'''
@@ -74,6 +112,14 @@ if __name__ == '__main__':
     help='Timestamped steering angular velocities JSON, produced by ' +
       'fit_motion.')
   parser.add_argument(
+    '--in_velocities_json', required=True,
+    help='Timestamped absolute forward velocities JSON, produced by ' +
+      'fit_motion.')
+  parser.add_argument(
+    '--min_forward_velocity_m_s', type=float, default=0.0,
+    help='Timestamped absolute forward velocities JSON, produced by ' +
+      'fit_motion.')
+  parser.add_argument(
     '--binary_dir', required=True,
     help='Directory where the compiled pilotguru C++ binaries are located.')
   parser.add_argument(
@@ -108,9 +154,22 @@ if __name__ == '__main__':
       '--json_root_element_name', 'steering',
       '--json_value_name', 'angular_velocity',
       '--out_json', steering_frames_json_name])
+
+  # Per-frame forward velocities annotations.
+  velocities_frames_json_name = os.path.join(args.out_dir, 'velocities.json')
+  subprocess.call(
+    [annotate_frames_bin,
+      '--frames_json', args.in_frames_json,
+      '--in_json', args.in_velocities_json,
+      '--json_root_element_name', 'velocities',
+      '--json_value_name', 'speed_m_s',
+      '--out_json', velocities_frames_json_name])
   
   with open(steering_frames_json_name) as f:
     steering_frames_json = json.load(f)
+  with open(velocities_frames_json_name) as f:
+    velocities_frames_json = json.load(f)
+  frames_data = JoinFrameData(steering_frames_json['steering'], velocities_frames_json['velocities'])
 
   # Open the video file for reading the frames.
   rotation_times = Video90RotationTimes(VideoOrientationDegrees(args.in_video))
@@ -119,36 +178,45 @@ if __name__ == '__main__':
 
   # Id of previous frame for which the data was written out.
   prev_frame_id = None
-  for frame in steering_frames_json['steering']:
-    frame_id = frame['frame_id']
-    if prev_frame_id is None or (frame_id - prev_frame_id) >= args.frames_step:
-      prev_frame_id = frame_id
-      angular_velocity = frame['angular_velocity']
-  
-      # Skip video frames until we get to the requested frame id.
-      while current_raw_frame.index < frame_id:
-        current_raw_frame = next(frames_generator)
-      assert current_raw_frame.index == frame_id
+  for frame_data in frames_data:
+    # Skip if no angular velocity data
+    if frame_data.angular_velocity is None:
+      continue
+    # Skip if no forward velocity data or forward velocity is too low.
+    if frame_data.speed_m_s is None or frame_data.speed_m_s < args.min_forward_velocity_m_s:
+      continue
+    
+    frame_id = frame_data.frame_id
+    # Skip if too few frames were seen since the last saved output.
+    if prev_frame_id is not None and (frame_id - prev_frame_id) < args.frames_step:
+      continue
+   
+    prev_frame_id = frame_id
 
-      # Raw image is in HWC order.
-      frame_image_raw = np.asarray(current_raw_frame.to_image())
-      # Rotate to allow for matrix orirentation in the camera.
-      frame_image_rotated = np.rot90(frame_image_raw, k=rotation_times)
-      # Crop to the ROI for the vision model.
-      frame_image_cropped = Crop(
-          frame_image_rotated,
-          args.crop_top, args.crop_bottom, args.crop_left, args.crop_right)
-      frame_image_resized = MaybeResize(
-          frame_image_cropped, args.target_height, args.target_width)
+    # Skip video frames until we get to the requested frame id.
+    while current_raw_frame.index < frame_id:
+      current_raw_frame = next(frames_generator)
+    assert current_raw_frame.index == frame_id
 
-      # Transpose to CHW for pytorch.
-      frame_image = np.transpose(frame_image_resized, (2,0,1))
+    # Raw image is in HWC order.
+    frame_image_raw = np.asarray(current_raw_frame.to_image())
+    # Rotate to allow for matrix orirentation in the camera.
+    frame_image_rotated = np.rot90(frame_image_raw, k=rotation_times)
+    # Crop to the ROI for the vision model.
+    frame_image_cropped = Crop(
+        frame_image_rotated,
+        args.crop_top, args.crop_bottom, args.crop_left, args.crop_right)
+    frame_image_resized = MaybeResize(
+        frame_image_cropped, args.target_height, args.target_width)
 
-      # Write out numpy array for the training example input.
-      image_out_name = OutFileName(args.out_dir, frame_id, 'img')
-      np.save(image_out_name, frame_image)
-      # Write out the PNG picture too for checking the inputs by hand.
-      scipy.misc.imsave(image_out_name + '.png', frame_image_resized)
-      # Steering angular velocity is the label.
-      angular_out_name = OutFileName(args.out_dir, frame_id, 'angular')
-      np.save(angular_out_name, np.array([angular_velocity], dtype=np.float32))
+    # Transpose to CHW for pytorch.
+    frame_image = np.transpose(frame_image_resized, (2,0,1))
+
+    # Write out numpy array for the training example input.
+    image_out_name = OutFileName(args.out_dir, frame_id, 'img')
+    np.save(image_out_name, frame_image)
+    # Write out the PNG picture too for checking the inputs by hand.
+    scipy.misc.imsave(image_out_name + '.png', frame_image_resized)
+    # Steering angular velocity is the label.
+    angular_out_name = OutFileName(args.out_dir, frame_id, 'angular')
+    np.save(angular_out_name, np.array([frame_data.angular_velocity], dtype=np.float32))
