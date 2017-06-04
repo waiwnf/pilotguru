@@ -4,6 +4,7 @@ import subprocess
 import av
 
 import numpy as np
+import scipy.misc
 
 def CropHWC(img, top, bottom, left, right):
   """Crops given number of pixels from the edges of the image in HWC format."""
@@ -15,6 +16,14 @@ def CropHWC(img, top, bottom, left, right):
   assert (top + bottom) < img.shape[0]
   assert (left + right) < img.shape[1]
   return img[top:(img.shape[0] - bottom), left:(img.shape[1] - right), ...]
+
+def MaybeResizeHWC(img, height, width):
+  if height <= 0 and width <= 0:
+    return img
+  else:
+    effective_height = height if height > 0 else img.shape[0]
+    effective_width = width if width > 0 else img.shape[1]
+    return scipy.misc.imresize(img, (effective_height, effective_width))
 
 def RawVideoFrameGenerator(filename):
   container = av.open(filename)

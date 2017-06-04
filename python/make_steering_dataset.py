@@ -60,14 +60,6 @@ def JoinFrameData(steering, velocities):
 def OutFileName(out_dir, frame_id, data_id):
   return os.path.join(args.out_dir, 'frame-%06d-%s.npy') % (frame_id, data_id)
 
-def MaybeResize(img, height, width):
-  if height <= 0 and width <= 0:
-    return img
-  else:
-    effective_height = height if height > 0 else img.shape[0]
-    effective_width = width if width > 0 else img.shape[1]
-    return scipy.misc.imresize(img, (effective_height, effective_width))
-
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()
   parser.add_argument(
@@ -173,7 +165,7 @@ if __name__ == '__main__':
     frame_image_cropped = image_helpers.CropHWC(
         raw_frame,
         args.crop_top, args.crop_bottom, args.crop_left, args.crop_right)
-    frame_image_resized = MaybeResize(
+    frame_image_resized = image_helpers.MaybeResizeHWC(
         frame_image_cropped, args.target_height, args.target_width)
 
     # Transpose to CHW for pytorch.
