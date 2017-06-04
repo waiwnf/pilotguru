@@ -11,12 +11,12 @@ import argparse
 import collections
 import json
 import os
-import re
 import subprocess
 
-import av
 import scipy.misc
 import numpy as np
+
+import image_helpers
 
 FrameData = collections.namedtuple(
     'FrameData', 'frame_id angular_velocity speed_m_s')
@@ -25,7 +25,8 @@ def FillFrameData(steering, velocity):
   assert velocity is not None or steering is not None
   if velocity is not None and steering is not None:
     assert velocity['frame_id'] == steering['frame_id']
-  frame_id = velocity['frame_id'] if velocity is not None else steering['frame_id']
+  frame_id = (
+      velocity['frame_id'] if velocity is not None else steering['frame_id'])
   s = velocity['speed_m_s'] if velocity is not None else None
   av = steering['angular_velocity'] if steering is not None else None
   return FrameData(frame_id, av, s)
@@ -35,7 +36,8 @@ def JoinFrameData(steering, velocities):
   velocities_idx = 0
   result = []
   while steering_idx < len(steering) or velocities_idx < len(velocities):
-    v = None if velocities_idx >= len(velocities) else velocities[velocities_idx]
+    v = None if velocities_idx >= len(velocities) else (
+        velocities[velocities_idx])
     s = None if steering_idx >= len(steering) else steering[steering_idx]
     if v is None:
       result.append(FillFrameData(s, None))
@@ -55,41 +57,8 @@ def JoinFrameData(steering, velocities):
       velocities_idx += 1
   return result
 
-def VideoOrientationDegrees(filename):
-  '''Infers video rotation by parsing  avprobe output.'''
-  avprobe_outcome = subprocess.run(['avprobe', filename], stderr=subprocess.PIPE)
-  for line in avprobe_outcome.stderr.decode('utf-8').split('\n'):
-    match_result = re.match('^\s*rotate\s*:\s*([0-9]+)\s*$', line)
-    if match_result is not None:
-      return int(match_result.group(1))
-  return 0  # No rotation information is in the file, hence zero rotation.
-
-def Video90RotationTimes(rotation_degrees):
-  '''Converts rotation in degrees to number of 90-degree rotations.'''
-  assert rotation_degrees % 90 == 0
-  return (rotation_degrees % 360) / 90
-
-def RawVideoFrameGenerator(filename):
-  container = av.open(filename)
-  for packet in container.demux():
-    for frame in packet.decode():
-      if isinstance(frame, av.video.frame.VideoFrame):
-        yield frame
-
 def OutFileName(out_dir, frame_id, data_id):
   return os.path.join(args.out_dir, 'frame-%06d-%s.npy') % (frame_id, data_id)
-
-def Crop(img, top, bottom, left, right):
-  """Crops given number of pixels from the edges of the image in HWC format."""
-
-  assert left >= 0
-  assert right >= 0
-  assert top >= 0
-  assert bottom >= 0
-  assert (top + bottom) < img.shape[0]
-  assert (left + right) < img.shape[1]
-
-  return img[top:(img.shape[0] - bottom), left:(img.shape[1] - right), ...]
 
 def MaybeResize(img, height, width):
   if height <= 0 and width <= 0:
@@ -169,12 +138,12 @@ if __name__ == '__main__':
     steering_frames_json = json.load(f)
   with open(velocities_frames_json_name) as f:
     velocities_frames_json = json.load(f)
-  frames_data = JoinFrameData(steering_frames_json['steering'], velocities_frames_json['velocities'])
+  frames_data = JoinFrameData(
+      steering_frames_json['steering'], velocities_frames_json['velocities'])
 
   # Open the video file for reading the frames.
-  rotation_times = Video90RotationTimes(VideoOrientationDegrees(args.in_video))
-  frames_generator = RawVideoFrameGenerator(args.in_video)
-  current_raw_frame = next(frames_generator)
+  frames_generator = image_helpers.VideoFrameGenerator(args.in_video)
+  raw_frame, frame_index = next(frames_generator)
 
   # Id of previous frame for which the data was written out.
   prev_frame_id = None
@@ -183,40 +152,41 @@ if __name__ == '__main__':
     if frame_data.angular_velocity is None:
       continue
     # Skip if no forward velocity data or forward velocity is too low.
-    if frame_data.speed_m_s is None or frame_data.speed_m_s < args.min_forward_velocity_m_s:
+    if (frame_data.speed_m_s is None or
+        frame_data.speed_m_s < args.min_forward_velocity_m_s):
       continue
     
     frame_id = frame_data.frame_id
     # Skip if too few frames were seen since the last saved output.
-    if prev_frame_id is not None and (frame_id - prev_frame_id) < args.frames_step:
+    if (prev_frame_id is not None and 
+        (frame_id - prev_frame_id) < args.frames_step):
       continue
    
     prev_frame_id = frame_id
 
     # Skip video frames until we get to the requested frame id.
-    while current_raw_frame.index < frame_id:
-      current_raw_frame = next(frames_generator)
-    assert current_raw_frame.index == frame_id
+    while frame_index < frame_id:
+      raw_frame, frame_index = next(frames_generator)
+    assert frame_index == frame_id
 
-    # Raw image is in HWC order.
-    frame_image_raw = np.asarray(current_raw_frame.to_image())
-    # Rotate to allow for matrix orirentation in the camera.
-    frame_image_rotated = np.rot90(frame_image_raw, k=rotation_times)
     # Crop to the ROI for the vision model.
-    frame_image_cropped = Crop(
-        frame_image_rotated,
+    frame_image_cropped = image_helpers.CropHWC(
+        raw_frame,
         args.crop_top, args.crop_bottom, args.crop_left, args.crop_right)
     frame_image_resized = MaybeResize(
         frame_image_cropped, args.target_height, args.target_width)
 
     # Transpose to CHW for pytorch.
-    frame_image = np.transpose(frame_image_resized, (2,0,1))
+    frame_image_chw = np.transpose(frame_image_resized, (2,0,1))
 
     # Write out numpy array for the training example input.
     image_out_name = OutFileName(args.out_dir, frame_id, 'img')
-    np.save(image_out_name, frame_image)
+    np.save(image_out_name, frame_image_chw)
     # Write out the PNG picture too for checking the inputs by hand.
     scipy.misc.imsave(image_out_name + '.png', frame_image_resized)
     # Steering angular velocity is the label.
     angular_out_name = OutFileName(args.out_dir, frame_id, 'angular')
-    np.save(angular_out_name, np.array([frame_data.angular_velocity], dtype=np.float32))
+    np.save(
+        angular_out_name,
+        np.array([frame_data.angular_velocity],
+        dtype=np.float32))
