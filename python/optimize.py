@@ -1,5 +1,7 @@
 import time
 
+import torch
+
 from torch.autograd import Variable
 
 def WrapTrainExamples(data):
@@ -11,7 +13,8 @@ def WrapTrainExamples(data):
   return inputs_var, labels_var
 
 # TODO save learned model to file, checkpoints.
-def TrainModel(net, trainloader, validation_loader, loss, optimizer, epochs):
+def TrainModel(net, trainloader, validation_loader, loss, optimizer, epochs, out_prefix):
+  min_validation_loss = float('inf')
   for epoch in range(1, epochs + 1):
     running_loss = 0.0
     total_examples = 0
@@ -50,8 +53,20 @@ def TrainModel(net, trainloader, validation_loader, loss, optimizer, epochs):
     net.train()
     
     validation_avg_loss = validation_total_loss / validation_examples
-    
+
     print('Epoch %d;  loss %g;  val loss: %g;  %0.2f sec/epoch; %0.2f examples/sec' %
           (epoch, avg_loss, validation_avg_loss, epoch_duration, examples_per_sec))
 
+    if validation_avg_loss < min_validation_loss:
+      save_start_time = time.time()
+      net.cpu()
+      torch.save(net.state_dict(), out_prefix + '-best.pth')
+      net.cuda()
+      min_validation_loss = validation_avg_loss
+      save_duration = time.time() - save_start_time
+      print('Saved model snapshot. Took %0.2f seconds' % save_duration)
+  
   print('Finished Training')
+  net.cpu()
+  torch.save(net.state_dict(), out_prefix + '-last.pth')
+  net.cuda()

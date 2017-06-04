@@ -16,6 +16,7 @@ if __name__ == '__main__':
   parser.add_argument('--batch_size', type=int, required=True)
   parser.add_argument('--epochs', type=int, required=True)
   parser.add_argument('--target_width', type=int, required=True)
+  parser.add_argument('--out_prefix', required=True)
   parser.add_argument('--dropout_prob', type=float, default=0.0)
   parser.add_argument('--max_horizontal_shift_pixels', type=int, default=0)
   parser.add_argument('--horizontal_label_shift_rate', type=float, default=0.0)
@@ -46,4 +47,10 @@ if __name__ == '__main__':
   optimizer = torch.optim.Adam(net.parameters())
 
   optimize.TrainModel(
-      net, trainloader, validation_loader, loss, optimizer, args.epochs)
+      net,
+      trainloader,
+      validation_loader,
+      loss,
+      optimizer,
+      args.epochs,
+      args.out_prefix)
