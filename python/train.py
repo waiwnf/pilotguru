@@ -21,9 +21,10 @@ if __name__ == '__main__':
   parser.add_argument('--horizontal_label_shift_rate', type=float, default=0.0)
   args = parser.parse_args()
 
-  plain_train_data = io_helpers.ImageFrameDataset(args.data_dirs.split(','))
+  plain_train_data = io_helpers.InMemoryNumpyFileDataset(
+      args.data_dirs.split(','))
   trainset = io_helpers.SteeringShiftAugmenterDataset(
-      plain_train_data,
+      io_helpers.ImageFrameDataset(plain_train_data),
       args.target_width,
       args.max_horizontal_shift_pixels,
       args.horizontal_label_shift_rate)
@@ -31,7 +32,8 @@ if __name__ == '__main__':
       trainset, batch_size=args.batch_size, shuffle=True)
   
   valset = io_helpers.ImageFrameDataset(
-      args.validation_data_dirs.split(','),
+      io_helpers.InMemoryNumpyFileDataset(
+          args.validation_data_dirs.split(',')),
       target_crop_width=args.target_width)
   validation_loader = torch.utils.data.DataLoader(
       valset, batch_size=args.batch_size, shuffle=False)

@@ -5,6 +5,26 @@ import random
 import numpy as np
 import torch.utils.data
 
+ANGULAR = 'angular'
+IMG = 'img'
+NUMPY_EXTN = '.npy'
+
+def SortedExampleFiles(data_dirs, full_data_suffix, full_label_suffix):
+  """Returns two aligned lists of files for training examples: data and labels.
+
+  Globs the files with given suffixes in data_dirs and sorts alphabetically.  
+  """
+  data_files = []
+  for data_dir in data_dirs:
+    data_files.extend(
+        glob.glob(os.path.join(data_dir, '*' + full_data_suffix)))
+  data_files.sort()
+  # Label files have the same name as the corresponding frame image file,
+  # except for the suffix.
+  label_files = [
+      x.replace(full_data_suffix, full_label_suffix) for x in data_files]
+  return data_files, label_files
+
 class NumpyFileDataset(torch.utils.data.Dataset):
   """Pytorch dataset to read input examples from numpy files.
   
@@ -12,22 +32,13 @@ class NumpyFileDataset(torch.utils.data.Dataset):
   numpy array.
   """
 
-  def __init__(self, data_dirs, data_suffix, label_suffix):
+  def __init__(self, data_dirs, data_suffix=IMG, label_suffix=ANGULAR):
     super(NumpyFileDataset, self).__init__()
     # Attach .npy extensions to the file name masks.
-    full_data_suffix = data_suffix + '.npy'
-    full_label_suffix = label_suffix + '.npy'
-    # Find all the matching frame image files in the data directories.
-    self.data_files = []
-    for data_dir in data_dirs:
-      self.data_files.extend(
-          glob.glob(os.path.join(data_dir, '*' + full_data_suffix)))
-    self.data_files.sort()
-    # Label files have the same name as the corresponding frame image file,
-    # except for the suffix.
-    self.label_files = [
-        x.replace(full_data_suffix, full_label_suffix)
-        for x in self.data_files]
+    full_data_suffix = data_suffix + NUMPY_EXTN
+    full_label_suffix = label_suffix + NUMPY_EXTN
+    self.data_files, self.label_files = SortedExampleFiles(
+        data_dirs, full_data_suffix, full_label_suffix)
   
   def __len__(self):
     return len(self.data_files)
@@ -35,7 +46,32 @@ class NumpyFileDataset(torch.utils.data.Dataset):
   def __getitem__(self, idx):
     return np.load(self.data_files[idx]), np.load(self.label_files[idx])
 
-class ImageFrameDataset(NumpyFileDataset):
+class InMemoryNumpyFileDataset(torch.utils.data.Dataset):
+  """Pytorch dataset to cache fully in memory input examples from numpy files.
+  
+  Each example consists of two files: data file and label file, each with a 
+  numpy array.
+  """
+
+  def __init__(self, data_dirs, data_suffix=IMG, label_suffix=ANGULAR):
+    super(InMemoryNumpyFileDataset, self).__init__()
+    # Attach .npy extensions to the file name masks.
+    full_data_suffix = data_suffix + NUMPY_EXTN
+    full_label_suffix = label_suffix + NUMPY_EXTN
+    # Find all the matching frame image files in the data directories.
+    data_files, label_files = SortedExampleFiles(
+        data_dirs, full_data_suffix, full_label_suffix)
+    self.data = [np.load(x) for x in data_files]
+    self.labels = [np.load(x) for x in label_files]
+  
+  def __len__(self):
+    return len(self.data)
+  
+  def __getitem__(self, idx):
+    return self.data[idx], self.labels[idx]
+
+
+class ImageFrameDataset(torch.utils.data.Dataset):
   """Dataset for data files with images (byte per channel).
 
   Optionally takes a centered crop to target width.
@@ -46,16 +82,17 @@ class ImageFrameDataset(NumpyFileDataset):
 
   def __init__(
       self,
-      data_dirs,
-      target_crop_width=None,
-      img_suffix='img',
-      label_suffix='angular'):
-    super(ImageFrameDataset, self).__init__(
-        data_dirs, data_suffix=img_suffix, label_suffix=label_suffix)
+      source_dataset,
+      target_crop_width=None):
+    super(ImageFrameDataset, self).__init__()
+    self.source_dataset = source_dataset
     self.target_crop_width = target_crop_width
   
+  def __len__(self):
+    return self.source_dataset.__len__()
+
   def __getitem__(self, idx):
-    img_raw, label = super(ImageFrameDataset, self).__getitem__(idx)
+    img_raw, label = self.source_dataset.__getitem__(idx)
     # Make sure input images are encoded as byte-per-channel.
     assert img_raw.dtype == np.uint8
 
