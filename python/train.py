@@ -12,9 +12,9 @@ if __name__ == '__main__':
   parser = argparse.ArgumentParser()
   parser.add_argument('--data_dirs', required=True)
   parser.add_argument('--validation_data_dirs', required=True)
-  parser.add_argument('--in_height', type=int, required=True)
   parser.add_argument('--batch_size', type=int, required=True)
   parser.add_argument('--epochs', type=int, required=True)
+  parser.add_argument('--target_height', type=int, required=True)
   parser.add_argument('--target_width', type=int, required=True)
   parser.add_argument('--out_prefix', required=True)
   parser.add_argument('--dropout_prob', type=float, default=0.0)
@@ -40,7 +40,7 @@ if __name__ == '__main__':
       valset, batch_size=args.batch_size, shuffle=False)
 
   net = models.NvidiaSingleFrameNet(
-      [3, args.in_height, args.target_width], args.dropout_prob)
+      [3, args.target_height, args.target_width], args.dropout_prob)
   net.cuda()
   
   loss = torch.nn.MSELoss()
@@ -53,4 +53,6 @@ if __name__ == '__main__':
       loss,
       optimizer,
       args.epochs,
-      args.out_prefix)
+      args.out_prefix,
+      optimize.FlattenInnerChunk,
+      optimize.FlattenInnerChunk)

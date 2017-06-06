@@ -4,6 +4,17 @@ import torch
 
 from torch.autograd import Variable
 
+def FlattenInnerChunk(x):
+  """Flattens the input tensor to merge first two dimensions into one.
+
+  This helper is useful for unrolling multi-frame training examples into 
+  separate single-frame model inputs.
+  """
+  in_shape = [i for i in x.size()]
+  assert len(in_shape) > 2
+  dest_shape = [in_shape[0] * in_shape[1]] + in_shape[2:]
+  return x.resize_(*dest_shape)
+
 def IdentityTransform(x):
   return x
 

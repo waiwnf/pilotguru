@@ -98,9 +98,10 @@ class ImageFrameDataset(torch.utils.data.Dataset):
 
     # Optionally crop to target_crop_width.
     if self.target_crop_width is not None:
-      assert img_raw.shape[2] >= self.target_crop_width
-      left_boundary = int((img_raw.shape[2] - self.target_crop_width) / 2)
-      img_raw = img_raw[:,:,left_boundary:(left_boundary + self.target_crop_width)]
+      assert img_raw.shape[3] >= self.target_crop_width
+      left_boundary = int((img_raw.shape[3] - self.target_crop_width) / 2)
+      right_boundary = left_boundary + self.target_crop_width
+      img_raw = img_raw[:,:,:,left_boundary:right_boundary]
 
     # Convert to float to feed into tensors, and normalize to [0, 1].
     img = img_raw.astype(np.float32) / 255.0
@@ -144,16 +145,16 @@ class SteeringShiftAugmenterDataset(torch.utils.data.Dataset):
   def __getitem__(self, idx):
     source_img, source_label = self.source_dataset.__getitem__(idx)
     # Margin to the edge of the source image for a centered crop.
-    crop_margin = int((source_img.shape[2] - self.target_width) / 2)
+    crop_margin = int((source_img.shape[3] - self.target_width) / 2)
     assert crop_margin >= 0
 
     # Randomly choose the fraction of max_horizontal_shift to shift by.
     horizontal_shift_fraction = random.uniform(-1.0, 1.0)
-    horizontal_shift_pixels = int(
+    horizontal_shift_pixels = round(
         horizontal_shift_fraction * self.max_horizontal_shift)
     left_boundary = crop_margin + horizontal_shift_pixels
     right_boundary = left_boundary + self.target_width
-    img_cropped = source_img[:,:,left_boundary:right_boundary]
+    img_cropped = source_img[:,:,:,left_boundary:right_boundary]
 
     # Adjust the label to account for the off-center crop shift.
     shifted_label = (source_label + 

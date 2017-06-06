@@ -57,6 +57,19 @@ def JoinFrameData(steering, velocities):
       velocities_idx += 1
   return result
 
+def FrameToModelInput(
+    raw_frame,
+    crop_top, crop_bottom, crop_left, crop_right,
+    target_height, target_width):
+  # Crop to the ROI for the vision model.
+  frame_image_cropped = image_helpers.CropHWC(
+      raw_frame, crop_top, crop_bottom, crop_left, crop_right)
+  frame_image_resized = image_helpers.MaybeResizeHWC(
+      frame_image_cropped, target_height, target_width)
+  # Transpose to CHW for pytorch.
+  frame_image_chw = np.transpose(frame_image_resized, (2,0,1))
+  return frame_image_chw, frame_image_resized
+
 def OutFileName(out_dir, frame_id, data_id):
   return os.path.join(args.out_dir, 'frame-%06d-%s.npy') % (frame_id, data_id)
 
@@ -91,6 +104,14 @@ if __name__ == '__main__':
     help='Only writes out data for every --frames_step\'s frame. ' +
       'Used to reduce the effective frame rate and have fewer very similar ' +
       'redundant examples.')
+  parser.add_argument(
+    '--frames_history_length', type=int, default=1,
+    help='Number of sequential frames (spaced by --frames_history_step) to ' +
+      'use per single training example.')
+  parser.add_argument(
+    '--frames_history_step', type=int, default=1,
+    help='Spacing of sequential frames within an individual example (with a ' +
+      'total of --frames_history_length frames per example)')
   parser.add_argument(
     '--exclude_frames_json', default='',
     help='Optional JSON file with ranges of frame IDs to exclude. Format is ' +
@@ -139,6 +160,14 @@ if __name__ == '__main__':
       assert len(exclude_range) == 2
       exclude_frames.update(range(exclude_range[0], exclude_range[1] + 1))
 
+  raw_history_size = (
+      (args.frames_history_length - 1) * args.frames_history_step + 1)
+  raw_frames_history = np.zeros(
+      (raw_history_size, 3, args.target_height, args.target_width),
+      dtype=np.uint8)
+  raw_steering_history = np.zeros((raw_history_size, 1), dtype=np.float32)
+  remaining_unfilled_history = raw_history_size
+
   with open(steering_frames_json_name) as f:
     steering_frames_json = json.load(f)
   with open(velocities_frames_json_name) as f:
@@ -148,53 +177,70 @@ if __name__ == '__main__':
 
   # Open the video file for reading the frames.
   frames_generator = image_helpers.VideoFrameGenerator(args.in_video)
-  raw_frame, frame_index = next(frames_generator)
 
   # Id of previous frame for which the data was written out.
-  prev_frame_id = None
+  prev_saved_frame_id = None
+  prev_seen_frame_data_id = None
   for frame_data in frames_data:
     # Skip if no angular velocity data
     if frame_data.angular_velocity is None:
+      remaining_unfilled_history = raw_history_size
       continue
     # Skip if no forward velocity data or forward velocity is too low.
     if (frame_data.speed_m_s is None or
         frame_data.speed_m_s < args.min_forward_velocity_m_s):
+      remaining_unfilled_history = raw_history_size
       continue
     
     frame_id = frame_data.frame_id
     # Skip the blacklisted frames.
     if frame_id in exclude_frames:
+      remaining_unfilled_history = raw_history_size
       continue
-    # Skip if too few frames were seen since the last saved output.
-    if (prev_frame_id is not None and 
-        (frame_id - prev_frame_id) < args.frames_step):
-      continue
-   
-    prev_frame_id = frame_id
+
+    # Invalidate history if there were skipped frames in frame data.
+    if (prev_seen_frame_data_id is not None and 
+        frame_id != prev_seen_frame_data_id + 1):
+      remaining_unfilled_history = raw_history_size
+
+    prev_seen_frame_data_id = frame_id
 
     # Skip video frames until we get to the requested frame id.
+    raw_frame, frame_index = next(frames_generator)
     while frame_index < frame_id:
       raw_frame, frame_index = next(frames_generator)
     assert frame_index == frame_id
-
-    # Crop to the ROI for the vision model.
-    frame_image_cropped = image_helpers.CropHWC(
+    history_index = frame_index % raw_history_size
+    frame_chw, frame_hwc = FrameToModelInput(
         raw_frame,
-        args.crop_top, args.crop_bottom, args.crop_left, args.crop_right)
-    frame_image_resized = image_helpers.MaybeResizeHWC(
-        frame_image_cropped, args.target_height, args.target_width)
+        args.crop_top, args.crop_bottom, args.crop_left, args.crop_right,
+        args.target_height, args.target_width)
+    raw_frames_history[history_index, ...] = frame_chw
+    raw_steering_history[history_index, 0] = frame_data.angular_velocity
+    remaining_unfilled_history = max(0, remaining_unfilled_history - 1)
 
-    # Transpose to CHW for pytorch.
-    frame_image_chw = np.transpose(frame_image_resized, (2,0,1))
+    if remaining_unfilled_history > 0:
+      continue
+
+    # Skip if too few frames were seen since the last saved output.
+    if (prev_saved_frame_id is not None and 
+        (frame_id - prev_saved_frame_id) < args.frames_step):
+      continue
+
+    # Have all the necessary history filled in and long enough since the
+    # previous write. Write a new example ending in this frame.
+    prev_saved_frame_id = frame_id
+    write_indices = [
+        (history_index - x * args.frames_history_step) % raw_history_size
+        for x in range(args.frames_history_length)]
+    # Reverse the indices to get the time-natural ordering.
+    write_indices.reverse()
 
     # Write out numpy array for the training example input.
     image_out_name = OutFileName(args.out_dir, frame_id, 'img')
-    np.save(image_out_name, frame_image_chw)
+    np.save(image_out_name, raw_frames_history[write_indices, ...])
     # Write out the PNG picture too for checking the inputs by hand.
-    scipy.misc.imsave(image_out_name + '.png', frame_image_resized)
+    scipy.misc.imsave(image_out_name + '.png', frame_hwc)
     # Steering angular velocity is the label.
     angular_out_name = OutFileName(args.out_dir, frame_id, 'angular')
-    np.save(
-        angular_out_name,
-        np.array([frame_data.angular_velocity],
-        dtype=np.float32))
+    np.save(angular_out_name, raw_steering_history[write_indices,:])
