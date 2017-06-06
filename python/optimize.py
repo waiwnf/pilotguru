@@ -4,16 +4,19 @@ import torch
 
 from torch.autograd import Variable
 
-def WrapTrainExamples(data):
-  # get the inputs
-  inputs, labels = data
-  # TODO parametrize GPU usage.
-  inputs_var = Variable(inputs).cuda()
-  labels_var = Variable(labels).cuda()
-  return inputs_var, labels_var
+def IdentityTransform(x):
+  return x
 
-# TODO save learned model to file, checkpoints.
-def TrainModel(net, trainloader, validation_loader, loss, optimizer, epochs, out_prefix):
+def TrainModel(
+    net,
+    trainloader,
+    validation_loader,
+    loss,
+    optimizer,
+    epochs,
+    out_prefix, 
+    input_batch_transform=IdentityTransform,
+    labels_batch_transform=IdentityTransform):
   min_validation_loss = float('inf')
   for epoch in range(1, epochs + 1):
     running_loss = 0.0
@@ -21,8 +24,9 @@ def TrainModel(net, trainloader, validation_loader, loss, optimizer, epochs, out
     optimizer.zero_grad()
 
     epoch_start_time = time.time()
-    for i, data in enumerate(trainloader, 0):
-      inputs_var, labels_var = WrapTrainExamples(data)
+    for (inputs_raw, labels_raw) in trainloader:
+      inputs_var = Variable(input_batch_transform(inputs_raw)).cuda()
+      labels_var = Variable(labels_batch_transform(labels_raw)).cuda()
 
       # forward + backward + optimize
       outputs = net(inputs_var)
@@ -43,9 +47,10 @@ def TrainModel(net, trainloader, validation_loader, loss, optimizer, epochs, out
     net.eval()
     validation_total_loss = 0.0
     validation_examples = 0
-    for data in validation_loader:
-      inputs_var, labels_var = WrapTrainExamples(data)
-      
+    for (inputs_raw, labels_raw) in validation_loader:
+      inputs_var = Variable(input_batch_transform(inputs_raw)).cuda()
+      labels_var = Variable(labels_batch_transform(labels_raw)).cuda()
+     
       outputs = net(inputs_var)
 
       validation_examples += inputs_var.size()[0]
