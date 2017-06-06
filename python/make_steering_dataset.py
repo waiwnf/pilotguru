@@ -91,6 +91,10 @@ if __name__ == '__main__':
     help='Only writes out data for every --frames_step\'s frame. ' +
       'Used to reduce the effective frame rate and have fewer very similar ' +
       'redundant examples.')
+  parser.add_argument(
+    '--exclude_frames_json', default='',
+    help='Optional JSON file with ranges of frame IDs to exclude. Format is ' +
+    '\'exclude\' key mapped a list of 2-element lists [start_id, end_id].')
   
   # Crop settings
   parser.add_argument('--crop_top', type=int, default=0)
@@ -114,6 +118,7 @@ if __name__ == '__main__':
       '--in_json', args.in_steering_json,
       '--json_root_element_name', 'steering',
       '--json_value_name', 'angular_velocity',
+      '--smoothing_sigma', '0.1',
       '--out_json', steering_frames_json_name])
 
   # Per-frame forward velocities annotations.
@@ -126,6 +131,14 @@ if __name__ == '__main__':
       '--json_value_name', 'speed_m_s',
       '--out_json', velocities_frames_json_name])
   
+  exclude_frames = set()
+  if args.exclude_frames_json != '':
+    with open(args.exclude_frames_json) as exclude_frames_file:
+      exclude_frames_json = json.load(exclude_frames_file)
+    for exclude_range in exclude_frames_json['exclude']:
+      assert len(exclude_range) == 2
+      exclude_frames.update(range(exclude_range[0], exclude_range[1] + 1))
+
   with open(steering_frames_json_name) as f:
     steering_frames_json = json.load(f)
   with open(velocities_frames_json_name) as f:
@@ -149,6 +162,9 @@ if __name__ == '__main__':
       continue
     
     frame_id = frame_data.frame_id
+    # Skip the blacklisted frames.
+    if frame_id in exclude_frames:
+      continue
     # Skip if too few frames were seen since the last saved output.
     if (prev_frame_id is not None and 
         (frame_id - prev_frame_id) < args.frames_step):
