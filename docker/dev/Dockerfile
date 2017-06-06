@@ -45,12 +45,10 @@ RUN apt-get -y install \
     valgrind \
     clang-format 
 
-RUN apt-get -y install python3-pip python3-numpy
+RUN apt-get -y install python3-pip python3-numpy python3-scipy python3-matplotlib
 RUN pip3 install http://download.pytorch.org/whl/cu80/torch-0.1.12.post2-cp35-cp35m-linux_x86_64.whl 
 RUN pip3 install torchvision
 RUN pip3 install jupyter
-
-RUN apt-get -y install python3-scipy
 
 RUN apt-get -y install libavformat-dev libavcodec-dev libavdevice-dev libavutil-dev libswscale-dev libavresample-dev libavfilter-dev
 RUN pip3 install av
