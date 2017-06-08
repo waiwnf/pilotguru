@@ -61,14 +61,20 @@ class InMemoryNumpyFileDataset(torch.utils.data.Dataset):
     # Find all the matching frame image files in the data directories.
     data_files, label_files = SortedExampleFiles(
         data_dirs, full_data_suffix, full_label_suffix)
-    self.data = [np.load(x) for x in data_files]
+
+    single_image = np.load(data_files[0])
+    self.data = np.zeros(
+        (len(data_files),) + single_image.shape, dtype=np.uint8)
+    for elem_idx, data_file in enumerate(data_files):
+      self.data[elem_idx, ...] = np.load(data_file)
+    
     self.labels = [np.load(x) for x in label_files]
   
   def __len__(self):
-    return len(self.data)
+    return self.data.shape[0]
   
   def __getitem__(self, idx):
-    return self.data[idx], self.labels[idx]
+    return self.data[idx, ...], self.labels[idx]
 
 
 class ImageFrameDataset(torch.utils.data.Dataset):
@@ -83,9 +89,11 @@ class ImageFrameDataset(torch.utils.data.Dataset):
   def __init__(
       self,
       source_dataset,
+      transforms=[],
       target_crop_width=None):
     super(ImageFrameDataset, self).__init__()
     self.source_dataset = source_dataset
+    self.transforms = transforms
     self.target_crop_width = target_crop_width
   
   def __len__(self):
@@ -105,6 +113,10 @@ class ImageFrameDataset(torch.utils.data.Dataset):
 
     # Convert to float to feed into tensors, and normalize to [0, 1].
     img = img_raw.astype(np.float32) / 255.0
+
+    for t in self.transforms:
+      t(img)
+
     return img, label
 
 class SteeringShiftAugmenterDataset(torch.utils.data.Dataset):
