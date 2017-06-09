@@ -166,6 +166,7 @@ if __name__ == '__main__':
       (raw_history_size, 3, args.target_height, args.target_width),
       dtype=np.uint8)
   raw_steering_history = np.zeros((raw_history_size, 1), dtype=np.float32)
+  raw_velocity_history = np.zeros((raw_history_size, 1), dtype=np.float32)
   remaining_unfilled_history = raw_history_size
 
   with open(steering_frames_json_name) as f:
@@ -217,6 +218,7 @@ if __name__ == '__main__':
         args.target_height, args.target_width)
     raw_frames_history[history_index, ...] = frame_chw
     raw_steering_history[history_index, 0] = frame_data.angular_velocity
+    raw_velocity_history[history_index, 0] = frame_data.speed_m_s
     remaining_unfilled_history = max(0, remaining_unfilled_history - 1)
 
     if remaining_unfilled_history > 0:
@@ -244,3 +246,8 @@ if __name__ == '__main__':
     # Steering angular velocity is the label.
     angular_out_name = OutFileName(args.out_dir, frame_id, 'angular')
     np.save(angular_out_name, raw_steering_history[write_indices,:])
+    # Inverse turn radius.
+    inverse_radius_out_name = OutFileName(args.out_dir, frame_id, 'inverse-radius')
+    inverse_radius_data = raw_steering_history[write_indices,:] / (
+        raw_velocity_history[write_indices,:] + 1.0)
+    np.save(inverse_radius_out_name, inverse_radius_data)

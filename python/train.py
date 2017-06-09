@@ -15,6 +15,7 @@ if __name__ == '__main__':
   parser = argparse.ArgumentParser()
   parser.add_argument('--data_dirs', required=True)
   parser.add_argument('--validation_data_dirs', required=True)
+  parser.add_argument('--labels_file_suffix', default='inverse-radius')
   parser.add_argument('--batch_size', type=int, required=True)
   parser.add_argument('--epochs', type=int, required=True)
   parser.add_argument('--target_height', type=int, required=True)
@@ -30,7 +31,8 @@ if __name__ == '__main__':
   parser.add_argument('--example_label_extra_weight_scale', type=float, default=0.0)
   args = parser.parse_args()
 
-  plain_train_data = io_helpers.InMemoryNumpyFileDataset(args.data_dirs.split(','))
+  plain_train_data = io_helpers.InMemoryNumpyFileDataset(
+      args.data_dirs.split(','), label_suffix=args.labels_file_suffix)
   augmenters = []
   if args.do_pca_random_shifts:
     pca_directions = image_helpers.GetPcaRgbDirections(
@@ -60,7 +62,8 @@ if __name__ == '__main__':
   
   weighted_val_data = io_helpers.L1LabelWeightingDataset(
         io_helpers.InMemoryNumpyFileDataset(
-            args.validation_data_dirs.split(',')),
+            args.validation_data_dirs.split(','),
+            label_suffix=args.labels_file_suffix),
         args.example_label_extra_weight_scale)
   valset = io_helpers.ImageFrameDataset(
       weighted_val_data, target_crop_width=args.target_width)
