@@ -44,7 +44,7 @@ class NumpyFileDataset(torch.utils.data.Dataset):
     return len(self.data_files)
   
   def __getitem__(self, idx):
-    return np.load(self.data_files[idx]), np.load(self.label_files[idx])
+    return np.load(self.data_files[idx]), np.load(self.label_files[idx]), np.array([1.0], dtype=np.float32)
 
 class InMemoryNumpyFileDataset(torch.utils.data.Dataset):
   """Pytorch dataset to cache fully in memory input examples from numpy files.
@@ -74,8 +74,29 @@ class InMemoryNumpyFileDataset(torch.utils.data.Dataset):
     return self.data.shape[0]
   
   def __getitem__(self, idx):
-    return self.data[idx, ...], self.labels[idx]
+    return self.data[idx, ...], self.labels[idx], np.array([1.0], dtype=np.float32)
 
+class L1LabelWeightingDataset(torch.utils.data.Dataset):
+  """Upweights the examples from the source dataset by (1 + |label|).
+
+  This is useful for steering angle prediction task to give higher weights to
+  the naturally more rare examples recorded in turns (vs. driving straight).
+  """
+
+  def __init__(self, source_dataset, label_scale = 0.0):
+    super(L1LabelWeightingDataset, self).__init__()
+    self.source_dataset = source_dataset
+    assert label_scale >= 0
+    self.label_scale = label_scale
+  
+  def __len__(self):
+    return self.source_dataset.__len__()
+  
+  def __getitem__(self, idx):
+    data, label, source_weight = self.source_dataset.__getitem__(idx)
+    assert len(label) == 1
+    effective_weight_scale = self.label_scale * np.abs(label) + 1.0
+    return data, label, source_weight * effective_weight_scale
 
 class ImageFrameDataset(torch.utils.data.Dataset):
   """Dataset for data files with images (byte per channel).
@@ -100,7 +121,7 @@ class ImageFrameDataset(torch.utils.data.Dataset):
     return self.source_dataset.__len__()
 
   def __getitem__(self, idx):
-    img_raw, label = self.source_dataset.__getitem__(idx)
+    img_raw, label, example_weight = self.source_dataset.__getitem__(idx)
     # Make sure input images are encoded as byte-per-channel.
     assert img_raw.dtype == np.uint8
 
@@ -117,7 +138,7 @@ class ImageFrameDataset(torch.utils.data.Dataset):
     for t in self.transforms:
       t(img)
 
-    return img, label
+    return img, label, example_weight
 
 class SteeringShiftAugmenterDataset(torch.utils.data.Dataset):
   """Dataset wrapper for shifted-crop steering angle augmentation.
@@ -155,7 +176,7 @@ class SteeringShiftAugmenterDataset(torch.utils.data.Dataset):
     return self.source_dataset.__len__()
   
   def __getitem__(self, idx):
-    source_img, source_label = self.source_dataset.__getitem__(idx)
+    source_img, source_label, example_weight = self.source_dataset.__getitem__(idx)
     # Margin to the edge of the source image for a centered crop.
     crop_margin = int((source_img.shape[3] - self.target_width) / 2)
     assert crop_margin >= 0
@@ -172,4 +193,4 @@ class SteeringShiftAugmenterDataset(torch.utils.data.Dataset):
     shifted_label = (source_label + 
         horizontal_shift_fraction * self.horizontal_label_shift_rate)
 
-    return img_cropped, shifted_label
+    return img_cropped, shifted_label, example_weight

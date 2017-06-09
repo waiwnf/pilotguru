@@ -27,10 +27,10 @@ if __name__ == '__main__':
   parser.add_argument('--train_blur_prob', type=float, default=0.0)
   parser.add_argument('--do_pca_random_shifts', type=bool, default=False)
   parser.add_argument('--grayscale_interpolate_prob', type=float, default=0.0)
+  parser.add_argument('--example_label_extra_weight_scale', type=float, default=0.0)
   args = parser.parse_args()
 
-  plain_train_data = io_helpers.InMemoryNumpyFileDataset(
-      args.data_dirs.split(','))
+  plain_train_data = io_helpers.InMemoryNumpyFileDataset(args.data_dirs.split(','))
   augmenters = []
   if args.do_pca_random_shifts:
     pca_directions = image_helpers.GetPcaRgbDirections(
@@ -48,17 +48,22 @@ if __name__ == '__main__':
   ])
 
   trainset = io_helpers.SteeringShiftAugmenterDataset(
-      io_helpers.ImageFrameDataset(plain_train_data, transforms=augmenters),
+      io_helpers.ImageFrameDataset(
+          io_helpers.L1LabelWeightingDataset(
+              plain_train_data, args.example_label_extra_weight_scale),
+          transforms=augmenters),
       args.target_width,
       args.max_horizontal_shift_pixels,
       args.horizontal_label_shift_rate)
   trainloader = torch.utils.data.DataLoader(
       trainset, batch_size=args.batch_size, shuffle=True)
   
+  weighted_val_data = io_helpers.L1LabelWeightingDataset(
+        io_helpers.InMemoryNumpyFileDataset(
+            args.validation_data_dirs.split(',')),
+        args.example_label_extra_weight_scale)
   valset = io_helpers.ImageFrameDataset(
-      io_helpers.InMemoryNumpyFileDataset(
-          args.validation_data_dirs.split(',')),
-      target_crop_width=args.target_width)
+      weighted_val_data, target_crop_width=args.target_width)
   validation_loader = torch.utils.data.DataLoader(
       valset, batch_size=args.batch_size, shuffle=False)
 
@@ -66,7 +71,7 @@ if __name__ == '__main__':
       [3, args.target_height, args.target_width], args.dropout_prob)
   net.cuda()
   
-  loss = torch.nn.MSELoss()
+  loss = optimize.WeightedMSELoss()
   optimizer = torch.optim.Adam(net.parameters())
 
   optimize.TrainModel(

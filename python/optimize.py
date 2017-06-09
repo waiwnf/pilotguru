@@ -1,6 +1,7 @@
 import time
 
 import torch
+import torch.nn
 
 from torch.autograd import Variable
 
@@ -17,6 +18,28 @@ def FlattenInnerChunk(x):
 
 def IdentityTransform(x):
   return x
+
+class UnweightedLoss(torch.nn.Module):
+  """Wraps loss functions that do not support examples weights for TrainModel().
+  """
+
+  def __init__(self, base_loss):
+    super(UnweightedLoss, self).__init__()
+    self.base_loss = base_loss
+  
+  def forward(self, predicted, labels, weights):
+    return self.base_loss.forward(predicted, labels)
+
+class WeightedMSELoss(torch.nn.Module):
+  """MSE loss with per-example weights."""
+
+  def __init__(self):
+    super(WeightedMSELoss, self).__init__()
+  
+  def forward(self, predicted, labels, weights):
+    diff_squares = torch.pow(torch.add(predicted, torch.neg(labels)), 2.0)
+    return torch.mean(torch.mul(diff_squares, weights))
+
 
 def TrainModel(
     net,
@@ -35,20 +58,22 @@ def TrainModel(
     optimizer.zero_grad()
 
     epoch_start_time = time.time()
-    for (inputs_raw, labels_raw) in trainloader:
+    for (inputs_raw, labels_raw, inputs_weights) in trainloader:
       inputs_var = Variable(input_batch_transform(inputs_raw)).cuda()
       labels_var = Variable(labels_batch_transform(labels_raw)).cuda()
+      weights_var = Variable(labels_batch_transform(inputs_weights)).cuda()
 
       # forward + backward + optimize
       outputs = net(inputs_var)
-      loss_value = loss(outputs, labels_var)
+      loss_value = loss(outputs, labels_var, weights_var)
       loss_value.backward()
       optimizer.step()
       optimizer.zero_grad()
 
       # Accumulate statistics
-      total_examples += inputs_var.size()[0]
-      running_loss += loss_value.data[0] * inputs_var.size()[0]    
+      batch_size = inputs_var.size()[0]
+      total_examples += batch_size
+      running_loss += loss_value.data[0] * batch_size
     epoch_end_time = time.time()
 
     epoch_duration = epoch_end_time - epoch_start_time
@@ -58,14 +83,17 @@ def TrainModel(
     net.eval()
     validation_total_loss = 0.0
     validation_examples = 0
-    for (inputs_raw, labels_raw) in validation_loader:
+    for (inputs_raw, labels_raw, validation_weights) in validation_loader:
       inputs_var = Variable(input_batch_transform(inputs_raw)).cuda()
       labels_var = Variable(labels_batch_transform(labels_raw)).cuda()
+      weights_var = Variable(labels_batch_transform(validation_weights)).cuda()
      
       outputs = net(inputs_var)
+      loss_value = loss(outputs, labels_var, weights_var)
 
-      validation_examples += inputs_var.size()[0]
-      validation_total_loss += loss(outputs, labels_var).data[0] * inputs_var.size()[0]
+      batch_size = inputs_var.size()[0]
+      validation_examples += batch_size
+      validation_total_loss += loss_value.data[0] * batch_size
     net.train()
     
     validation_avg_loss = validation_total_loss / validation_examples
