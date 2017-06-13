@@ -6,6 +6,11 @@ import torch.nn
 
 from torch.autograd import Variable
 
+TRAIN_LOSS = 'train_loss'
+VAL_LOSS = 'val_loss'
+EPOCH_DURATION_SEC = 'epoch_duration_sec'
+EXAMPLES_PER_SEC = 'examples_per_sec'
+
 def FlattenInnerChunk(x):
   """Flattens the input tensor to merge first two dimensions into one.
 
@@ -48,18 +53,26 @@ class WeightedMSELoss(torch.nn.Module):
     diff_squares = torch.pow(torch.add(predicted, torch.neg(labels)), 2.0)
     return torch.mean(torch.mul(diff_squares, weights))
 
+def TrainLogEventToString(event):
+  return 'loss %g;  val loss: %g;  %0.2f sec/epoch; %0.2f examples/sec' % (
+      event[TRAIN_LOSS],
+      event[VAL_LOSS],
+      event[EPOCH_DURATION_SEC],
+      event[EXAMPLES_PER_SEC])
 
 def TrainModel(
     net,
     train_loader,
     val_loader,
     train_settings,
-    out_prefix):
+    out_prefix,
+    print_log=True):
+  train_log = []
   min_validation_loss = float('inf')
   loss_settings = train_settings.loss_settings
   data_transform = loss_settings.data_chunk_transform
   label_transform = loss_settings.label_chunk_transform
-  for epoch in range(1, train_settings.epochs + 1):
+  for epoch in range(train_settings.epochs):
     running_loss = 0.0
     total_examples = 0
     train_settings.optimizer.zero_grad()
@@ -105,19 +118,30 @@ def TrainModel(
     
     validation_avg_loss = validation_total_loss / validation_examples
 
-    print('Epoch %d;  loss %g;  val loss: %g;  %0.2f sec/epoch; %0.2f examples/sec' %
-          (epoch, avg_loss, validation_avg_loss, epoch_duration, examples_per_sec))
+    epoch_metrics = {
+      TRAIN_LOSS: avg_loss,
+      VAL_LOSS: validation_avg_loss,
+      EPOCH_DURATION_SEC: epoch_duration,
+      EXAMPLES_PER_SEC: examples_per_sec
+    }
+    train_log.append(epoch_metrics)
 
+    val_improved_marker = ''
     if validation_avg_loss < min_validation_loss:
+      val_improved_marker = ' **'
       save_start_time = time.time()
       net.cpu()
       torch.save(net.state_dict(), out_prefix + '-best.pth')
       net.cuda()
       min_validation_loss = validation_avg_loss
       save_duration = time.time() - save_start_time
-      print('Saved model snapshot. Took %0.2f seconds' % save_duration)
+    
+    if print_log:
+      print('Epoch %d;  %s%s' %
+          (epoch, TrainLogEventToString(epoch_metrics), val_improved_marker))
   
-  print('Finished Training')
   net.cpu()
   torch.save(net.state_dict(), out_prefix + '-last.pth')
   net.cuda()
+
+  return train_log
