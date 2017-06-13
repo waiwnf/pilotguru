@@ -7,7 +7,6 @@ import optimize
 
 import numpy as np
 
-import torch.nn
 import torch.optim
 import torch.utils.data
 
@@ -28,11 +27,14 @@ if __name__ == '__main__':
   parser.add_argument('--train_blur_prob', type=float, default=0.0)
   parser.add_argument('--do_pca_random_shifts', type=bool, default=False)
   parser.add_argument('--grayscale_interpolate_prob', type=float, default=0.0)
-  parser.add_argument('--example_label_extra_weight_scale', type=float, default=0.0)
+  parser.add_argument(
+      '--example_label_extra_weight_scale', type=float, default=0.0)
   args = parser.parse_args()
 
-  plain_train_data = io_helpers.InMemoryNumpyFileDataset(
+  plain_train_in, plain_train_labels = io_helpers.LoadDatasetNumpyFiles(
       args.data_dirs.split(','), label_suffix=args.labels_file_suffix)
+  plain_train_data = io_helpers.InMemoryNumpyDataset(
+      plain_train_in, plain_train_labels)
   augmenters = []
   if args.do_pca_random_shifts:
     pca_directions = image_helpers.GetPcaRgbDirections(
@@ -60,10 +62,11 @@ if __name__ == '__main__':
   trainloader = torch.utils.data.DataLoader(
       trainset, batch_size=args.batch_size, shuffle=True)
   
+  plain_val_in, plain_val_labels = io_helpers.LoadDatasetNumpyFiles(
+      args.validation_data_dirs.split(','),
+      label_suffix=args.labels_file_suffix)
   weighted_val_data = io_helpers.L1LabelWeightingDataset(
-        io_helpers.InMemoryNumpyFileDataset(
-            args.validation_data_dirs.split(','),
-            label_suffix=args.labels_file_suffix),
+        io_helpers.InMemoryNumpyDataset(plain_val_in, plain_val_labels),
         args.example_label_extra_weight_scale)
   valset = io_helpers.ImageFrameDataset(
       weighted_val_data, target_crop_width=args.target_width)

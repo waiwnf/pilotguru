@@ -25,6 +25,29 @@ def SortedExampleFiles(data_dirs, full_data_suffix, full_label_suffix):
       x.replace(full_data_suffix, full_label_suffix) for x in data_files]
   return data_files, label_files
 
+def LoadDatasetNumpyFiles(
+    data_dirs,
+    data_suffix=IMG,
+    label_suffix=ANGULAR,
+    file_extension=NUMPY_EXTN):
+  """Reads data and labels from name-aligned files and stacks into two arrays.
+  """
+
+  # Attach file extensions to the file name masks.
+  full_data_suffix = data_suffix + file_extension
+  full_label_suffix = label_suffix + file_extension
+  # Find all the matching frame image files in the data directories.
+  data_files, label_files = SortedExampleFiles(
+      data_dirs, full_data_suffix, full_label_suffix)
+
+  single_image = np.load(data_files[0])
+  data = np.zeros((len(data_files),) + single_image.shape, dtype=np.uint8)
+  for elem_idx, data_file in enumerate(data_files):
+    data[elem_idx, ...] = np.load(data_file)
+  labels = np.array([np.load(x) for x in label_files], dtype=np.float32)
+
+  return data, labels
+
 class NumpyFileDataset(torch.utils.data.Dataset):
   """Pytorch dataset to read input examples from numpy files.
   
@@ -46,29 +69,11 @@ class NumpyFileDataset(torch.utils.data.Dataset):
   def __getitem__(self, idx):
     return np.load(self.data_files[idx]), np.load(self.label_files[idx]), np.array([1.0], dtype=np.float32)
 
-class InMemoryNumpyFileDataset(torch.utils.data.Dataset):
-  """Pytorch dataset to cache fully in memory input examples from numpy files.
-  
-  Each example consists of two files: data file and label file, each with a 
-  numpy array.
-  """
-
-  def __init__(self, data_dirs, data_suffix=IMG, label_suffix=ANGULAR):
-    super(InMemoryNumpyFileDataset, self).__init__()
-    # Attach .npy extensions to the file name masks.
-    full_data_suffix = data_suffix + NUMPY_EXTN
-    full_label_suffix = label_suffix + NUMPY_EXTN
-    # Find all the matching frame image files in the data directories.
-    data_files, label_files = SortedExampleFiles(
-        data_dirs, full_data_suffix, full_label_suffix)
-
-    single_image = np.load(data_files[0])
-    self.data = np.zeros(
-        (len(data_files),) + single_image.shape, dtype=np.uint8)
-    for elem_idx, data_file in enumerate(data_files):
-      self.data[elem_idx, ...] = np.load(data_file)
-    
-    self.labels = [np.load(x) for x in label_files]
+class InMemoryNumpyDataset(torch.utils.data.Dataset):
+  def __init__(self, data, labels):
+    assert data.shape[0] == labels.shape[0]
+    self.data = data
+    self.labels = labels
   
   def __len__(self):
     return self.data.shape[0]
@@ -176,7 +181,8 @@ class SteeringShiftAugmenterDataset(torch.utils.data.Dataset):
     return self.source_dataset.__len__()
   
   def __getitem__(self, idx):
-    source_img, source_label, example_weight = self.source_dataset.__getitem__(idx)
+    source_img, source_label, example_weight = (
+        self.source_dataset.__getitem__(idx))
     # Margin to the edge of the source image for a centered crop.
     crop_margin = int((source_img.shape[3] - self.target_width) / 2)
     assert crop_margin >= 0
