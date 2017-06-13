@@ -37,22 +37,21 @@ if __name__ == '__main__':
       plain_train_in, plain_train_labels)
   
   augment_settings = augmentation.AugmentSettings(
+      target_width=args.target_width,
       max_horizontal_shift_pixels=args.max_horizontal_shift_pixels,
       horizontal_label_shift_rate=args.horizontal_label_shift_rate,
       blur_sigma=args.train_blur_sigma,
       blur_prob=args.train_blur_prob,
       grayscale_interpolate_prob=args.grayscale_interpolate_prob,
       do_pca_random_shifts=args.do_pca_random_shifts)
-  data_augmenters = augmentation.MakeAugmenters(augment_settings, plain_train_in)
+  joint_augmenters, data_augmenters = augmentation.MakeAugmenters(
+      augment_settings, plain_train_in)
 
-  trainset = io_helpers.SteeringShiftAugmenterDataset(
-      io_helpers.ImageFrameDataset(
-          io_helpers.L1LabelWeightingDataset(
-              plain_train_data, args.example_label_extra_weight_scale),
-          data_transforms=data_augmenters),
-      args.target_width,
-      args.max_horizontal_shift_pixels,
-      args.horizontal_label_shift_rate)
+  trainset = io_helpers.ImageFrameDataset(
+    io_helpers.L1LabelWeightingDataset(
+        plain_train_data, args.example_label_extra_weight_scale),
+    joint_transforms=joint_augmenters,
+    data_transforms=data_augmenters)
   trainloader = torch.utils.data.DataLoader(
       trainset, batch_size=args.batch_size, shuffle=True)
   
