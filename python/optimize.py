@@ -1,4 +1,5 @@
 import time
+from collections import namedtuple
 
 import torch
 import torch.nn
@@ -18,6 +19,13 @@ def FlattenInnerChunk(x):
 
 def IdentityTransform(x):
   return x
+
+LossSettings = namedtuple(
+    'LossSettings', 'loss data_chunk_transform label_chunk_transform')
+LossSettings.__new__.__defaults__ = (
+    None, FlattenInnerChunk, FlattenInnerChunk)
+
+TrainSettings = namedtuple('TrainSettings', 'loss_settings optimizer epochs')
 
 class UnweightedLoss(torch.nn.Module):
   """Wraps loss functions that do not support examples weights for TrainModel().
@@ -43,32 +51,31 @@ class WeightedMSELoss(torch.nn.Module):
 
 def TrainModel(
     net,
-    trainloader,
-    validation_loader,
-    loss,
-    optimizer,
-    epochs,
-    out_prefix, 
-    input_batch_transform=IdentityTransform,
-    labels_batch_transform=IdentityTransform):
+    train_loader,
+    val_loader,
+    train_settings,
+    out_prefix):
   min_validation_loss = float('inf')
-  for epoch in range(1, epochs + 1):
+  loss_settings = train_settings.loss_settings
+  data_transform = loss_settings.data_chunk_transform
+  label_transform = loss_settings.label_chunk_transform
+  for epoch in range(1, train_settings.epochs + 1):
     running_loss = 0.0
     total_examples = 0
-    optimizer.zero_grad()
+    train_settings.optimizer.zero_grad()
 
     epoch_start_time = time.time()
-    for (inputs_raw, labels_raw, inputs_weights) in trainloader:
-      inputs_var = Variable(input_batch_transform(inputs_raw)).cuda()
-      labels_var = Variable(labels_batch_transform(labels_raw)).cuda()
-      weights_var = Variable(labels_batch_transform(inputs_weights)).cuda()
+    for (inputs_raw, labels_raw, inputs_weights) in train_loader:
+      inputs_var = Variable(data_transform(inputs_raw)).cuda()
+      labels_var = Variable(label_transform(labels_raw)).cuda()
+      weights_var = Variable(label_transform(inputs_weights)).cuda()
 
       # forward + backward + optimize
       outputs = net(inputs_var)
-      loss_value = loss(outputs, labels_var, weights_var)
+      loss_value = loss_settings.loss(outputs, labels_var, weights_var)
       loss_value.backward()
-      optimizer.step()
-      optimizer.zero_grad()
+      train_settings.optimizer.step()
+      train_settings.optimizer.zero_grad()
 
       # Accumulate statistics
       batch_size = inputs_var.size()[0]
@@ -83,13 +90,13 @@ def TrainModel(
     net.eval()
     validation_total_loss = 0.0
     validation_examples = 0
-    for (inputs_raw, labels_raw, validation_weights) in validation_loader:
-      inputs_var = Variable(input_batch_transform(inputs_raw)).cuda()
-      labels_var = Variable(labels_batch_transform(labels_raw)).cuda()
-      weights_var = Variable(labels_batch_transform(validation_weights)).cuda()
+    for (inputs_raw, labels_raw, validation_weights) in val_loader:
+      inputs_var = Variable(data_transform(inputs_raw)).cuda()
+      labels_var = Variable(label_transform(labels_raw)).cuda()
+      weights_var = Variable(label_transform(validation_weights)).cuda()
      
       outputs = net(inputs_var)
-      loss_value = loss(outputs, labels_var, weights_var)
+      loss_value = loss_settings.loss(outputs, labels_var, weights_var)
 
       batch_size = inputs_var.size()[0]
       validation_examples += batch_size

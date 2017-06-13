@@ -131,14 +131,6 @@ class ImageFrameDataset(torch.utils.data.Dataset):
     img_raw, label, example_weight = self.source_dataset.__getitem__(idx)
     # Make sure input images are encoded as byte-per-channel.
     assert img_raw.dtype == np.uint8
-
-    # Optionally crop to target_crop_width.
-    if self.target_crop_width is not None:
-      assert img_raw.shape[3] >= self.target_crop_width
-      left_boundary = int((img_raw.shape[3] - self.target_crop_width) / 2)
-      right_boundary = left_boundary + self.target_crop_width
-      img_raw = img_raw[:,:,:,left_boundary:right_boundary]
-
     # Convert to float to feed into tensors, and normalize to [0, 1].
     img = img_raw.astype(np.float32) / 255.0
 
@@ -147,5 +139,12 @@ class ImageFrameDataset(torch.utils.data.Dataset):
 
     for t in self.data_transforms:
       img = t(img)
+
+    # Optionally crop to target_crop_width.
+    if self.target_crop_width is not None:
+      assert img.shape[3] >= self.target_crop_width
+      left_boundary = int((img.shape[3] - self.target_crop_width) / 2)
+      right_boundary = left_boundary + self.target_crop_width
+      img = img[:,:,:,left_boundary:right_boundary]
 
     return img, label, example_weight
