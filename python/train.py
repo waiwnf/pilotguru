@@ -1,6 +1,6 @@
 import argparse
 
-import image_helpers
+import augmentation
 import io_helpers
 import models
 import optimize
@@ -35,27 +35,21 @@ if __name__ == '__main__':
       args.data_dirs.split(','), label_suffix=args.labels_file_suffix)
   plain_train_data = io_helpers.InMemoryNumpyDataset(
       plain_train_in, plain_train_labels)
-  augmenters = []
-  if args.do_pca_random_shifts:
-    pca_directions = image_helpers.GetPcaRgbDirections(
-      plain_train_data.data.astype(np.float32) / 255.0)
-    augmenters.append(
-        image_helpers.RandomShiftInPlaceTransform(pca_directions))
-
-  augmenters.extend([
-        image_helpers.MaybeApplyInPlaceTransform(
-              image_helpers.BlurInPlaceTransform(args.train_blur_sigma),
-              args.train_blur_prob),
-        image_helpers.MaybeApplyInPlaceTransform(
-              image_helpers.GrayscaleInterpolateInPlaceTransform(0.5),
-              args.grayscale_interpolate_prob)
-  ])
+  
+  augment_settings = augmentation.AugmentSettings(
+      max_horizontal_shift_pixels=args.max_horizontal_shift_pixels,
+      horizontal_label_shift_rate=args.horizontal_label_shift_rate,
+      blur_sigma=args.train_blur_sigma,
+      blur_prob=args.train_blur_prob,
+      grayscale_interpolate_prob=args.grayscale_interpolate_prob,
+      do_pca_random_shifts=args.do_pca_random_shifts)
+  data_augmenters = augmentation.MakeAugmenters(augment_settings, plain_train_in)
 
   trainset = io_helpers.SteeringShiftAugmenterDataset(
       io_helpers.ImageFrameDataset(
           io_helpers.L1LabelWeightingDataset(
               plain_train_data, args.example_label_extra_weight_scale),
-          transforms=augmenters),
+          data_transforms=data_augmenters),
       args.target_width,
       args.max_horizontal_shift_pixels,
       args.horizontal_label_shift_rate)

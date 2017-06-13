@@ -115,11 +115,13 @@ class ImageFrameDataset(torch.utils.data.Dataset):
   def __init__(
       self,
       source_dataset,
-      transforms=[],
+      joint_transforms=[],
+      data_transforms=[],
       target_crop_width=None):
     super(ImageFrameDataset, self).__init__()
     self.source_dataset = source_dataset
-    self.transforms = transforms
+    self.joint_transforms = joint_transforms
+    self.data_transforms = data_transforms
     self.target_crop_width = target_crop_width
   
   def __len__(self):
@@ -140,8 +142,8 @@ class ImageFrameDataset(torch.utils.data.Dataset):
     # Convert to float to feed into tensors, and normalize to [0, 1].
     img = img_raw.astype(np.float32) / 255.0
 
-    for t in self.transforms:
-      t(img)
+    for t in self.data_transforms:
+      img = t(img)
 
     return img, label, example_weight
 
