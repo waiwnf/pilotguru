@@ -1,6 +1,7 @@
 import argparse
 
 import augmentation
+import image_helpers
 import io_helpers
 import models
 import optimize
@@ -37,7 +38,8 @@ if __name__ == '__main__':
   val_data, val_labels = io_helpers.LoadDatasetNumpyFiles(
       args.validation_data_dirs.split(','),
       label_suffix=args.labels_file_suffix)
-
+  random_shift_directions = None if not args.do_pca_random_shifts else (
+      image_helpers.GetPcaRgbDirections(train_data.astype(np.float32) / 255.0))
   augment_settings = augmentation.AugmentSettings(
       target_width=args.target_width,
       max_horizontal_shift_pixels=args.max_horizontal_shift_pixels,
@@ -45,7 +47,7 @@ if __name__ == '__main__':
       blur_sigma=args.train_blur_sigma,
       blur_prob=args.train_blur_prob,
       grayscale_interpolate_prob=args.grayscale_interpolate_prob,
-      do_pca_random_shifts=args.do_pca_random_shifts)
+      random_shift_directions=random_shift_directions)
   
   train_loader, val_loader = training_helpers.MakeDataLoaders(
       train_data,

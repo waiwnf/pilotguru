@@ -136,9 +136,12 @@ class ImageFrameDataset(torch.utils.data.Dataset):
 
     for t in self.joint_transforms:
       img, label = t(img, label)
+      assert img is not None
+      assert label is not None
 
     for t in self.data_transforms:
       img = t(img)
+      assert img is not None
 
     # Optionally crop to target_crop_width.
     if self.target_crop_width is not None:

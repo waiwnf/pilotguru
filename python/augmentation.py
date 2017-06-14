@@ -56,10 +56,9 @@ def SteeringTrainingRandomShiftTransform(
 
 AugmentSettings = namedtuple(
     'AugmentSettings',
-    'target_width max_horizontal_shift_pixels horizontal_label_shift_rate ' +
-    'blur_sigma blur_prob '+ 
-    'grayscale_interpolate_prob ' +
-    'do_pca_random_shifts')
+    ['target_width', 'max_horizontal_shift_pixels',
+      'horizontal_label_shift_rate', 'blur_sigma', 'blur_prob',
+      'grayscale_interpolate_prob', 'random_shift_directions'])
 AugmentSettings.__new__.__defaults__ = (
     -1,     # target_width
     0,      # max_horizontal_shift_pixels
@@ -67,7 +66,7 @@ AugmentSettings.__new__.__defaults__ = (
     2.0,    # blur_sigma
     0.0,    # blur_prob
     0.0,    # grayscale_interpolate_prob
-    False   # do_pca_random_shifts
+    None    # random_shift_directions
   )
 
 def MakeAugmenters(augment_settings, in_data = None):
@@ -81,11 +80,10 @@ def MakeAugmenters(augment_settings, in_data = None):
             augment_settings.horizontal_label_shift_rate))
 
   data_augmenters = []
-  if augment_settings.do_pca_random_shifts:
-    pca_directions = image_helpers.GetPcaRgbDirections(
-        in_data.data.astype(np.float32) / 255.0)
+  if augment_settings.random_shift_directions is not None:
     data_augmenters.append(
-        image_helpers.RandomShiftInPlaceTransform(pca_directions))
+        image_helpers.RandomShiftInPlaceTransform(
+            augment_settings.random_shift_directions))
 
   if augment_settings.blur_prob > 0:
     assert augment_settings.blur_sigma > 0

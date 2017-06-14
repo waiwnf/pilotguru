@@ -26,11 +26,12 @@ def IdentityTransform(x):
   return x
 
 LossSettings = namedtuple(
-    'LossSettings', 'loss data_chunk_transform label_chunk_transform')
+    'LossSettings', ['loss', 'data_chunk_transform', 'label_chunk_transform'])
 LossSettings.__new__.__defaults__ = (
     None, FlattenInnerChunk, FlattenInnerChunk)
 
-TrainSettings = namedtuple('TrainSettings', 'loss_settings optimizer epochs')
+TrainSettings = namedtuple(
+    'TrainSettings', ['loss_settings', 'optimizer', 'epochs'])
 
 class UnweightedLoss(torch.nn.Module):
   """Wraps loss functions that do not support examples weights for TrainModel().

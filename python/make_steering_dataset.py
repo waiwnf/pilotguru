@@ -19,7 +19,7 @@ import numpy as np
 import image_helpers
 
 FrameData = collections.namedtuple(
-    'FrameData', 'frame_id angular_velocity speed_m_s')
+    'FrameData', ['frame_id', 'angular_velocity', 'speed_m_s'])
 
 def FillFrameData(steering, velocity):
   assert velocity is not None or steering is not None
