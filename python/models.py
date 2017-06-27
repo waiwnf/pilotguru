@@ -1,5 +1,6 @@
 import math
 
+import torch
 import torch.nn as nn
 
 def ConvOutSize(in_size, kernel_size, stride=1, padding=0, dilation=1):
@@ -55,6 +56,9 @@ def MakeBatchNorm1d(in_shape):
 def MakeDropout2d(in_shape, p):
   return nn.Dropout2d(p), in_shape
 
+def MakeDropout(in_shape, p):
+  return nn.Dropout(p), in_shape
+
 class SequentialNet(nn.Module):
   def __init__(self, in_shape):
     super(SequentialNet, self).__init__()
@@ -87,6 +91,9 @@ class SequentialNet(nn.Module):
   
   def AddDrouput2d(self, p):
     return self.AddLayer(MakeDropout2d(self.OutShape(), p))
+  
+  def AddDropout(self, p):
+    return self.AddLayer(MakeDropout(self.OutShape(), p))
 
   def AddLayer(self, layer_tuple):
     layer, out_shape = layer_tuple
@@ -164,15 +171,138 @@ class NvidiaSingleFrameNet(SequentialNet):
     self.fc1 = self.AddLinear(1164)
     self.fc1bn = self.AddBatchNorm1d()
     self.AddRelu()
+    self.fc1_drop = self.AddDropout(drouput_prob)
 
     self.fc2 = self.AddLinear(100)
     self.fc2bn = self.AddBatchNorm1d()
     self.AddRelu()
+    self.fc2_drop = self.AddDropout(drouput_prob)
 
     self.fc3 = self.AddLinear(50)
+    self.fc3bn = self.AddBatchNorm1d()
     self.AddRelu()
 
     self.fc4 = self.AddLinear(10)
     self.AddRelu()
 
     self.fc5 = self.AddLinear(1)
+
+class UdacityRamboNet(nn.Module):
+  def __init__(self, in_shape, dropout_prob):
+    super(UdacityRamboNet, self).__init__()
+
+    self.comma_layers = []
+    self.comma_shapes = [in_shape]
+    self.nv1_layers = []
+    self.nv1_shapes = [in_shape]
+    self.nv2_layers = []
+    self.nv2_shapes = [in_shape]
+
+    self.comma_conv1, self.comma_bn1, self.comma_relu1, self.comma_drop1 = self.AddConvBlock(
+        16, 8, 4, dropout_prob, self.comma_layers, self.comma_shapes)
+    self.comma_conv2, self.comma_bn2, self.comma_relu2, self.comma_drop2 = self.AddConvBlock(
+        32, 5, 2, dropout_prob, self.comma_layers, self.comma_shapes)
+    self.comma_conv3, self.comma_bn3, self.comma_relu3, self.comma_drop3 = self.AddConvBlock(
+        64, 5, 2, dropout_prob, self.comma_layers, self.comma_shapes)
+    self.comma_flatten = self.AddLayer(
+        MakeFlatten(self.comma_shapes[-1]),
+        self.comma_layers, self.comma_shapes)
+    print(self.comma_shapes)
+    self.comma_fc1, self.comma_fc1_bn, self.comma_fc1_relu = self.AddFcBlock(
+        512, self.comma_layers, self.comma_shapes)
+    self.comma_fc1_drop = self.AddLayer(
+        MakeDropout(self.comma_shapes[-1], dropout_prob),
+        self.comma_layers, self.comma_shapes)
+    self.comma_fc2 = self.AddLayer(
+        MakeLinear(self.comma_shapes[-1], 10),
+        self.comma_layers, self.comma_shapes)
+    
+    self.nv1_conv1, self.nv1_bn1, self.nv1_relu1, self.nv1_drop1 = self.AddConvBlock(
+        24, 5, 2, dropout_prob, self.nv1_layers, self.nv1_shapes)
+    self.nv1_conv2, self.nv1_bn2, self.nv1_relu2, self.nv1_drop2 = self.AddConvBlock(
+        36, 5, 2, dropout_prob, self.nv1_layers, self.nv1_shapes)
+    self.nv1_conv3, self.nv1_bn3, self.nv1_relu3, self.nv1_drop3 = self.AddConvBlock(
+        48, 5, 2, dropout_prob, self.nv1_layers, self.nv1_shapes)
+    self.nv1_conv4, self.nv1_bn4, self.nv1_relu4, self.nv1_drop4 = self.AddConvBlock(
+        64, 3, 2, dropout_prob, self.nv1_layers, self.nv1_shapes)
+    self.nv1_conv5, self.nv1_bn5, self.nv1_relu5, self.nv1_drop5 = self.AddConvBlock(
+        64, 3, 2, dropout_prob, self.nv1_layers, self.nv1_shapes)
+    self.nv1_flatten = self.AddLayer(
+        MakeFlatten(self.nv1_shapes[-1]),
+        self.nv1_layers, self.nv1_shapes)
+    print(self.nv1_shapes)
+    self.nv1_fc1, self.nv1_fc1_bn, self.nv1_fc1_relu = self.AddFcBlock(
+        100, self.nv1_layers, self.nv1_shapes)
+    self.nv1_fc1_drop = self.AddLayer(
+        MakeDropout(self.nv1_shapes[-1], dropout_prob),
+        self.nv1_layers, self.nv1_shapes)
+    self.nv1_fc2, self.nv1_fc2_bn, self.nv1_fc2_relu = self.AddFcBlock(
+        50, self.nv1_layers, self.nv1_shapes)
+    self.nv1_fc3 = self.AddLayer(
+        MakeLinear(self.nv1_shapes[-1], 10),
+        self.nv1_layers, self.nv1_shapes)
+    
+    self.nv2_conv2, self.nv2_bn2, self.nv2_relu2, self.nv2_drop2 = self.AddConvBlock(
+        36, 5, 2, dropout_prob, self.nv2_layers, self.nv2_shapes)
+    self.nv2_conv3, self.nv2_bn3, self.nv2_relu3, self.nv2_drop3 = self.AddConvBlock(
+        48, 5, 2, dropout_prob, self.nv2_layers, self.nv2_shapes)
+    self.nv2_conv4, self.nv2_bn4, self.nv2_relu4, self.nv2_drop4 = self.AddConvBlock(
+        64, 3, 2, dropout_prob, self.nv2_layers, self.nv2_shapes)
+    self.nv2_conv5, self.nv2_bn5, self.nv2_relu5, self.nv2_drop5 = self.AddConvBlock(
+        64, 3, 2, dropout_prob, self.nv2_layers, self.nv2_shapes)
+    self.nv2_flatten = self.AddLayer(
+        MakeFlatten(self.nv2_shapes[-1]), self.nv2_layers, self.nv2_shapes)
+    print(self.nv2_shapes)
+    self.nv2_fc1, self.nv2_fc1_bn, self.nv2_fc1_relu = self.AddFcBlock(
+        100, self.nv2_layers, self.nv2_shapes)
+    self.nv2_fc1_drop = self.AddLayer(
+        MakeDropout(self.nv2_shapes[-1], dropout_prob),
+        self.nv2_layers, self.nv2_shapes)
+    self.nv2_fc2, self.nv2_fc2_bn, self.nv2_fc2_relu = self.AddFcBlock(
+        50, self.nv2_layers, self.nv2_shapes)
+    self.nv2_fc3 = self.AddLayer(
+        MakeLinear(self.nv2_shapes[-1], 10),
+        self.nv2_layers, self.nv2_shapes)
+    
+    self.merged_shape = [
+        self.comma_shapes[-1][0] + 
+        self.nv1_shapes[-1][0] + 
+        self.nv2_shapes[-1][0]]
+    self.merged_linear = nn.Linear(self.merged_shape[0], 1)
+  
+  def forward(self, x):
+    comma_result = x
+    for layer in self.comma_layers:
+      comma_result = layer(comma_result)
+    
+    nv1_result = x
+    for layer in self.nv1_layers:
+      nv1_result = layer(nv1_result)
+
+    nv2_result = x
+    for layer in self.nv2_layers:
+      nv2_result = layer(nv2_result)
+    
+    merged_result = torch.cat([comma_result, nv1_result, nv2_result], 1)
+    result = self.merged_linear(merged_result)
+    return result
+
+  def AddConvBlock(self, out_channels, kernel, stride, dropout_prob, layers, shapes):
+    conv = self.AddLayer(
+        MakeConv2d(shapes[-1], out_channels, kernel, stride), layers, shapes)
+    bn = self.AddLayer(MakeBatchNorm2d(shapes[-1]), layers, shapes)
+    relu = self.AddLayer(MakeRelu(shapes[-1]), layers, shapes)
+    dropout = self.AddLayer(MakeDropout2d(shapes[-1], dropout_prob), layers, shapes)
+    return conv, bn, relu, dropout
+
+  def AddFcBlock(self, out_dim, layers, shapes):
+    fc = self.AddLayer(MakeLinear(shapes[-1], out_dim), layers, shapes)
+    bn = self.AddLayer(MakeBatchNorm1d(shapes[-1]), layers, shapes)
+    relu = self.AddLayer(MakeRelu(shapes[-1]), layers, shapes)
+    return fc, bn, relu
+
+  def AddLayer(self, layer_tuple, layers_list, shapes_list):
+    layer, out_shape = layer_tuple
+    layers_list.append(layer)
+    shapes_list.append(out_shape)
+    return layer
