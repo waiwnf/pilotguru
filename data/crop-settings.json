@@ -1,0 +1,22 @@
+{
+  "out_66_x_200": {
+    "in_height": 480,
+    "in_width": 720,
+    "crop_top": 286,
+    "crop_bottom": 40,
+    "dataset_target_height": 66,
+    "dataset_target_width": 308,
+    "model_input_target_height": 66,
+    "model_input_target_width": 200
+  },
+  "out_100_x_300": {
+    "in_height": 480,
+    "in_width": 720,
+    "crop_top": 286,
+    "crop_bottom": 40,
+    "dataset_target_height": 100,
+    "dataset_target_width": 468,
+    "model_input_target_height": 100,
+    "model_input_target_width": 300
+  }
+}
