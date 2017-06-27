@@ -207,7 +207,6 @@ class UdacityRamboNet(nn.Module):
     self.comma_flatten = self.AddLayer(
         MakeFlatten(self.comma_shapes[-1]),
         self.comma_layers, self.comma_shapes)
-    print(self.comma_shapes)
     self.comma_fc1, self.comma_fc1_bn, self.comma_fc1_relu = self.AddFcBlock(
         512, self.comma_layers, self.comma_shapes)
     self.comma_fc1_drop = self.AddLayer(
@@ -230,7 +229,6 @@ class UdacityRamboNet(nn.Module):
     self.nv1_flatten = self.AddLayer(
         MakeFlatten(self.nv1_shapes[-1]),
         self.nv1_layers, self.nv1_shapes)
-    print(self.nv1_shapes)
     self.nv1_fc1, self.nv1_fc1_bn, self.nv1_fc1_relu = self.AddFcBlock(
         100, self.nv1_layers, self.nv1_shapes)
     self.nv1_fc1_drop = self.AddLayer(
@@ -252,7 +250,6 @@ class UdacityRamboNet(nn.Module):
         64, 3, 2, dropout_prob, self.nv2_layers, self.nv2_shapes)
     self.nv2_flatten = self.AddLayer(
         MakeFlatten(self.nv2_shapes[-1]), self.nv2_layers, self.nv2_shapes)
-    print(self.nv2_shapes)
     self.nv2_fc1, self.nv2_fc1_bn, self.nv2_fc1_relu = self.AddFcBlock(
         100, self.nv2_layers, self.nv2_shapes)
     self.nv2_fc1_drop = self.AddLayer(
@@ -306,3 +303,17 @@ class UdacityRamboNet(nn.Module):
     layers_list.append(layer)
     shapes_list.append(out_shape)
     return layer
+
+NVIDIA_NET_NAME = 'nvidia'
+RAMBO_NET_NAME = 'rambo'
+
+IN_SHAPE = 'in_shape'
+DROPOUT_PROB = 'dropout_prob'
+
+def MakeNetwork(net_name, **kwargs):
+  if net_name == NVIDIA_NET_NAME:
+    return NvidiaSingleFrameNet(kwargs[IN_SHAPE], kwargs[DROPOUT_PROB])
+  elif net_name == RAMBO_NET_NAME:
+    return UdacityRamboNet(kwargs[IN_SHAPE], kwargs[DROPOUT_PROB])
+  else:
+    assert False, ('Unknown network name: %s' % (net_name,))

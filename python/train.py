@@ -21,6 +21,7 @@ if __name__ == '__main__':
   parser.add_argument('--epochs', type=int, required=True)
   parser.add_argument('--target_height', type=int, required=True)
   parser.add_argument('--target_width', type=int, required=True)
+  parser.add_argument('--net_name', default=models.NVIDIA_NET_NAME)
   parser.add_argument('--out_prefix', required=True)
   parser.add_argument('--dropout_prob', type=float, default=0.0)
   parser.add_argument('--max_horizontal_shift_pixels', type=int, default=0)
@@ -59,8 +60,10 @@ if __name__ == '__main__':
       args.batch_size,
       args.example_label_extra_weight_scale)
 
-  net = models.NvidiaSingleFrameNet(
-      [3, args.target_height, args.target_width], args.dropout_prob)
+  net = models.MakeNetwork(
+      args.net_name,
+      in_shape=[3, args.target_height, args.target_width],
+      dropout_prob=args.dropout_prob)
   net.cuda()
   
   train_settings = optimize.TrainSettings(
