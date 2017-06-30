@@ -73,6 +73,18 @@ def FrameToModelInput(
 def OutFileName(out_dir, frame_id, data_id):
   return os.path.join(args.out_dir, 'frame-%06d-%s.npy') % (frame_id, data_id)
 
+def LabelDataWithLookaheads(raw_labels, write_indices, lookaheads):
+  assert len(raw_labels.shape) == 2
+  assert raw_labels.shape[1] == 1
+  result = np.zeros(shape=[len(write_indices), len(lookaheads)])
+  total_raw_history_size = raw_labels.shape[0]
+  for w, write_index in enumerate(write_indices):
+    result[w,:] = raw_labels[
+      [(write_index + lookahead) % total_raw_history_size
+            for lookahead in lookaheads], 0]
+  return result
+
+
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()
   parser.add_argument(
@@ -113,6 +125,10 @@ if __name__ == '__main__':
     help='Spacing of sequential frames within an individual example (with a ' +
       'total of --frames_history_length frames per example)')
   parser.add_argument(
+    '--label_lookahead_frames', default='0',
+    help='Comma-separated list of lookaheads (in terms of number of frames) '
+    'to use for the label annotations.')
+  parser.add_argument(
     '--exclude_frames_json', default='',
     help='Optional JSON file with ranges of frame IDs to exclude. Format is ' +
     '\'exclude\' key mapped a list of 2-element lists [start_id, end_id].')
@@ -152,6 +168,13 @@ if __name__ == '__main__':
       '--json_value_name', 'speed_m_s',
       '--out_json', velocities_frames_json_name])
   
+  label_lookahead_frames = [
+      int(x) for x in args.label_lookahead_frames.split(',')]
+  label_lookahead_frames.sort()
+  # No negative lookaheads for simplicity.
+  assert min(label_lookahead_frames) >= 0
+  max_lookahead = max(label_lookahead_frames)
+
   exclude_frames = set()
   if args.exclude_frames_json != '':
     with open(args.exclude_frames_json) as exclude_frames_file:
@@ -161,7 +184,8 @@ if __name__ == '__main__':
       exclude_frames.update(range(exclude_range[0], exclude_range[1] + 1))
 
   raw_history_size = (
-      (args.frames_history_length - 1) * args.frames_history_step + 1)
+      (args.frames_history_length - 1) * args.frames_history_step
+          + 1 + max_lookahead)
   raw_frames_history = np.zeros(
       (raw_history_size, 3, args.target_height, args.target_width),
       dtype=np.uint8)
@@ -233,21 +257,27 @@ if __name__ == '__main__':
     # previous write. Write a new example ending in this frame.
     prev_saved_frame_id = frame_id
     write_indices = [
-        (history_index - x * args.frames_history_step) % raw_history_size
+        (history_index - max_lookahead - x * args.frames_history_step) % raw_history_size
         for x in range(args.frames_history_length)]
     # Reverse the indices to get the time-natural ordering.
     write_indices.reverse()
 
+    out_frame_id = frame_id - max_lookahead
     # Write out numpy array for the training example input.
-    image_out_name = OutFileName(args.out_dir, frame_id, 'img')
+    image_out_name = OutFileName(args.out_dir, out_frame_id, 'img')
     np.save(image_out_name, raw_frames_history[write_indices, ...])
     # Write out the PNG picture too for checking the inputs by hand.
     scipy.misc.imsave(image_out_name + '.png', frame_hwc)
     # Steering angular velocity is the label.
-    angular_out_name = OutFileName(args.out_dir, frame_id, 'angular')
-    np.save(angular_out_name, raw_steering_history[write_indices,:])
+    angular_out_name = OutFileName(args.out_dir, out_frame_id, 'angular')
+    angular_out_data = LabelDataWithLookaheads(
+        raw_steering_history, write_indices, label_lookahead_frames)
+    np.save(angular_out_name, angular_out_data)
+    velocity_out_data = LabelDataWithLookaheads(
+        raw_velocity_history, write_indices, label_lookahead_frames)
     # Inverse turn radius.
-    inverse_radius_out_name = OutFileName(args.out_dir, frame_id, 'inverse-radius')
-    inverse_radius_data = raw_steering_history[write_indices,:] / (
-        raw_velocity_history[write_indices,:] + 1.0)
+    inverse_radius_out_name = OutFileName(
+        args.out_dir, out_frame_id, 'inverse-radius')
+    inverse_radius_data = (
+        angular_out_data / (velocity_out_data + 1.0)).astype(np.float32)
     np.save(inverse_radius_out_name, inverse_radius_data)
