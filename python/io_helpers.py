@@ -67,7 +67,10 @@ class NumpyFileDataset(torch.utils.data.Dataset):
     return len(self.data_files)
   
   def __getitem__(self, idx):
-    return np.load(self.data_files[idx]), np.load(self.label_files[idx]), np.array([1.0], dtype=np.float32)
+    return (
+        np.load(self.data_files[idx]),
+        np.load(self.label_files[idx]),
+        np.array([1.0], dtype=np.float32))
 
 class InMemoryNumpyDataset(torch.utils.data.Dataset):
   def __init__(self, data, labels):
@@ -79,7 +82,10 @@ class InMemoryNumpyDataset(torch.utils.data.Dataset):
     return self.data.shape[0]
   
   def __getitem__(self, idx):
-    return self.data[idx, ...], self.labels[idx], np.array([1.0], dtype=np.float32)
+    return (
+        self.data[idx, ...],
+        self.labels[idx],
+        np.array([1.0], dtype=np.float32))
 
 class L1LabelWeightingDataset(torch.utils.data.Dataset):
   """Upweights the examples from the source dataset by (1 + |label|).
@@ -99,8 +105,8 @@ class L1LabelWeightingDataset(torch.utils.data.Dataset):
   
   def __getitem__(self, idx):
     data, label, source_weight = self.source_dataset.__getitem__(idx)
-    assert len(label) == 1
-    effective_weight_scale = self.label_scale * np.abs(label) + 1.0
+    effective_weight_scale = (
+        self.label_scale * np.mean(np.abs(label), keepdims=True) + 1.0)
     return data, label, source_weight * effective_weight_scale
 
 class ImageFrameDataset(torch.utils.data.Dataset):

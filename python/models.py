@@ -139,7 +139,7 @@ class ToyConvNet(SequentialNet):
 
 class NvidiaSingleFrameNet(SequentialNet):
 
-  def __init__(self, in_shape, drouput_prob):
+  def __init__(self, in_shape, out_dims, drouput_prob):
     super(NvidiaSingleFrameNet, self).__init__(in_shape)
     self.conv1 = self.AddConv2d(24, 5, stride=2)
     self.c1bn = self.AddBatchNorm2d()
@@ -185,10 +185,10 @@ class NvidiaSingleFrameNet(SequentialNet):
     self.fc4 = self.AddLinear(10)
     self.AddRelu()
 
-    self.fc5 = self.AddLinear(1)
+    self.fc5 = self.AddLinear(out_dims)
 
 class UdacityRamboNet(nn.Module):
-  def __init__(self, in_shape, dropout_prob):
+  def __init__(self, in_shape, out_dims, dropout_prob):
     super(UdacityRamboNet, self).__init__()
 
     self.comma_layers = []
@@ -265,7 +265,7 @@ class UdacityRamboNet(nn.Module):
         self.comma_shapes[-1][0] + 
         self.nv1_shapes[-1][0] + 
         self.nv2_shapes[-1][0]]
-    self.merged_linear = nn.Linear(self.merged_shape[0], 1)
+    self.merged_linear = nn.Linear(self.merged_shape[0], out_dims)
   
   def forward(self, x):
     comma_result = x
@@ -308,12 +308,15 @@ NVIDIA_NET_NAME = 'nvidia'
 RAMBO_NET_NAME = 'rambo'
 
 IN_SHAPE = 'in_shape'
+OUT_DIMS = 'out_dims'
 DROPOUT_PROB = 'dropout_prob'
 
 def MakeNetwork(net_name, **kwargs):
   if net_name == NVIDIA_NET_NAME:
-    return NvidiaSingleFrameNet(kwargs[IN_SHAPE], kwargs[DROPOUT_PROB])
+    return NvidiaSingleFrameNet(
+        kwargs[IN_SHAPE], kwargs[OUT_DIMS], kwargs[DROPOUT_PROB])
   elif net_name == RAMBO_NET_NAME:
-    return UdacityRamboNet(kwargs[IN_SHAPE], kwargs[DROPOUT_PROB])
+    return UdacityRamboNet(
+        kwargs[IN_SHAPE], kwargs[OUT_DIMS], kwargs[DROPOUT_PROB])
   else:
     assert False, ('Unknown network name: %s' % (net_name,))

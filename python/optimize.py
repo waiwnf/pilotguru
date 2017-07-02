@@ -52,7 +52,7 @@ class WeightedMSELoss(torch.nn.Module):
   
   def forward(self, predicted, labels, weights):
     diff_squares = torch.pow(torch.add(predicted, torch.neg(labels)), 2.0)
-    return torch.mean(torch.mul(diff_squares, weights))
+    return torch.mean(torch.mul(diff_squares, weights.expand_as(labels)))
 
 def TrainLogEventToString(event):
   return 'loss %g;  val loss: %g;  %0.2f sec/epoch; %0.2f examples/sec' % (
