@@ -304,8 +304,91 @@ class UdacityRamboNet(nn.Module):
     shapes_list.append(out_shape)
     return layer
 
+class RamboCommaNet(SequentialNet):
+
+  def __init__(self, in_shape, out_dims, drouput_prob):
+    super(RamboCommaNet, self).__init__(in_shape)
+    self.conv1 = self.AddConv2d(16, 8, stride=4)
+    self.c1bn = self.AddBatchNorm2d()
+    self.AddRelu()
+    self.drop1 = self.AddDrouput2d(drouput_prob)
+
+    self.conv2 = self.AddConv2d(32, 5, stride=2)
+    self.c2bn = self.AddBatchNorm2d()
+    self.AddRelu()
+    self.drop2 = self.AddDrouput2d(drouput_prob)
+
+    self.conv3 = self.AddConv2d(64, 5, stride=2)
+    self.c3bn = self.AddBatchNorm2d()
+    self.AddRelu()
+    self.drop3 = self.AddDrouput2d(drouput_prob)
+
+    self.AddFlatten()
+
+    self.fc1 = self.AddLinear(512)
+    self.fc1bn = self.AddBatchNorm1d()
+    self.AddRelu()
+    self.fc1_drop = self.AddDropout(drouput_prob)
+
+    self.fc2 = self.AddLinear(10)
+    self.AddRelu()
+
+    self.fc5 = self.AddLinear(out_dims)
+
+class RamboNVidiaNet(SequentialNet):
+
+  def __init__(self, skip_first_conv_layer, in_shape, out_dims, drouput_prob):
+    super(RamboNVidiaNet, self).__init__(in_shape)
+
+    if not skip_first_conv_layer:
+      self.conv1 = self.AddConv2d(24, 5, stride=2)
+      self.c1bn = self.AddBatchNorm2d()
+      self.AddRelu()
+      self.drop1 = self.AddDrouput2d(drouput_prob)
+
+    self.conv2 = self.AddConv2d(36, 5, stride=2)
+    self.c2bn = self.AddBatchNorm2d()
+    self.AddRelu()
+    self.drop2 = self.AddDrouput2d(drouput_prob)
+
+    self.conv3 = self.AddConv2d(48, 5, stride=2)
+    self.c3bn = self.AddBatchNorm2d()
+    self.AddRelu()
+    self.drop3 = self.AddDrouput2d(drouput_prob)
+
+    self.conv4 = self.AddConv2d(64, 3, stride=2)
+    self.c4bn = self.AddBatchNorm2d()
+    self.AddRelu()
+    self.drop4 = self.AddDrouput2d(drouput_prob)
+
+    self.conv5 = self.AddConv2d(64, 3, stride=2)
+    self.c5bn = self.AddBatchNorm2d()
+    self.AddRelu()
+    self.drop5 = self.AddDrouput2d(drouput_prob)
+
+    self.AddFlatten()
+
+    self.fc1 = self.AddLinear(100)
+    self.fc1bn = self.AddBatchNorm1d()
+    self.AddRelu()
+    self.fc1_drop = self.AddDropout(drouput_prob)
+
+    self.fc2 = self.AddLinear(50)
+    self.fc2bn = self.AddBatchNorm1d()
+    self.AddRelu()
+
+    self.fc3 = self.AddLinear(10)
+    self.AddRelu()
+
+    self.fc4 = self.AddLinear(out_dims)
+
+
 NVIDIA_NET_NAME = 'nvidia'
 RAMBO_NET_NAME = 'rambo'
+RAMBO_COMMA_NET_NAME = 'rambo-comma'
+RAMBO_NVIDIA_DEEP_NET_NAME = 'rambo-nvidia-deep'
+RAMBO_NVIDIA_SHALLOW_NET_NAME = 'rambo-nvidia-shallow'
+
 
 IN_SHAPE = 'in_shape'
 OUT_DIMS = 'out_dims'
@@ -318,5 +401,14 @@ def MakeNetwork(net_name, **kwargs):
   elif net_name == RAMBO_NET_NAME:
     return UdacityRamboNet(
         kwargs[IN_SHAPE], kwargs[OUT_DIMS], kwargs[DROPOUT_PROB])
+  elif net_name == RAMBO_COMMA_NET_NAME:
+    return RamboCommaNet(
+        kwargs[IN_SHAPE], kwargs[OUT_DIMS], kwargs[DROPOUT_PROB])
+  elif net_name == RAMBO_NVIDIA_DEEP_NET_NAME:
+    return RamboNVidiaNet(
+        False, kwargs[IN_SHAPE], kwargs[OUT_DIMS], kwargs[DROPOUT_PROB])
+  elif net_name == RAMBO_NVIDIA_SHALLOW_NET_NAME:
+    return RamboNVidiaNet(
+        True, kwargs[IN_SHAPE], kwargs[OUT_DIMS], kwargs[DROPOUT_PROB])
   else:
     assert False, ('Unknown network name: %s' % (net_name,))
