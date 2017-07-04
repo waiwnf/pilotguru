@@ -14,9 +14,9 @@ if __name__ == '__main__':
   parser.add_argument(
     '--in_video', required=True,
     help='MPEG video file from Pilotguru Recorder.')
-  # parser.add_argument(
-  #   '--in_frames_json', required=True,
-  #   help='Video frames timestamps file from Pilotguru Recorder.')
+  parser.add_argument('--net_name', default=models.NVIDIA_NET_NAME)
+  parser.add_argument('--net_out_total_dimensions', type=int, default=1)
+  parser.add_argument('--net_out_dimension_to_use', type=int, default=0)
   parser.add_argument(
     '--in_model_weights', required=True, help='Pytorch model weights file')
   parser.add_argument(
@@ -36,8 +36,11 @@ if __name__ == '__main__':
   args = parser.parse_args()
 
   # Init model and load weights.
-  net = models.NvidiaSingleFrameNet(
-      [3, args.target_height, args.target_width], 0.0)
+  net = models.MakeNetwork(
+      args.net_name,
+      in_shape=[3, args.target_height, args.target_width],
+      out_dims=args.net_out_total_dimensions,
+      dropout_prob=0.0)
   net.load_state_dict(torch.load(args.in_model_weights))
   net.eval()
   net.cuda()
@@ -56,7 +59,7 @@ if __name__ == '__main__':
     frame_tensor = Variable(
         torch.from_numpy(frame_float[np.newaxis,...])).cuda()
     result_tensor = net(frame_tensor).cpu()
-    result_value = result_tensor.data.numpy()[0,0].item()
+    result_value = result_tensor.data.numpy()[0,args.net_out_dimension_to_use].item()
     result_data.append({'frame_id': frame_index, 'angular_velocity': result_value})
   
   with open(args.out_steering_json, 'w') as out_json:
