@@ -60,12 +60,25 @@ def JoinFrameData(steering, velocities):
 def FrameToModelInput(
     raw_frame,
     crop_top, crop_bottom, crop_left, crop_right,
-    target_height, target_width):
+    target_height, target_width, convert_to_grayscale,
+    convert_to_yuv):
+  # Grayscale and YUV outputs are mutually exclusive.
+  # TODO: make an output enum instead (RGB, YUV, GRAY).
+  assert not convert_to_grayscale or not convert_to_yuv
   # Crop to the ROI for the vision model.
   frame_image_cropped = image_helpers.CropHWC(
       raw_frame, crop_top, crop_bottom, crop_left, crop_right)
   frame_image_resized = image_helpers.MaybeResizeHWC(
       frame_image_cropped, target_height, target_width)
+  # Optionally convert to grayscale.
+  if convert_to_grayscale:
+    rgb_to_gray_weights = np.array(
+      [0.2989, 0.5870, 0.1140], dtype=np.float64).reshape([1,1,3])
+    frame_image_resized = np.sum(
+        frame_image_resized.astype(np.float64) * rgb_to_gray_weights,
+        axis=2, keepdims=True).astype(np.uint8)
+  if convert_to_yuv:
+    frame_image_resized = image_helpers.RgbToYuv(frame_image_resized)
   # Transpose to CHW for pytorch.
   frame_image_chw = np.transpose(frame_image_resized, (2,0,1))
   return frame_image_chw, frame_image_resized
@@ -132,6 +145,8 @@ if __name__ == '__main__':
     '--exclude_frames_json', default='',
     help='Optional JSON file with ranges of frame IDs to exclude. Format is ' +
     '\'exclude\' key mapped a list of 2-element lists [start_id, end_id].')
+  parser.add_argument('--convert_to_grayscale', type=bool, default=False)
+  parser.add_argument('--convert_to_yuv', type=bool, default=False)
   
   # Crop settings
   parser.add_argument('--crop_top', type=int, default=0)
@@ -145,6 +160,8 @@ if __name__ == '__main__':
 
   args = parser.parse_args()
 
+  out_color_channels = 1 if args.convert_to_grayscale else 3
+  
   # Compute per-frame steering angular velocity annotations from the raw 
   # angular velocity time series.
   annotate_frames_bin = os.path.join(args.binary_dir, 'annotate_frames')
@@ -187,7 +204,7 @@ if __name__ == '__main__':
       (args.frames_history_length - 1) * args.frames_history_step
           + 1 + max_lookahead)
   raw_frames_history = np.zeros(
-      (raw_history_size, 3, args.target_height, args.target_width),
+      (raw_history_size, out_color_channels, args.target_height, args.target_width),
       dtype=np.uint8)
   raw_steering_history = np.zeros((raw_history_size, 1), dtype=np.float32)
   raw_velocity_history = np.zeros((raw_history_size, 1), dtype=np.float32)
@@ -239,7 +256,8 @@ if __name__ == '__main__':
     frame_chw, frame_hwc = FrameToModelInput(
         raw_frame,
         args.crop_top, args.crop_bottom, args.crop_left, args.crop_right,
-        args.target_height, args.target_width)
+        args.target_height, args.target_width, args.convert_to_grayscale,
+        args.convert_to_yuv)
     raw_frames_history[history_index, ...] = frame_chw
     raw_steering_history[history_index, 0] = frame_data.angular_velocity
     raw_velocity_history[history_index, 0] = frame_data.speed_m_s
@@ -267,7 +285,7 @@ if __name__ == '__main__':
     image_out_name = OutFileName(args.out_dir, out_frame_id, 'img')
     np.save(image_out_name, raw_frames_history[write_indices, ...])
     # Write out the PNG picture too for checking the inputs by hand.
-    scipy.misc.imsave(image_out_name + '.png', frame_hwc)
+    scipy.misc.imsave(image_out_name + '.png', np.squeeze(frame_hwc))
     # Steering angular velocity is the label.
     angular_out_name = OutFileName(args.out_dir, out_frame_id, 'angular')
     angular_out_data = LabelDataWithLookaheads(

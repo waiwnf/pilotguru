@@ -19,6 +19,7 @@ if __name__ == '__main__':
   parser.add_argument('--labels_file_suffix', default='inverse-radius')
   parser.add_argument('--batch_size', type=int, required=True)
   parser.add_argument('--epochs', type=int, required=True)
+  parser.add_argument('--in_channels', type=int, default=3)
   parser.add_argument('--target_height', type=int, required=True)
   parser.add_argument('--target_width', type=int, required=True)
   parser.add_argument('--net_name', default=models.NVIDIA_NET_NAME)
@@ -63,7 +64,7 @@ if __name__ == '__main__':
 
   net = models.MakeNetwork(
       args.net_name,
-      in_shape=[3, args.target_height, args.target_width],
+      in_shape=[args.in_channels, args.target_height, args.target_width],
       out_dims=args.label_dimensions,
       dropout_prob=args.dropout_prob)
   net.cuda()

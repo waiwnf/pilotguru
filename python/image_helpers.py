@@ -20,6 +20,34 @@ def CropHWC(img, top, bottom, left, right):
   assert (left + right) < img.shape[1]
   return img[top:(img.shape[0] - bottom), left:(img.shape[1] - right), ...]
 
+def RgbToYuv(rgb_image):
+  assert rgb_image.dtype == np.uint8
+  assert rgb_image.shape[2] == 3
+
+  # Constants from https://en.wikipedia.org/wiki/YUV#Conversion_to.2Ffrom_RGB
+  # (with input RGB values in [0, 1]).
+  u_max = 0.437
+  v_max = 0.615
+  # Shift to have minimum values at 0.
+  yuv_bias = np.array([0, u_max, v_max], dtype=np.float64).reshape([1,1,3])
+  # Scale to have max YUV values at 1 (for RGB inputs in [0, 1]).
+  yuv_scale = np.array(
+      [1.0, 1.0 / (2.0 * u_max), 1.0 / (2.0 * v_max)],
+      dtype=np.float64).reshape([1,1,3])
+
+  # Coefficients from scikit-image.
+  yuv_from_rgb = np.array(
+      [[ 0.299     ,  0.587     ,  0.114      ],
+       [-0.14714119, -0.28886916,  0.43601035 ],
+       [ 0.61497538, -0.51496512, -0.10001026 ]],
+      dtype=np.float64)
+  rgb_image_float = rgb_image.astype(np.float64) / 255.0
+  # Scale all the channels to 0...255 range to be able to store values as uint8.
+  yuv_image_float = (
+      (np.dot(rgb_image_float, yuv_from_rgb.T) + yuv_bias) *
+      yuv_scale * 255.0)
+  return np.clip(yuv_image_float, 0, 255).astype(np.uint8)
+
 def MaybeResizeHWC(img, height, width):
   if height <= 0 and width <= 0:
     return img
@@ -78,7 +106,8 @@ def GrayscaleInterpolateInPlace(images_chw, grayscale_share):
   return images_chw
 
 def RandomGrayscaleInterpolateInPlace(images_chw):
-  return GrayscaleInterpolateInPlace(images_chw, random.uniform(0.0, 1.0))
+  # return GrayscaleInterpolateInPlace(images_chw, random.uniform(0.0, 1.0))
+  return GrayscaleInterpolateInPlace(images_chw, 1.0)
 
 def GrayscaleInterpolateInPlaceTransform(grayscale_share):
   return lambda x : GrayscaleInterpolateInPlace(x, grayscale_share)
