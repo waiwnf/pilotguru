@@ -73,14 +73,8 @@ double AccelerometerCalibrator::eval(const std::vector<double> &in,
     // Travel distance from GPS, assuming fixed speed and straight line travel.
     double reference_distance = 0;
 
-    // Cumulative rotation matrices from the beginning for each
-    // accelerometer/gyro measurement within this reference interval. Necessary
-    // for computing the derivative wrt local accelerometer bias.
-    std::vector<Eigen::Quaterniond> interval_integrated_rotations;
-
     // Iterate over all inertial measurements on the given GPS reference
     // interval.
-
     std::vector<MotionIntegrationOutcome> integrated_intervals;
     for (const InterpolationInterval &interval : intervals) {
       const std::vector<size_t> &sensor_indices =
@@ -259,5 +253,223 @@ AccelerometerCalibrator::IntegrateTrajectory(
   }
 
   return result;
+}
+
+FixedForwardAxisCalibrator::FixedForwardAxisCalibrator(
+    const std::vector<TimestampedVelocity> &reference_velocities,
+    const std::vector<TimestampedRotationVelocity> &rotation_velocities,
+    const std::vector<TimestampedAcceleration> &accelerations)
+    : reference_velocities_(reference_velocities),
+      rotation_velocities_(rotation_velocities), accelerations_(accelerations),
+      rotation_times_(ExtractTimestamps(rotation_velocities)),
+      accelerations_times_(ExtractTimestamps(accelerations)),
+      imu_times_({&rotation_times_, &accelerations_times_}),
+      reference_intervals_(
+          InitInterpolationIntervals(reference_velocities, imu_times_)) {}
+
+double FixedForwardAxisCalibrator::operator()(const Eigen::VectorXd &x,
+                                              Eigen::VectorXd &grad) {
+  // Global acceleration bias (gravity) +
+  // local acceleration bias (accelerometer calibration) +
+  // vehicle forward axis in moving reference frame +
+  // scalar velocity for every IMU timestamp.
+  CHECK_EQ(x.size(), VELOCITY_SCALES_START + imu_times_.MergedEvents().size());
+  CHECK_EQ(x.size(), grad.size());
+
+  // Zero out the gradient.
+  grad *= 0;
+
+  // Named aliases for biases.
+  const Eigen::Vector3d acceleration_global_bias =
+      x.segment(ACCELERATION_GLOBAL_BIAS_START, 3);
+  const Eigen::Vector3d acceleration_local_bias =
+      x.segment(ACCELERATION_LOCAL_BIAS_START, 3);
+  const Eigen::Vector3d local_forward_axis = x.segment(FORWARD_AXIS_START, 3);
+  const Eigen::VectorBlock<const Eigen::VectorXd> scalar_velocities =
+      x.segment(VELOCITY_SCALES_START, imu_times_.MergedEvents().size());
+
+  // Overall loss consists of 3 components:
+  // - Sum of squared travel distance differences between GPS and IMU.
+  // - Sum of squared diffs of IMU measured accelerations vs the forward-only
+  //   motion constrained accelerations.
+  // - Penalty on local forward axis magnitude different from 1.
+  double travel_distance_loss = 0;
+  double acceleration_match_loss = 0;
+
+  const double forward_axis_length = local_forward_axis.norm();
+  const double forward_axis_magnitude_weight = 0.05;
+  double forward_axis_magnitude_loss = forward_axis_magnitude_weight *
+                                       (forward_axis_length - 1.0) *
+                                       (forward_axis_length - 1.0);
+  const Eigen::Vector3d forward_axis_magnitude_loss_gradient =
+      forward_axis_magnitude_weight * local_forward_axis * 2.0 *
+      (1.0 - 1.0 / (forward_axis_length + 1e-5));
+
+  grad.segment(FORWARD_AXIS_START, 3) += forward_axis_magnitude_loss_gradient;
+
+  // Without loss of generality on the first step take the device to be aligned
+  // with the fixed reference frame.
+  Eigen::Quaterniond integrated_rotation(1.0, 0.0, 0.0, 0.0);
+  for (const std::vector<InterpolationInterval> &reference_interval :
+       reference_intervals_) {
+    // Total effective shift in 3D for this interval between two reference
+    // points, integrated from accelerometer/gyro.
+    Eigen::Vector3d integrated_travel = Eigen::Vector3d::Zero();
+    // Travel distance from GPS, assuming fixed speed and straight line travel.
+    double reference_distance = 0;
+
+    std::vector<Eigen::Vector3d> d_integrated_travel_d_velocity_scales;
+    Eigen::Matrix3d d_integrated_travel_d_forward_axis =
+        Eigen::Matrix3d::Zero();
+    for (const InterpolationInterval &imu_interval : reference_interval) {
+      const size_t imu_interval_global_idx =
+          imu_interval.interpolation_end_time_index;
+      const std::vector<size_t> &sensor_indices =
+          imu_times_.MergedEvents().at(imu_interval_global_idx);
+      const TimestampedRotationVelocity &timestamped_raw_rotation =
+          rotation_velocities_.at(sensor_indices.at(0));
+
+      const double imu_duration_sec = imu_interval.DurationSec();
+      const Eigen::Quaterniond raw_rotation = RotationMotionToQuaternion(
+          timestamped_raw_rotation.rate_x_rad_s,
+          timestamped_raw_rotation.rate_y_rad_s,
+          timestamped_raw_rotation.rate_z_rad_s, imu_duration_sec);
+
+      // Rotate the forward velocity to fixed reference frame and weigh by
+      // interval duration.
+      const Eigen::Matrix3d integrated_rotation_matrix =
+          integrated_rotation.toRotationMatrix();
+      const Eigen::Vector3d time_weighted_velocity_axis =
+          imu_duration_sec * integrated_rotation_matrix * local_forward_axis;
+      const double scalar_velocity = scalar_velocities[imu_interval_global_idx];
+      integrated_travel += scalar_velocity * time_weighted_velocity_axis;
+      reference_distance +=
+          imu_duration_sec *
+          reference_velocities_.at(imu_interval.reference_end_time_index)
+              .velocity;
+
+      const TimestampedAcceleration &timestamped_raw_acceleration =
+          accelerations_.at(sensor_indices.at(1));
+      const Eigen::Vector3d raw_acceleration =
+          Eigen::Vector3d(timestamped_raw_acceleration.acc_x,
+                          timestamped_raw_acceleration.acc_y,
+                          timestamped_raw_acceleration.acc_z);
+      const Eigen::Vector3d imu_delta_velocity =
+          imu_duration_sec * (acceleration_global_bias +
+                              integrated_rotation_matrix *
+                                  (acceleration_local_bias + raw_acceleration));
+
+      // Accumulating derivatives wrt per-segment scalar velocity
+      d_integrated_travel_d_velocity_scales.push_back(
+          time_weighted_velocity_axis);
+      // Accumulating derivative wrt forward axis direction.
+      d_integrated_travel_d_forward_axis +=
+          scalar_velocity * imu_duration_sec * integrated_rotation_matrix;
+
+      integrated_rotation = integrated_rotation * raw_rotation;
+      const Eigen::Matrix3d end_integrated_rotation_matrix =
+          integrated_rotation.toRotationMatrix();
+      // Make sure incremented index is within bounds.
+      CHECK_LT(imu_interval_global_idx + 1, scalar_velocities.size());
+      const Eigen::Matrix3d delta_forward_transform =
+          end_integrated_rotation_matrix *
+              scalar_velocities[imu_interval_global_idx + 1] -
+          integrated_rotation_matrix *
+              scalar_velocities[imu_interval_global_idx];
+      const Eigen::Vector3d forward_axis_delta_velocity =
+          delta_forward_transform * local_forward_axis;
+
+      const Eigen::Vector3d delta_velocity_diff =
+          forward_axis_delta_velocity - imu_delta_velocity;
+      acceleration_match_loss += delta_velocity_diff.squaredNorm();
+
+      // wrt forward axis
+      grad.segment(FORWARD_AXIS_START, 3) +=
+          2.0 * delta_forward_transform.transpose() * delta_forward_transform *
+          local_forward_axis;
+      grad.segment(FORWARD_AXIS_START, 3) -=
+          2.0 * delta_forward_transform.transpose() * imu_delta_velocity;
+
+      // wrt velocity magnitudes before and after
+      grad[VELOCITY_SCALES_START + imu_interval_global_idx] +=
+          2.0 * scalar_velocities[imu_interval_global_idx] *
+          local_forward_axis.transpose() *
+          integrated_rotation_matrix.transpose() * integrated_rotation_matrix *
+          local_forward_axis;
+      grad[VELOCITY_SCALES_START + imu_interval_global_idx] -=
+          2.0 * local_forward_axis.transpose() *
+          integrated_rotation_matrix.transpose() *
+          (end_integrated_rotation_matrix *
+               scalar_velocities[imu_interval_global_idx + 1] *
+               local_forward_axis -
+           imu_delta_velocity);
+
+      grad[VELOCITY_SCALES_START + imu_interval_global_idx + 1] +=
+          2.0 * scalar_velocities[imu_interval_global_idx + 1] *
+          local_forward_axis.transpose() *
+          end_integrated_rotation_matrix.transpose() *
+          end_integrated_rotation_matrix * local_forward_axis;
+      grad[VELOCITY_SCALES_START + imu_interval_global_idx + 1] -=
+          2.0 * local_forward_axis.transpose() *
+          end_integrated_rotation_matrix.transpose() *
+          (integrated_rotation_matrix *
+               scalar_velocities[imu_interval_global_idx] * local_forward_axis +
+           imu_delta_velocity);
+
+      // wrt global acceleration bias
+      grad.segment(ACCELERATION_GLOBAL_BIAS_START, 3) +=
+          2.0 * imu_duration_sec * imu_duration_sec * acceleration_global_bias;
+      grad.segment(ACCELERATION_GLOBAL_BIAS_START, 3) +=
+          2.0 * imu_duration_sec *
+          (imu_duration_sec * integrated_rotation_matrix *
+           (acceleration_local_bias + raw_acceleration));
+      grad.segment(ACCELERATION_GLOBAL_BIAS_START, 3) -=
+          2.0 * imu_duration_sec * forward_axis_delta_velocity;
+
+      // wrt local acceleration bias
+      grad.segment(ACCELERATION_LOCAL_BIAS_START, 3) +=
+          2.0 * imu_duration_sec * imu_duration_sec *
+          integrated_rotation_matrix.transpose() * integrated_rotation_matrix *
+          acceleration_local_bias;
+      grad.segment(ACCELERATION_LOCAL_BIAS_START, 3) -=
+          2.0 * imu_duration_sec * integrated_rotation_matrix.transpose() *
+          (forward_axis_delta_velocity -
+           imu_duration_sec * acceleration_global_bias -
+           imu_duration_sec * integrated_rotation_matrix * raw_acceleration);
+    }
+
+    const double distance_diff = integrated_travel.norm() - reference_distance;
+    travel_distance_loss += distance_diff * distance_diff;
+    const Eigen::Vector3d d_loss_d_travel = 2.0 * distance_diff *
+                                            integrated_travel /
+                                            (integrated_travel.norm() + 1e-5);
+
+    grad.segment(FORWARD_AXIS_START, 3) +=
+        d_integrated_travel_d_forward_axis.transpose() * d_loss_d_travel;
+
+    for (size_t reference_imu_idx = 0;
+         reference_imu_idx < reference_interval.size(); ++reference_imu_idx) {
+      const InterpolationInterval &imu_interval =
+          reference_interval.at(reference_imu_idx);
+      const Eigen::Vector3d &d_travel_d_velocity_scale =
+          d_integrated_travel_d_velocity_scales.at(reference_imu_idx);
+      grad[VELOCITY_SCALES_START + imu_interval.interpolation_end_time_index] +=
+          d_travel_d_velocity_scale.dot(d_loss_d_travel);
+    }
+  }
+
+  const double result = travel_distance_loss + acceleration_match_loss +
+                        forward_axis_magnitude_loss;
+
+  LOG(INFO) << "FixedForwardAxisCalibrator overall: " << result
+            << "; travel: " << travel_distance_loss << "; acceleration "
+            << acceleration_match_loss
+            << "; forward axis: " << forward_axis_magnitude_loss;
+
+  return result;
+}
+
+const MergedTimeSeries &FixedForwardAxisCalibrator::ImuTimes() const {
+  return imu_times_;
 }
 }

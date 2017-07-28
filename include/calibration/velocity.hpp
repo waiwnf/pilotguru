@@ -74,6 +74,51 @@ private:
   const std::vector<std::vector<pilotguru::InterpolationInterval>>
       reference_intervals_;
 };
+
+// Autocalibrator with the assumption that forward motion is possible
+// only along one axis, fixed in the vehicle reference frame (i.e. the 
+// longitudinal axis of the vehicle). Finds the optimal accelerometer 
+// calibration parameters (local and global bias), the local forward motion axis 
+// and scalar velocity on each IMU measurement interval.
+// 
+// The constraint on the motion axis magnitude is soft, so it is important to
+// compute the forward velocity as (scalar velocity) * (motion axis).
+class FixedForwardAxisCalibrator {
+public:
+  // Does not take ownership of arguments. All vectors must outlive this object.
+  FixedForwardAxisCalibrator(
+      const std::vector<TimestampedVelocity>
+          &reference_velocities /* from GPS */,
+      const std::vector<TimestampedRotationVelocity> &rotation_velocities,
+      const std::vector<TimestampedAcceleration> &accelerations);
+
+  // For the LBFGS implementation.
+  double operator()(const Eigen::VectorXd &x, Eigen::VectorXd &grad);
+
+  const MergedTimeSeries& ImuTimes() const;
+
+  // Offsets into the flat overall parameters vector corresponding to first 
+  // elements of the respective calibration parameters.
+  static const size_t ACCELERATION_GLOBAL_BIAS_START = 0;
+  static const size_t ACCELERATION_LOCAL_BIAS_START = 3;
+  static const size_t FORWARD_AXIS_START = 6;
+  static const size_t VELOCITY_SCALES_START = 9;
+
+private:
+  const std::vector<TimestampedVelocity> &reference_velocities_;
+  const std::vector<TimestampedRotationVelocity> &rotation_velocities_;
+  const std::vector<TimestampedAcceleration> &accelerations_;
+
+  // Events timestamps.
+  const std::vector<long> rotation_times_, accelerations_times_;
+
+  // Merged rotations and accelerations time series.
+  const MergedTimeSeries imu_times_;
+
+  // Intervals of the merged rotations/accelerations wrt reference velocities.
+  const std::vector<std::vector<pilotguru::InterpolationInterval>>
+      reference_intervals_;
+};
 }
 
 #endif // PILOTGURU_CALIBRATION_VELOCITY_HPP_
