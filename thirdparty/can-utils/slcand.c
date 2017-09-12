@@ -334,12 +334,16 @@ int main(int argc, char *argv[])
 		syslogger(LOG_NOTICE, "Cannot set attributes for device \"%s\": %s!\n", ttypath, strerror(errno));
 
 	if (speed) {
-		sprintf(buf, "C\rS%s\r", speed);
+		sprintf(buf, "C\r");
+		write(fd, buf, strlen(buf));
+		sprintf(buf, "S%s\r", speed);
 		write(fd, buf, strlen(buf));
 	}
 
 	if (btr) {
-		sprintf(buf, "C\rs%s\r", btr);
+		sprintf(buf, "C\r");
+		write(fd, buf, strlen(buf));
+		sprintf(buf, "s%s\r", btr);
 		write(fd, buf, strlen(buf));
 	}
 
