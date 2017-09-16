@@ -411,13 +411,73 @@ class RamboNVidiaNet(SequentialNet):
 
     self.fc4 = self.AddLinear(out_dims)
 
+class DeepNVidiaNet(SequentialNet):
+
+  def __init__(self, in_shape, out_dims, drouput_prob):
+    super(DeepNVidiaNet, self).__init__(in_shape)
+
+    self.conv1 = self.AddConv2d(36, 5, stride=2)
+    self.c1bn = self.AddBatchNorm2d()
+    self.AddActivation(RELU)
+    self.drop1 = self.AddDropout(drouput_prob, DROPOUT_2D)
+
+    self.conv2 = self.AddConv2d(48, 5, stride=2)
+    self.c2bn = self.AddBatchNorm2d()
+    self.AddActivation(RELU)
+    self.drop2 = self.AddDropout(drouput_prob, DROPOUT_2D)
+
+    self.conv3 = self.AddConv2d(48, 5, stride=1)
+    self.c3bn = self.AddBatchNorm2d()
+    self.AddActivation(RELU)
+    self.drop3 = self.AddDropout(drouput_prob, DROPOUT_2D)
+
+    self.conv4 = self.AddConv2d(64, 3, stride=1)
+    self.c4bn = self.AddBatchNorm2d()
+    self.AddActivation(RELU)
+    self.drop4 = self.AddDropout(drouput_prob, DROPOUT_2D)
+
+    self.conv5 = self.AddConv2d(64, 3, stride=2)
+    self.c5bn = self.AddBatchNorm2d()
+    self.AddActivation(RELU)
+    self.drop5 = self.AddDropout(drouput_prob, DROPOUT_2D)
+
+    self.conv6 = self.AddConv2d(64, 3, stride=1)
+    self.c6bn = self.AddBatchNorm2d()
+    self.AddActivation(RELU)
+    self.drop6 = self.AddDropout(drouput_prob, DROPOUT_2D)
+
+    self.conv7 = self.AddConv2d(64, 3, stride=1)
+    self.c7bn = self.AddBatchNorm2d()
+    self.AddActivation(RELU)
+    self.drop7 = self.AddDropout(drouput_prob, DROPOUT_2D)
+
+    self.conv8 = self.AddConv2d(64, 3, stride=1)
+    self.c8bn = self.AddBatchNorm2d()
+    self.AddActivation(RELU)
+    self.drop8 = self.AddDropout(drouput_prob, DROPOUT_2D)
+
+    self.AddFlatten()
+
+    self.fc1 = self.AddLinear(100)
+    self.fc1bn = self.AddBatchNorm1d()
+    self.AddActivation(RELU)
+    self.fc1_drop = self.AddDropout(drouput_prob, DROPOUT_VANILLA)
+
+    self.fc2 = self.AddLinear(50)
+    self.fc2bn = self.AddBatchNorm1d()
+    self.AddActivation(RELU)
+
+    self.fc3 = self.AddLinear(10)
+    self.AddActivation(RELU)
+
+    self.fc4 = self.AddLinear(out_dims)
 
 NVIDIA_NET_NAME = 'nvidia'
 RAMBO_NET_NAME = 'rambo'
 RAMBO_COMMA_NET_NAME = 'rambo-comma'
 RAMBO_NVIDIA_DEEP_NET_NAME = 'rambo-nvidia-deep'
 RAMBO_NVIDIA_SHALLOW_NET_NAME = 'rambo-nvidia-shallow'
-
+DEEP_NVIDIA_NET_NAME = 'nvidia-deep'
 
 IN_SHAPE = 'in_shape'
 OUT_DIMS = 'out_dims'
@@ -439,5 +499,8 @@ def MakeNetwork(net_name, **kwargs):
   elif net_name == RAMBO_NVIDIA_SHALLOW_NET_NAME:
     return RamboNVidiaNet(
         True, kwargs[IN_SHAPE], kwargs[OUT_DIMS], kwargs[DROPOUT_PROB])
+  elif net_name == DEEP_NVIDIA_NET_NAME:
+    return DeepNVidiaNet(
+        kwargs[IN_SHAPE], kwargs[OUT_DIMS], kwargs[DROPOUT_PROB])
   else:
     assert False, ('Unknown network name: %s' % (net_name,))
