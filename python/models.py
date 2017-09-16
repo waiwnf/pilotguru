@@ -110,6 +110,13 @@ class SequentialNet(nn.Module):
   def AddDropout(self, p, dropout_type):
     return self.AddLayer(MakeDropout(self.OutShape(), p, dropout_type))
 
+  def AddConvBlock(self, out_channels, kernel_size, stride, dropout_prob):
+    conv = self.AddConv2d(out_channels, kernel_size, stride)
+    bn = self.AddBatchNorm2d()
+    activation = self.AddActivation(RELU)
+    dropout = self.AddDropout(dropout_prob, DROPOUT_2D)
+    return conv, bn, activation, dropout
+
   def AddLayer(self, layer_tuple):
     layer, out_shape = layer_tuple
     self.layers.append(layer)
@@ -154,44 +161,34 @@ class ToyConvNet(SequentialNet):
 
 class NvidiaSingleFrameNet(SequentialNet):
 
-  def __init__(self, in_shape, out_dims, drouput_prob):
+  def __init__(self, in_shape, out_dims, dropout_prob):
     super(NvidiaSingleFrameNet, self).__init__(in_shape)
-    self.conv1 = self.AddConv2d(24, 5, stride=2)
-    self.c1bn = self.AddBatchNorm2d()
-    self.AddActivation(RELU)
-    self.drop1 = self.AddDropout(drouput_prob, DROPOUT_2D)
+    self.conv1, self.c1_norm, self.c1_act, self.c1_drop = self.AddConvBlock(
+        24, 5, 2, dropout_prob)
 
-    self.conv2 = self.AddConv2d(36, 5, stride=2)
-    self.c2bn = self.AddBatchNorm2d()
-    self.AddActivation(RELU)
-    self.drop2 = self.AddDropout(drouput_prob, DROPOUT_2D)
+    self.conv2, self.c2_norm, self.c2_act, self.c2_drop = self.AddConvBlock(
+        36, 5, 2, dropout_prob)
 
-    self.conv3 = self.AddConv2d(48, 5, stride=2)
-    self.c3bn = self.AddBatchNorm2d()
-    self.AddActivation(RELU)
-    self.drop3 = self.AddDropout(drouput_prob, DROPOUT_2D)
+    self.conv3, self.c3_norm, self.c3_act, self.c3_drop = self.AddConvBlock(
+        48, 5, 2, dropout_prob)
 
-    self.conv4 = self.AddConv2d(64, 3)
-    self.c4bn = self.AddBatchNorm2d()
-    self.AddActivation(RELU)
-    self.drop4 = self.AddDropout(drouput_prob, DROPOUT_2D)
-
-    self.conv5 = self.AddConv2d(64, 3)
-    self.c5bn = self.AddBatchNorm2d()
-    self.AddActivation(RELU)
-    self.drop5 = self.AddDropout(drouput_prob, DROPOUT_2D)
+    self.conv4, self.c4_norm, self.c4_act, self.c4_drop = self.AddConvBlock(
+        64, 3, 1, dropout_prob)
+    
+    self.conv5, self.c5_norm, self.c5_act, self.c5_drop = self.AddConvBlock(
+        64, 3, 1, dropout_prob)
 
     self.AddFlatten()
 
     self.fc1 = self.AddLinear(1164)
     self.fc1bn = self.AddBatchNorm1d()
     self.AddActivation(RELU)
-    self.fc1_drop = self.AddDropout(drouput_prob, DROPOUT_VANILLA)
+    self.fc1_drop = self.AddDropout(dropout_prob, DROPOUT_VANILLA)
 
     self.fc2 = self.AddLinear(100)
     self.fc2bn = self.AddBatchNorm1d()
     self.AddActivation(RELU)
-    self.fc2_drop = self.AddDropout(drouput_prob, DROPOUT_VANILLA)
+    self.fc2_drop = self.AddDropout(dropout_prob, DROPOUT_VANILLA)
 
     self.fc3 = self.AddLinear(50)
     self.fc3bn = self.AddBatchNorm1d()
@@ -335,29 +332,24 @@ class UdacityRamboNet(nn.Module):
 
 class RamboCommaNet(SequentialNet):
 
-  def __init__(self, in_shape, out_dims, drouput_prob):
+  def __init__(self, in_shape, out_dims, dropout_prob):
     super(RamboCommaNet, self).__init__(in_shape)
-    self.conv1 = self.AddConv2d(16, 8, stride=4)
-    self.c1bn = self.AddBatchNorm2d()
-    self.AddActivation(RELU)
-    self.drop1 = self.AddDropout(drouput_prob, DROPOUT_2D)
 
-    self.conv2 = self.AddConv2d(32, 5, stride=2)
-    self.c2bn = self.AddBatchNorm2d()
-    self.AddActivation(RELU)
-    self.drop2 = self.AddDropout(drouput_prob, DROPOUT_2D)
+    self.conv1, self.c1_norm, self.c1_act, self.c1_drop = self.AddConvBlock(
+        16, 8, 4, dropout_prob)
 
-    self.conv3 = self.AddConv2d(64, 5, stride=2)
-    self.c3bn = self.AddBatchNorm2d()
-    self.AddActivation(RELU)
-    self.drop3 = self.AddDropout(drouput_prob, DROPOUT_2D)
+    self.conv2, self.c2_norm, self.c2_act, self.c2_drop = self.AddConvBlock(
+        32, 5, 2, dropout_prob)
+
+    self.conv3, self.c3_norm, self.c3_act, self.c3_drop = self.AddConvBlock(
+        64, 5, 2, dropout_prob)
 
     self.AddFlatten()
 
     self.fc1 = self.AddLinear(512)
     self.fc1bn = self.AddBatchNorm1d()
     self.AddActivation(RELU)
-    self.fc1_drop = self.AddDropout(drouput_prob, DROPOUT_VANILLA)
+    self.fc1_drop = self.AddDropout(dropout_prob, DROPOUT_VANILLA)
 
     self.fc2 = self.AddLinear(10)
     self.AddActivation(RELU)
@@ -366,41 +358,31 @@ class RamboCommaNet(SequentialNet):
 
 class RamboNVidiaNet(SequentialNet):
 
-  def __init__(self, skip_first_conv_layer, in_shape, out_dims, drouput_prob):
+  def __init__(self, skip_first_conv_layer, in_shape, out_dims, dropout_prob):
     super(RamboNVidiaNet, self).__init__(in_shape)
 
     if not skip_first_conv_layer:
-      self.conv1 = self.AddConv2d(24, 5, stride=2)
-      self.c1bn = self.AddBatchNorm2d()
-      self.AddActivation(RELU)
-      self.drop1 = self.AddDropout(drouput_prob, DROPOUT_2D)
+      self.conv1, self.c1_norm, self.c1_act, self.c1_drop = self.AddConvBlock(
+          24, 5, 2, dropout_prob)
 
-    self.conv2 = self.AddConv2d(36, 5, stride=2)
-    self.c2bn = self.AddBatchNorm2d()
-    self.AddActivation(RELU)
-    self.drop2 = self.AddDropout(drouput_prob, DROPOUT_2D)
+    self.conv2, self.c2_norm, self.c2_act, self.c2_drop = self.AddConvBlock(
+        36, 5, 2, dropout_prob)
 
-    self.conv3 = self.AddConv2d(48, 5, stride=2)
-    self.c3bn = self.AddBatchNorm2d()
-    self.AddActivation(RELU)
-    self.drop3 = self.AddDropout(drouput_prob, DROPOUT_2D)
+    self.conv3, self.c3_norm, self.c3_act, self.c3_drop = self.AddConvBlock(
+        48, 5, 2, dropout_prob)
 
-    self.conv4 = self.AddConv2d(64, 3, stride=2)
-    self.c4bn = self.AddBatchNorm2d()
-    self.AddActivation(RELU)
-    self.drop4 = self.AddDropout(drouput_prob, DROPOUT_2D)
+    self.conv4, self.c4_norm, self.c4_act, self.c4_drop = self.AddConvBlock(
+        64, 3, 2, dropout_prob)
 
-    self.conv5 = self.AddConv2d(64, 3, stride=2)
-    self.c5bn = self.AddBatchNorm2d()
-    self.AddActivation(RELU)
-    self.drop5 = self.AddDropout(drouput_prob, DROPOUT_2D)
+    self.conv5, self.c5_norm, self.c5_act, self.c5_drop = self.AddConvBlock(
+        64, 3, 2, dropout_prob)
 
     self.AddFlatten()
 
     self.fc1 = self.AddLinear(100)
     self.fc1bn = self.AddBatchNorm1d()
     self.AddActivation(RELU)
-    self.fc1_drop = self.AddDropout(drouput_prob, DROPOUT_VANILLA)
+    self.fc1_drop = self.AddDropout(dropout_prob, DROPOUT_VANILLA)
 
     self.fc2 = self.AddLinear(50)
     self.fc2bn = self.AddBatchNorm1d()
@@ -413,55 +395,39 @@ class RamboNVidiaNet(SequentialNet):
 
 class DeepNVidiaNet(SequentialNet):
 
-  def __init__(self, in_shape, out_dims, drouput_prob):
+  def __init__(self, in_shape, out_dims, dropout_prob):
     super(DeepNVidiaNet, self).__init__(in_shape)
 
-    self.conv1 = self.AddConv2d(36, 5, stride=2)
-    self.c1bn = self.AddBatchNorm2d()
-    self.AddActivation(RELU)
-    self.drop1 = self.AddDropout(drouput_prob, DROPOUT_2D)
+    self.conv1, self.c1_norm, self.c1_act, self.c1_drop = self.AddConvBlock(
+        36, 5, 2, dropout_prob)
 
-    self.conv2 = self.AddConv2d(48, 5, stride=2)
-    self.c2bn = self.AddBatchNorm2d()
-    self.AddActivation(RELU)
-    self.drop2 = self.AddDropout(drouput_prob, DROPOUT_2D)
+    self.conv2, self.c2_norm, self.c2_act, self.c2_drop = self.AddConvBlock(
+        48, 5, 2, dropout_prob)
 
-    self.conv3 = self.AddConv2d(48, 5, stride=1)
-    self.c3bn = self.AddBatchNorm2d()
-    self.AddActivation(RELU)
-    self.drop3 = self.AddDropout(drouput_prob, DROPOUT_2D)
+    self.conv3, self.c3_norm, self.c3_act, self.c3_drop = self.AddConvBlock(
+        48, 5, 1, dropout_prob)
 
-    self.conv4 = self.AddConv2d(64, 3, stride=1)
-    self.c4bn = self.AddBatchNorm2d()
-    self.AddActivation(RELU)
-    self.drop4 = self.AddDropout(drouput_prob, DROPOUT_2D)
+    self.conv4, self.c4_norm, self.c4_act, self.c4_drop = self.AddConvBlock(
+        64, 3, 1, dropout_prob)
 
-    self.conv5 = self.AddConv2d(64, 3, stride=2)
-    self.c5bn = self.AddBatchNorm2d()
-    self.AddActivation(RELU)
-    self.drop5 = self.AddDropout(drouput_prob, DROPOUT_2D)
+    self.conv5, self.c5_norm, self.c5_act, self.c5_drop = self.AddConvBlock(
+        64, 3, 2, dropout_prob)
 
-    self.conv6 = self.AddConv2d(64, 3, stride=1)
-    self.c6bn = self.AddBatchNorm2d()
-    self.AddActivation(RELU)
-    self.drop6 = self.AddDropout(drouput_prob, DROPOUT_2D)
+    self.conv6, self.c6_norm, self.c6_act, self.c6_drop = self.AddConvBlock(
+        64, 3, 1, dropout_prob)
 
-    self.conv7 = self.AddConv2d(64, 3, stride=1)
-    self.c7bn = self.AddBatchNorm2d()
-    self.AddActivation(RELU)
-    self.drop7 = self.AddDropout(drouput_prob, DROPOUT_2D)
+    self.conv7, self.c7_norm, self.c7_act, self.c7_drop = self.AddConvBlock(
+        64, 3, 1, dropout_prob)
 
-    self.conv8 = self.AddConv2d(64, 3, stride=1)
-    self.c8bn = self.AddBatchNorm2d()
-    self.AddActivation(RELU)
-    self.drop8 = self.AddDropout(drouput_prob, DROPOUT_2D)
+    self.conv8, self.c8_norm, self.c8_act, self.c8_drop = self.AddConvBlock(
+        64, 3, 1, dropout_prob)
 
     self.AddFlatten()
 
     self.fc1 = self.AddLinear(100)
     self.fc1bn = self.AddBatchNorm1d()
     self.AddActivation(RELU)
-    self.fc1_drop = self.AddDropout(drouput_prob, DROPOUT_VANILLA)
+    self.fc1_drop = self.AddDropout(dropout_prob, DROPOUT_VANILLA)
 
     self.fc2 = self.AddLinear(50)
     self.fc2bn = self.AddBatchNorm1d()
