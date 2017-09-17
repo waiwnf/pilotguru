@@ -114,8 +114,18 @@ class SequentialNet(nn.Module):
     conv = self.AddConv2d(out_channels, kernel_size, stride)
     bn = self.AddBatchNorm2d()
     activation = self.AddActivation(RELU)
-    dropout = self.AddDropout(dropout_prob, DROPOUT_2D)
+    dropout = None
+    if dropout_prob > 0:
+      dropout = self.AddDropout(dropout_prob, DROPOUT_2D)
     return conv, bn, activation, dropout
+
+  def AdFcBlock(self, out_channels, dropout_prob):
+    fc = self.AddLinear(out_channels)
+    bn = self.AddBatchNorm1d()
+    activation = self.AddActivation(RELU)
+    if dropout_prob > 0:
+      dropout = self.AddDropout(dropout_prob, DROPOUT_VANILLA)
+    return fc, bn, activation, dropout
 
   def AddLayer(self, layer_tuple):
     layer, out_shape = layer_tuple
@@ -165,37 +175,26 @@ class NvidiaSingleFrameNet(SequentialNet):
     super(NvidiaSingleFrameNet, self).__init__(in_shape)
     self.conv1, self.c1_norm, self.c1_act, self.c1_drop = self.AddConvBlock(
         24, 5, 2, dropout_prob)
-
     self.conv2, self.c2_norm, self.c2_act, self.c2_drop = self.AddConvBlock(
         36, 5, 2, dropout_prob)
-
     self.conv3, self.c3_norm, self.c3_act, self.c3_drop = self.AddConvBlock(
         48, 5, 2, dropout_prob)
-
     self.conv4, self.c4_norm, self.c4_act, self.c4_drop = self.AddConvBlock(
         64, 3, 1, dropout_prob)
-    
     self.conv5, self.c5_norm, self.c5_act, self.c5_drop = self.AddConvBlock(
         64, 3, 1, dropout_prob)
 
     self.AddFlatten()
 
-    self.fc1 = self.AddLinear(1164)
-    self.fc1bn = self.AddBatchNorm1d()
-    self.AddActivation(RELU)
-    self.fc1_drop = self.AddDropout(dropout_prob, DROPOUT_VANILLA)
-
-    self.fc2 = self.AddLinear(100)
-    self.fc2bn = self.AddBatchNorm1d()
-    self.AddActivation(RELU)
-    self.fc2_drop = self.AddDropout(dropout_prob, DROPOUT_VANILLA)
-
-    self.fc3 = self.AddLinear(50)
-    self.fc3bn = self.AddBatchNorm1d()
-    self.AddActivation(RELU)
+    self.fc1, self.fc1_norm, self.fc1_act, self.fc1_drop = self.AdFcBlock(
+        1164, dropout_prob)
+    self.fc2, self.fc2_norm, self.fc2_act, self.fc2_drop = self.AdFcBlock(
+        100, dropout_prob)
+    self.fc3, self.fc3_norm, self.fc13_act, self.fc3_drop = self.AdFcBlock(
+        50, 0)
 
     self.fc4 = self.AddLinear(10)
-    self.AddActivation(RELU)
+    self.fc4_act = self.AddActivation(RELU)
 
     self.fc5 = self.AddLinear(out_dims)
 
@@ -346,15 +345,13 @@ class RamboCommaNet(SequentialNet):
 
     self.AddFlatten()
 
-    self.fc1 = self.AddLinear(512)
-    self.fc1bn = self.AddBatchNorm1d()
-    self.AddActivation(RELU)
-    self.fc1_drop = self.AddDropout(dropout_prob, DROPOUT_VANILLA)
+    self.fc1, self.fc1_norm, self.fc1_act, self.fc1_drop = self.AdFcBlock(
+        512, dropout_prob)
 
     self.fc2 = self.AddLinear(10)
     self.AddActivation(RELU)
 
-    self.fc5 = self.AddLinear(out_dims)
+    self.fc3 = self.AddLinear(out_dims)
 
 class RamboNVidiaNet(SequentialNet):
 
@@ -379,14 +376,10 @@ class RamboNVidiaNet(SequentialNet):
 
     self.AddFlatten()
 
-    self.fc1 = self.AddLinear(100)
-    self.fc1bn = self.AddBatchNorm1d()
-    self.AddActivation(RELU)
-    self.fc1_drop = self.AddDropout(dropout_prob, DROPOUT_VANILLA)
-
-    self.fc2 = self.AddLinear(50)
-    self.fc2bn = self.AddBatchNorm1d()
-    self.AddActivation(RELU)
+    self.fc1, self.fc1_norm, self.fc1_act, self.fc1_drop = self.AdFcBlock(
+        100, dropout_prob)
+    self.fc2, self.fc2_norm, self.fc2_act, self.fc2_drop = self.AdFcBlock(
+        1164, 0)
 
     self.fc3 = self.AddLinear(10)
     self.AddActivation(RELU)
@@ -424,14 +417,10 @@ class DeepNVidiaNet(SequentialNet):
 
     self.AddFlatten()
 
-    self.fc1 = self.AddLinear(100)
-    self.fc1bn = self.AddBatchNorm1d()
-    self.AddActivation(RELU)
-    self.fc1_drop = self.AddDropout(dropout_prob, DROPOUT_VANILLA)
-
-    self.fc2 = self.AddLinear(50)
-    self.fc2bn = self.AddBatchNorm1d()
-    self.AddActivation(RELU)
+    self.fc1, self.fc1_norm, self.fc1_act, self.fc1_drop = self.AdFcBlock(
+        100, dropout_prob)
+    self.fc2, self.fc2_norm, self.fc2_act, self.fc2_drop = self.AdFcBlock(
+        1164, dropout_prob)
 
     self.fc3 = self.AddLinear(10)
     self.AddActivation(RELU)
