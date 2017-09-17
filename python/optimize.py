@@ -1,6 +1,7 @@
 import time
 from collections import namedtuple
 
+import tensorboard_logger
 import torch
 import torch.nn
 
@@ -67,7 +68,11 @@ def TrainModel(
     val_loader,
     train_settings,
     out_prefix,
-    print_log=True):
+    print_log=True,
+    log_dir=''):
+  if log_dir != '':
+    tensorboard_logger.configure(log_dir, flush_secs=5)
+
   train_log = []
   min_validation_loss = float('inf')
   loss_settings = train_settings.loss_settings
@@ -137,9 +142,14 @@ def TrainModel(
       min_validation_loss = validation_avg_loss
       save_duration = time.time() - save_start_time
     
+    # Maybe print metrics to screen.
     if print_log:
       print('Epoch %d;  %s%s' %
           (epoch, TrainLogEventToString(epoch_metrics), val_improved_marker))
+    # Maybe log metrics to tensorboard.
+    if log_dir != '':
+      tensorboard_logger.log_value('train_loss', avg_loss, epoch)
+      tensorboard_logger.log_value('val_loss', validation_avg_loss, epoch)
   
   net.cpu()
   torch.save(net.state_dict(), out_prefix + '-last.pth')

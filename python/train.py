@@ -37,6 +37,7 @@ if __name__ == '__main__':
             models.DROPOUT: models.DROPOUT_2D}}))
   parser.add_argument('--label_dimensions', type=int, default=1)
   parser.add_argument('--out_prefix', required=True)
+  parser.add_argument('--log_dir', default='')
   parser.add_argument('--dropout_prob', type=float, default=0.0)
   parser.add_argument('--max_horizontal_shift_pixels', type=int, default=0)
   parser.add_argument('--horizontal_label_shift_rate', type=float, default=0.0)
@@ -94,4 +95,5 @@ if __name__ == '__main__':
       train_loader,
       val_loader,
       train_settings,
-      args.out_prefix)
+      args.out_prefix,
+      log_dir=args.log_dir)
