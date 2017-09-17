@@ -3,12 +3,19 @@ import math
 import torch
 import torch.nn as nn
 
+CONV = 'conv'
+FC = 'fc'
+
+ACTIVATION = 'activation'
 RELU = 'relu'
 SELU = 'selu'
 
+DROPOUT = 'dropout'
 DROPOUT_VANILLA = 'vanilla'
 DROPOUT_2D = '2d'
 DROPOUT_ALPHA = 'alpha'
+
+BATCHNORM = 'batchnorm'
 
 def ConvOutSize(in_size, kernel_size, stride=1, padding=0, dilation=1):
   return math.floor(
@@ -77,10 +84,11 @@ def MakeDropout(in_shape, p, dropout_type):
     assert False, 'Unknown dropout type: %s' % (dropout_type,)
 
 class SequentialNet(nn.Module):
-  def __init__(self, in_shape):
+  def __init__(self, in_shape, options):
     super(SequentialNet, self).__init__()
     self.layers = []
     self.out_shapes = [in_shape]
+    self.options = options
   
   def OutShape(self):
     return self.out_shapes[-1]
@@ -112,19 +120,23 @@ class SequentialNet(nn.Module):
 
   def AddConvBlock(self, out_channels, kernel_size, stride, dropout_prob):
     conv = self.AddConv2d(out_channels, kernel_size, stride)
-    bn = self.AddBatchNorm2d()
-    activation = self.AddActivation(RELU)
+    bn = None
+    if self.options[CONV][BATCHNORM] == True:
+      bn = self.AddBatchNorm2d()
+    activation = self.AddActivation(self.options[CONV][ACTIVATION])
     dropout = None
     if dropout_prob > 0:
-      dropout = self.AddDropout(dropout_prob, DROPOUT_2D)
+      dropout = self.AddDropout(dropout_prob, self.options[CONV][DROPOUT])
     return conv, bn, activation, dropout
 
   def AdFcBlock(self, out_channels, dropout_prob):
     fc = self.AddLinear(out_channels)
-    bn = self.AddBatchNorm1d()
-    activation = self.AddActivation(RELU)
+    bn = None
+    if self.options[FC][BATCHNORM] == True:
+      bn = self.AddBatchNorm1d()
+    activation = self.AddActivation(self.options[FC][ACTIVATION])
     if dropout_prob > 0:
-      dropout = self.AddDropout(dropout_prob, DROPOUT_VANILLA)
+      dropout = self.AddDropout(dropout_prob, self.options[FC][DROPOUT])
     return fc, bn, activation, dropout
 
   def AddLayer(self, layer_tuple):
@@ -143,36 +155,33 @@ class SequentialNet(nn.Module):
 class ToyConvNet(SequentialNet):
   """Simple 3-conv + 3-fc model, mostly for debugging purposes."""
 
-  def __init__(self, in_shape):
-    super(ToyConvNet, self).__init__(in_shape)
+  def __init__(self, in_shape, options):
+    super(ToyConvNet, self).__init__(in_shape, options)
 
-    self.conv1 = self.AddConv2d(6, 5)
-    self.c1bn = self.AddBatchNorm2d()
-    self.AddActivation(RELU)
+    self.conv1, self.c1_norm, self.c1_act, self.c1_drop = self.AddConvBlock(
+        6, 5, 1, 0)
     self.pool1 = self.AddMaxPool2d(2)
 
-    self.conv2 = self.AddConv2d(16, 5)
-    self.c2bn = self.AddBatchNorm2d()
-    self.AddActivation(RELU)
+    self.conv2, self.c2_norm, self.c2_act, self.c2_drop = self.AddConvBlock(
+        16, 5, 1, 0)
     self.pool2 = self.AddMaxPool2d(2)
 
-    self.conv3 = self.AddConv2d(1, 5)
-    self.c3bn = self.AddBatchNorm2d()
-    self.AddActivation(RELU)
+    self.conv3, self.c3_norm, self.c3_act, self.c3_drop = self.AddConvBlock(
+        1, 5, 1, 0)
     self.pool3 = self.AddMaxPool2d(2)
 
     self.AddFlatten()
 
     self.fc1 = self.AddLinear(120)
-    self.AddActivation(RELU)
+    self.AddActivation(self.options[FC][ACTIVATION])
     self.fc2 = self.AddLinear(84)
-    self.AddActivation(RELU)
+    self.AddActivation(self.options[FC][ACTIVATION])
     self.fc3 = self.AddLinear(1)
 
 class NvidiaSingleFrameNet(SequentialNet):
 
-  def __init__(self, in_shape, out_dims, dropout_prob):
-    super(NvidiaSingleFrameNet, self).__init__(in_shape)
+  def __init__(self, in_shape, out_dims, dropout_prob, options):
+    super(NvidiaSingleFrameNet, self).__init__(in_shape, options)
     self.conv1, self.c1_norm, self.c1_act, self.c1_drop = self.AddConvBlock(
         24, 5, 2, dropout_prob)
     self.conv2, self.c2_norm, self.c2_act, self.c2_drop = self.AddConvBlock(
@@ -331,8 +340,8 @@ class UdacityRamboNet(nn.Module):
 
 class RamboCommaNet(SequentialNet):
 
-  def __init__(self, in_shape, out_dims, dropout_prob):
-    super(RamboCommaNet, self).__init__(in_shape)
+  def __init__(self, in_shape, out_dims, dropout_prob, options):
+    super(RamboCommaNet, self).__init__(in_shape, options)
 
     self.conv1, self.c1_norm, self.c1_act, self.c1_drop = self.AddConvBlock(
         16, 8, 4, dropout_prob)
@@ -355,8 +364,9 @@ class RamboCommaNet(SequentialNet):
 
 class RamboNVidiaNet(SequentialNet):
 
-  def __init__(self, skip_first_conv_layer, in_shape, out_dims, dropout_prob):
-    super(RamboNVidiaNet, self).__init__(in_shape)
+  def __init__(
+        self, skip_first_conv_layer, in_shape, out_dims, dropout_prob, options):
+    super(RamboNVidiaNet, self).__init__(in_shape, options)
 
     if not skip_first_conv_layer:
       self.conv1, self.c1_norm, self.c1_act, self.c1_drop = self.AddConvBlock(
@@ -388,30 +398,23 @@ class RamboNVidiaNet(SequentialNet):
 
 class DeepNVidiaNet(SequentialNet):
 
-  def __init__(self, in_shape, out_dims, dropout_prob):
-    super(DeepNVidiaNet, self).__init__(in_shape)
+  def __init__(self, in_shape, out_dims, dropout_prob, options):
+    super(DeepNVidiaNet, self).__init__(in_shape, options)
 
     self.conv1, self.c1_norm, self.c1_act, self.c1_drop = self.AddConvBlock(
         36, 5, 2, dropout_prob)
-
     self.conv2, self.c2_norm, self.c2_act, self.c2_drop = self.AddConvBlock(
         48, 5, 2, dropout_prob)
-
     self.conv3, self.c3_norm, self.c3_act, self.c3_drop = self.AddConvBlock(
         48, 5, 1, dropout_prob)
-
     self.conv4, self.c4_norm, self.c4_act, self.c4_drop = self.AddConvBlock(
         64, 3, 1, dropout_prob)
-
     self.conv5, self.c5_norm, self.c5_act, self.c5_drop = self.AddConvBlock(
         64, 3, 2, dropout_prob)
-
     self.conv6, self.c6_norm, self.c6_act, self.c6_drop = self.AddConvBlock(
         64, 3, 1, dropout_prob)
-
     self.conv7, self.c7_norm, self.c7_act, self.c7_drop = self.AddConvBlock(
         64, 3, 1, dropout_prob)
-
     self.conv8, self.c8_norm, self.c8_act, self.c8_drop = self.AddConvBlock(
         64, 3, 1, dropout_prob)
 
@@ -423,7 +426,7 @@ class DeepNVidiaNet(SequentialNet):
         1164, dropout_prob)
 
     self.fc3 = self.AddLinear(10)
-    self.AddActivation(RELU)
+    self.AddActivation(self.options[FC][ACTIVATION])
 
     self.fc4 = self.AddLinear(out_dims)
 
@@ -437,25 +440,23 @@ DEEP_NVIDIA_NET_NAME = 'nvidia-deep'
 IN_SHAPE = 'in_shape'
 OUT_DIMS = 'out_dims'
 DROPOUT_PROB = 'dropout_prob'
+OPTIONS = 'options'
 
-def MakeNetwork(net_name, **kwargs):
+def MakeNetwork(net_name, in_shape, out_dims, dropout_prob, **kwargs):
   if net_name == NVIDIA_NET_NAME:
     return NvidiaSingleFrameNet(
-        kwargs[IN_SHAPE], kwargs[OUT_DIMS], kwargs[DROPOUT_PROB])
+        in_shape, out_dims, dropout_prob, kwargs[OPTIONS])
   elif net_name == RAMBO_NET_NAME:
-    return UdacityRamboNet(
-        kwargs[IN_SHAPE], kwargs[OUT_DIMS], kwargs[DROPOUT_PROB])
+    return UdacityRamboNet(in_shape, out_dims, dropout_prob)
   elif net_name == RAMBO_COMMA_NET_NAME:
-    return RamboCommaNet(
-        kwargs[IN_SHAPE], kwargs[OUT_DIMS], kwargs[DROPOUT_PROB])
+    return RamboCommaNet(in_shape, out_dims, dropout_prob, kwargs[OPTIONS])
   elif net_name == RAMBO_NVIDIA_DEEP_NET_NAME:
     return RamboNVidiaNet(
-        False, kwargs[IN_SHAPE], kwargs[OUT_DIMS], kwargs[DROPOUT_PROB])
+        False, in_shape, out_dims, dropout_prob, kwargs[OPTIONS])
   elif net_name == RAMBO_NVIDIA_SHALLOW_NET_NAME:
     return RamboNVidiaNet(
-        True, kwargs[IN_SHAPE], kwargs[OUT_DIMS], kwargs[DROPOUT_PROB])
+        True, in_shape, out_dims, dropout_prob, kwargs[OPTIONS])
   elif net_name == DEEP_NVIDIA_NET_NAME:
-    return DeepNVidiaNet(
-        kwargs[IN_SHAPE], kwargs[OUT_DIMS], kwargs[DROPOUT_PROB])
+    return DeepNVidiaNet(in_shape, out_dims, dropout_prob, kwargs[OPTIONS])
   else:
     assert False, ('Unknown network name: %s' % (net_name,))

@@ -3,6 +3,7 @@ import argparse
 import augmentation
 import image_helpers
 import io_helpers
+import json
 import models
 import optimize
 import training_helpers
@@ -23,6 +24,17 @@ if __name__ == '__main__':
   parser.add_argument('--target_height', type=int, required=True)
   parser.add_argument('--target_width', type=int, required=True)
   parser.add_argument('--net_name', default=models.NVIDIA_NET_NAME)
+  parser.add_argument(
+    '--net_options',
+    default=json.dumps({
+        models.CONV: {
+            models.BATCHNORM: True,
+            models.ACTIVATION: models.RELU,
+            models.DROPOUT: models.DROPOUT_2D},
+        models.FC : {
+            models.BATCHNORM: True,
+            models.ACTIVATION: models.RELU,
+            models.DROPOUT: models.DROPOUT_2D}}))
   parser.add_argument('--label_dimensions', type=int, default=1)
   parser.add_argument('--out_prefix', required=True)
   parser.add_argument('--dropout_prob', type=float, default=0.0)
@@ -51,6 +63,8 @@ if __name__ == '__main__':
       blur_prob=args.train_blur_prob,
       grayscale_interpolate_prob=args.grayscale_interpolate_prob,
       random_shift_directions=random_shift_directions)
+  print(args.net_options)
+  net_options = json.loads(args.net_options)
   
   train_loader, val_loader = training_helpers.MakeDataLoaders(
       train_data,
@@ -66,7 +80,8 @@ if __name__ == '__main__':
       args.net_name,
       in_shape=[args.in_channels, args.target_height, args.target_width],
       out_dims=args.label_dimensions,
-      dropout_prob=args.dropout_prob)
+      dropout_prob=args.dropout_prob,
+      options=net_options)
   net.cuda()
   
   train_settings = optimize.TrainSettings(
