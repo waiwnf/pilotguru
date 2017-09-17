@@ -55,6 +55,10 @@ RUN pip3 install sklearn
 RUN apt-get -y install libavformat-dev libavcodec-dev libavdevice-dev libavutil-dev libswscale-dev libavresample-dev libavfilter-dev
 RUN pip3 install av
 
+RUN pip3 install tensorflow-tensorboard
+
 RUN apt-get  update
 
 RUN apt-get -y install code
+
+RUN pip3 install tensorboard_logger
