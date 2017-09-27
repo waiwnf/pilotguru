@@ -25,6 +25,10 @@
     </string-array>
     <!-- <string name="settings_wb_default_value">10</string> -->
 
+    <string-array name="settings_elm327_devices_entries">
+    </string-array>
+    <string-array name="settings_elm327_devices_values">
+    </string-array>
 
     @array/settings_fm_entries
     <string-array name="settings_fm_entries">
@@ -36,6 +40,9 @@
         <item>auto</item>
         <item>infinity</item>
     </string-array>
+
+    <string name="settings_can_id_filter_default_value">0x2B0</string>
+    <string name="settings_can_id_mask_default_value">0x1FF</string>
 
     <string name="settings_fm_default_value">infinity</string>
 </resources>

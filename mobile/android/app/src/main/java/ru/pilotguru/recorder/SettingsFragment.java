@@ -1,5 +1,7 @@
 package ru.pilotguru.recorder;
 
+import android.bluetooth.BluetoothAdapter;
+import android.bluetooth.BluetoothDevice;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.hardware.camera2.CameraAccessException;
@@ -18,6 +20,7 @@ import android.util.Range;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
 
 import static android.hardware.camera2.CameraCharacteristics.CONTROL_AWB_AVAILABLE_MODES;
 import static android.hardware.camera2.CameraMetadata.CONTROL_AWB_MODE_AUTO;
@@ -62,6 +65,7 @@ public class SettingsFragment extends PreferenceFragment implements
     });
 
     populateResolutionList((ListPreference) findPreference(SettingsConstants.PREF_RESOLUTIONS));
+    populateObdiiDeviceList((ListPreference) findPreference(SettingsConstants.PREF_ELM327_DEVICES));
     populateWhitebalanceList();
     populateIsoList(null);
 
@@ -144,6 +148,23 @@ public class SettingsFragment extends PreferenceFragment implements
     prefResolutions.setEntries(supportedProfileLabels.toArray(new CharSequence[0]));
     prefResolutions.setEntryValues(supportedProfileIds.toArray(new CharSequence[0]));
     prefResolutions.setDefaultValue(supportedProfileIds.get(0));
+  }
+
+  public static void populateObdiiDeviceList(ListPreference prefObdiiDevices) {
+    BluetoothAdapter btAdapter = BluetoothAdapter.getDefaultAdapter();
+    Set<BluetoothDevice> pairedDevices = btAdapter.getBondedDevices();
+    final List<CharSequence> deviceNames = new ArrayList<>();
+    final List<CharSequence> deviceAddresses = new ArrayList<>();
+    deviceNames.add("None");
+    deviceAddresses.add("");
+    for (BluetoothDevice device : pairedDevices) {
+      deviceNames.add(device.getName());
+      deviceAddresses.add(device.getAddress());
+    }
+    prefObdiiDevices.setEntries(deviceNames.toArray(new CharSequence[0]));
+    prefObdiiDevices.setEntryValues(deviceAddresses.toArray(new CharSequence[0]));
+    // Not connecting to OBD-II device by default.
+    prefObdiiDevices.setDefaultValue("");
   }
 
   @Override

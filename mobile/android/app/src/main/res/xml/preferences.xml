@@ -36,6 +36,29 @@
         android:entries="@array/settings_iso_entries"
         android:entryValues="@array/settings_iso_values" />
 
+    <ListPreference
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:dialogTitle="ISO value"
+        android:entries="@array/settings_elm327_devices_entries"
+        android:entryValues="@array/settings_elm327_devices_values"
+        android:key="pref_elm327_devices"
+        android:summary="%s"
+        android:title="ELM327 OBD-II Bluetooth device"/>
+    <EditTextPreference
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:defaultValue="@string/settings_can_id_filter_default_value"
+        android:key="pref_can_id_filter"
+        android:selectAllOnFocus="true"
+        android:singleLine="true"
+        android:title="CAN ID filter"/>
+    <EditTextPreference
+        android:defaultValue="@string/settings_can_id_mask_default_value"
+        android:key="pref_can_id_mask"
+        android:selectAllOnFocus="true"
+        android:singleLine="true"
+        android:title="CAN ID mask"/>
     <Preference
         android:key="probe"
         android:title="Probe Camera2 Features">

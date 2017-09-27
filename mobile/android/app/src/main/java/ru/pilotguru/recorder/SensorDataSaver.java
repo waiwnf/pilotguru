@@ -35,17 +35,20 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
+import ru.pilotguru.recorder.elm327.ELM327Receiver;
+
 public class SensorDataSaver extends CameraCaptureSession.CaptureCallback implements
-    SensorEventListener, LocationListener {
+    SensorEventListener, LocationListener, ELM327Receiver.ELM327Listener {
   public static String ROTATIONS = "rotations";
   public static String ACCELERATIONS = "accelerations";
   public static String LOCATIONS = "locations";
   public static String FRAMES = "frames";
+  public static String CAN_FRAMES = "can_frames";
 
   public static String TIME_USEC = "time_usec";
 
   private JsonWriter rotationsWriter = null, accelerationsWriter = null, locationsWriter = null,
-      framesWriter = null;
+      framesWriter = null, elm327Writer = null;
   private List<String> jsonFiles = new LinkedList<>();
 
   private boolean isRecording = false;
@@ -54,6 +57,7 @@ public class SensorDataSaver extends CameraCaptureSession.CaptureCallback implem
   private final Lock accelerometerLock = recordingStatusLock.readLock();
   private final Lock locationLock = recordingStatusLock.readLock();
   private final Lock frameCaptureLock = recordingStatusLock.readLock();
+  private final Lock elm327Lock = recordingStatusLock.readLock();
   private final Lock recordingStatusChangeLock = recordingStatusLock.writeLock();
 
   private TextView textViewFps, textViewCamera;
@@ -130,6 +134,7 @@ public class SensorDataSaver extends CameraCaptureSession.CaptureCallback implem
       accelerationsWriter = initJsonListWriter(recordingDir, ACCELERATIONS);
       locationsWriter = initJsonListWriter(recordingDir, LOCATIONS);
       framesWriter = initJsonListWriter(recordingDir, FRAMES);
+      elm327Writer = initJsonListWriter(recordingDir, CAN_FRAMES);
     } finally {
       recordingStatusChangeLock.unlock();
     }
@@ -197,6 +202,7 @@ public class SensorDataSaver extends CameraCaptureSession.CaptureCallback implem
     finishJsonListWriter(accelerationsWriter, ACCELERATIONS);
     finishJsonListWriter(locationsWriter, LOCATIONS);
     finishJsonListWriter(framesWriter, FRAMES);
+    finishJsonListWriter(elm327Writer, CAN_FRAMES);
     MediaScannerConnection.scanFile(context, jsonFiles.toArray(new String[0]), null, null);
     jsonFiles.clear();
 
@@ -275,6 +281,25 @@ public class SensorDataSaver extends CameraCaptureSession.CaptureCallback implem
   }
 
   public void onStatusChanged(String provider, int status, Bundle extras) {
+  }
+
+  // ELM327Listener
+  @Override
+  public void onELM327ResponseReceived(@NonNull ELM327Receiver.TimestampedResponse response) {
+    try {
+      elm327Lock.lock();
+      if (isRecording) {
+        elm327Writer.beginObject();
+        elm327Writer.name("can_frame").value(response.getText());
+        elm327Writer.name(TIME_USEC).value(TimeUnit.NANOSECONDS.toMicros(response.getStartNanos()));
+        elm327Writer.endObject();
+      }
+    } catch (IOException e) {
+      Errors.dieOnException(
+          parentActivity, e, "Error writing CAN frames JSON from ELM327 adapter.");
+    } finally {
+      elm327Lock.unlock();
+    }
   }
 
   // CaptureCallback - captured frames timestamps.

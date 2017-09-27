@@ -28,6 +28,7 @@ import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
+import android.util.Log;
 import android.view.Surface;
 import android.view.TextureView;
 import android.view.TextureView.SurfaceTextureListener;
@@ -44,6 +45,10 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
 
+import ru.pilotguru.recorder.elm327.BluetoothELM327Connector;
+import ru.pilotguru.recorder.elm327.ELM327Receiver;
+import ru.pilotguru.recorder.elm327.ELM327Settings;
+
 public class MainActivity extends Activity {
   // UI - text fields.
   private TextView textViewBattery;
@@ -59,11 +64,13 @@ public class MainActivity extends Activity {
   private static final int REQUEST_ALL_PERMISSIONS = 200;
   private static final String[] necessaryPermissions =
       {Manifest.permission.CAMERA, Manifest.permission.WRITE_EXTERNAL_STORAGE,
-          Manifest.permission.ACCESS_FINE_LOCATION};
+          Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.BLUETOOTH};
 
   // Status bits for camera connections.
   private boolean isPreviewTextureAvailable = false;
   private boolean isCameraOpened = false;
+
+  private ELM327Receiver elm327Receiver;
 
   private CameraDevice cameraDevice;
   private CameraCaptureSession cameraCaptureSession;
@@ -245,6 +252,9 @@ public class MainActivity extends Activity {
     if (cameraDevice != null) {
       closeCamera();
     }
+    if (elm327Receiver != null) {
+      elm327Receiver.stopMonitoring();
+    }
     super.onStop();
   }
 
@@ -278,6 +288,31 @@ public class MainActivity extends Activity {
   private synchronized void maybeConnectAllSensors() {
     if (isCameraOpened || !isPreviewTextureAvailable || !isHaveAllPermissions()) {
       return;
+    }
+
+    final ELM327Settings elm327Settings =
+        new ELM327Settings(PreferenceManager.getDefaultSharedPreferences(this));
+    final String elm327DeviceAddress = elm327Settings.getElm327DeviceName();
+    // If a receiver connected to a different device is already open, stop it and close.
+    if (elm327Receiver != null && !elm327Receiver.deviceAddress().equals(elm327DeviceAddress)) {
+      elm327Receiver.stopMonitoring();
+      elm327Receiver = null;
+    }
+    if (!elm327DeviceAddress.isEmpty()) {
+      try {
+        if (elm327Receiver == null) {
+          // Either there was no receiver, or the old one was connected to a different device and
+          // was cleaned up in the block above. Create a new one.
+          elm327Receiver = new ELM327Receiver(
+              new BluetoothELM327Connector(elm327DeviceAddress),
+              elm327Settings.getCanIdFilter(),
+              elm327Settings.getCanIdMask());
+          elm327Receiver.addSubscriber(recorder.getSensorDataSaver());
+        }
+        elm327Receiver.startMonitoringAsync(-1 /* unlimited lines requested */);
+      } catch (IOException e) {
+        Log.w("PilotGuruELM327", "ELM327 connection error.");
+      }
     }
 
     subscribeToLocationUpdates(recorder.getSensorDataSaver(), 20 /* minTimeMsec */);
