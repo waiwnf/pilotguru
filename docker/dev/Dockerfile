@@ -65,3 +65,5 @@ RUN mkdir /opt/install && \
 RUN echo "deb [arch=amd64] http://packages.microsoft.com/repos/vscode stable main" > /etc/apt/sources.list.d/vscode.list
 RUN apt-get update
 RUN apt-get -y install code
+
+RUN apt-get -y install autoconf libtool psmisc net-tools

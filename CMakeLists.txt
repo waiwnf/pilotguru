@@ -1,6 +1,22 @@
 cmake_minimum_required(VERSION 2.8)
 project(pilotguru)
 
+include(ExternalProject)
+ExternalProject_Add(can-utils
+  PREFIX            ${CMAKE_BINARY_DIR}/can-utils
+  GIT_REPOSITORY    https://github.com/waiwnf/can-utils.git
+  GIT_TAG           master
+  UPDATE_COMMAND    ""
+  CONFIGURE_COMMAND autoreconf --install -Wall && ./configure --prefix=<INSTALL_DIR>
+  BUILD_IN_SOURCE   1
+)
+ExternalProject_Get_Property(can-utils source_dir)
+add_library(socketcanlib STATIC IMPORTED)
+set_property(TARGET socketcanlib PROPERTY IMPORTED_LOCATION ${source_dir}/.libs/libcan.a)
+include_directories(
+  ${source_dir}/include
+)
+
 IF(NOT CMAKE_BUILD_TYPE)
   SET(CMAKE_BUILD_TYPE Release)
 ENDIF()
@@ -44,6 +60,7 @@ add_executable(calibrate src/calibrate.cc)
 add_executable(fit_motion src/fit_motion.cc)
 add_executable(integrate_motion src/integrate_motion.cc)
 add_executable(interpolate_velocity src/interpolate_velocity.cc)
+add_executable(kia_steering_angle src/kia_steering_angle.cc)
 add_executable(optical_trajectories src/optical_trajectories.cc)
 add_executable(project_translations src/project_translations.cc)
 add_executable(render_motion src/render_motion.cc)
@@ -54,6 +71,7 @@ add_dependencies(annotate_frames pilotgurulib)
 add_dependencies(fit_motion pilotgurulib ORB_SLAM2)
 add_dependencies(integrate_motion pilotgurulib ORB_SLAM2)
 add_dependencies(interpolate_velocity pilotgurulib ORB_SLAM2)
+add_dependencies(kia_steering_angle socketcanlib)
 add_dependencies(optical_trajectories pilotgurulib ORB_SLAM2)
 add_dependencies(project_translations pilotgurulib ORB_SLAM2)
 add_dependencies(render_motion pilotgurulib ORB_SLAM2)
@@ -64,6 +82,7 @@ target_link_libraries(calibrate ${OpenCV_LIBS} glog gflags)
 target_link_libraries(fit_motion pilotgurulib ORB_SLAM2 glog gflags)
 target_link_libraries(integrate_motion pilotgurulib ORB_SLAM2 glog gflags)
 target_link_libraries(interpolate_velocity pilotgurulib ORB_SLAM2 glog gflags)
+target_link_libraries(kia_steering_angle socketcanlib glog gflags)
 target_link_libraries(optical_trajectories pilotgurulib ORB_SLAM2 ${OpenCV_LIBS} glog gflags)
 target_link_libraries(project_translations pilotgurulib ORB_SLAM2 ${OpenCV_LIBS} glog gflags)
 target_link_libraries(render_motion pilotgurulib ORB_SLAM2 ${OpenCV_LIBS} glog gflags)
