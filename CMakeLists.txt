@@ -55,6 +55,9 @@ add_library(pilotgurulib SHARED
   ${PROJECT_SOURCE_DIR}/src/slam/smoothing.cc
 )
 
+add_library(kiacanlib SHARED ${PROJECT_SOURCE_DIR}/src/car/kia_can.cc)
+add_library(canlib SHARED ${PROJECT_SOURCE_DIR}/src/car/can.cc)
+
 add_executable(annotate_frames src/annotate_frames.cc)
 add_executable(calibrate src/calibrate.cc)
 add_executable(fit_motion src/fit_motion.cc)
@@ -82,7 +85,7 @@ target_link_libraries(calibrate ${OpenCV_LIBS} glog gflags)
 target_link_libraries(fit_motion pilotgurulib ORB_SLAM2 glog gflags)
 target_link_libraries(integrate_motion pilotgurulib ORB_SLAM2 glog gflags)
 target_link_libraries(interpolate_velocity pilotgurulib ORB_SLAM2 glog gflags)
-target_link_libraries(kia_steering_angle socketcanlib glog gflags)
+target_link_libraries(kia_steering_angle canlib kiacanlib socketcanlib glog gflags)
 target_link_libraries(optical_trajectories pilotgurulib ORB_SLAM2 ${OpenCV_LIBS} glog gflags)
 target_link_libraries(project_translations pilotgurulib ORB_SLAM2 ${OpenCV_LIBS} glog gflags)
 target_link_libraries(render_motion pilotgurulib ORB_SLAM2 ${OpenCV_LIBS} glog gflags)
