@@ -1,6 +1,7 @@
 #include <car/can.hpp>
 
 #include <cstring>
+#include <limits>
 
 #include <net/if.h>
 #include <sys/ioctl.h>
@@ -46,5 +47,23 @@ std::string can_frame_payload_to_hex_string(const can_frame &frame) {
     sprintf(frame_data_hex_string + idx * 2, "%02X", frame.data[idx]);
   }
   return std::string(frame_data_hex_string);
+}
+
+std::pair<uint32_t, uint32_t>
+can_id_filter_and_mask(const std::vector<uint32_t> &ids) {
+  if (ids.empty()) {
+    return {0, 0};
+  }
+  uint32_t filter = ids.front();
+  uint32_t mask = std::numeric_limits<uint32_t>::max();
+
+  for (const uint32_t id : ids) {
+    // Mask only retains the bits that match in filter and id.
+    mask &= (filter ^ ~id);
+    // To get a 'canonical' filter representation, independent of the order of
+    // ids in the input, zero out all the bits in the filter that are 
+    filter &= id;
+  }
+  return {filter, mask};
 }
 }

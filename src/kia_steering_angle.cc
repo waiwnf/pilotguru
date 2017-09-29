@@ -27,7 +27,7 @@ int main(int argc, char *argv[]) {
     LOG(INFO) << "CAN ID: " << frame.can_id << "; payload: "
               << pilotguru::can_frame_payload_to_hex_string(frame);
 
-    if ((frame.can_id & pilotguru::CAN_ID_MASK) ==
+    if ((frame.can_id & pilotguru::CAN_ID_MASK_11_BIT) ==
         pilotguru::kia::STEERING_WHEEL_ANGLE_CAN_ID) {
       // TODO factor out 5 bytes payload size to a constant.
       CHECK_EQ(frame.can_dlc, 5);
