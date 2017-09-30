@@ -17,8 +17,12 @@ int main(int argc, char *argv[]) {
   google::ParseCommandLineFlags(&argc, &argv, true);
   google::InstallFailureSignalHandler();
 
-  const int can_socket =
-      pilotguru::connect_new_can_soket(FLAGS_can_interface.c_str());
+  // TODO library for stepwise force.
+  // TODO sketch for specifying force.
+  // TODO control closed loop logic.
+  // TODO filtering whitelist as command line flag.
+  const int can_socket = pilotguru::connect_new_can_soket(
+      FLAGS_can_interface.c_str(), {0x2B0, 0x4B0});
   CHECK_GE(can_socket, 0);
 
   pilotguru::kia::CarMotionData motion_data(10);
@@ -35,7 +39,6 @@ int main(int argc, char *argv[]) {
 
     if ((frame.can_id & pilotguru::CAN_ID_MASK_11_BIT) ==
         pilotguru::kia::STEERING_WHEEL_ANGLE_CAN_ID) {
-      // TODO factor out 5 bytes payload size to a constant.
       CHECK_EQ(frame.can_dlc,
                pilotguru::kia::STEERING_WHEEL_ANGLE_FRAME_PAYLOAD_SIZE);
       LOG(INFO) << "Steering wheel angle: "

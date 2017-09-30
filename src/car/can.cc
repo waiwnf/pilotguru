@@ -7,14 +7,23 @@
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 
+#include <linux/can/raw.h>
+
 namespace pilotguru {
 
-int connect_new_can_soket(const std::string &interface_name) {
+int connect_new_can_soket(const std::string &interface_name,
+                          const std::vector<canid_t> &accepted_ids) {
   constexpr int CONNECTION_FAILURE = -1;
 
   int can_socket = socket(PF_CAN, SOCK_RAW, CAN_RAW);
   if (socket < 0) {
     return CONNECTION_FAILURE;
+  }
+
+  if (!accepted_ids.empty()) {
+    can_filter accepted_ids_filter[] = {make_can_filter(accepted_ids)};
+    setsockopt(can_socket, SOL_CAN_RAW, CAN_RAW_FILTER, &accepted_ids_filter,
+               sizeof(accepted_ids_filter));
   }
 
   // Resolve CAN network interface id by name.
@@ -49,19 +58,19 @@ std::string can_frame_payload_to_hex_string(const can_frame &frame) {
   return std::string(frame_data_hex_string);
 }
 
-std::pair<uint32_t, uint32_t>
-can_id_filter_and_mask(const std::vector<uint32_t> &ids) {
-  if (ids.empty()) {
+can_filter make_can_filter(const std::vector<canid_t> &accepted_ids) {
+  if (accepted_ids.empty()) {
     return {0, 0};
   }
-  uint32_t filter = ids.front();
-  uint32_t mask = std::numeric_limits<uint32_t>::max();
+  canid_t filter = accepted_ids.front();
+  canid_t mask = std::numeric_limits<canid_t>::max();
 
-  for (const uint32_t id : ids) {
+  for (const uint32_t id : accepted_ids) {
     // Mask only retains the bits that match in filter and id.
     mask &= (filter ^ ~id);
     // To get a 'canonical' filter representation, independent of the order of
-    // ids in the input, zero out all the bits in the filter that are 
+    // ids in the input, zero out all the bits in the filter that are not all
+    // equal among the acceted ids.
     filter &= id;
   }
   return {filter, mask};
