@@ -41,6 +41,7 @@
 #define TWI_FREQ 400000L
 
 #include <assert.h>
+#include <kia-spoof-steering.h>
 
 // Stock Arduino I2C library.
 #include <Wire.h>
@@ -65,46 +66,6 @@
 // Use ADC AIN channel 3 for reading the voltage level. Following reads from
 // the PCF8591 will return the voltage on this channel.
 #define AIN3_ID 0x3
-
-// Voltage measurement postprocessing settings.
-// Because PCF8591 is only 8 bit for both AD and DA conversions, even 1-bit
-// jitter is noticeable by the power steering ECU when forwarding the signal
-// from the torque sensors. To reduce the jitter, we use two tricks:
-// 1. Maintain a running average of the torque sensor voltage measurements
-//    instead of using only one most recent measurement.
-// 2. Change the output voltage level only if the input running average moves
-//    away by X from the current output level ("hystheresis").
-
-// Use 2^VOLTAGE_BUFFER_AVERAGING_SHIFT most recent measurements for the running
-// average of the torque sensor voltage. This way the running average is simply
-// a bit shift of the sum of the individual measurements.
-#define VOLTAGE_BUFFER_AVERAGING_SHIFT 4
-// Buffer size to hold the individual measurements for computing the running
-// average.
-#define VOLTAGE_READINGS_BUFFER_SIZE (1 << VOLTAGE_BUFFER_AVERAGING_SHIFT)
-// Only change the output voltage when the input running average is more than
-// VOLTAGE_UPDATE_HYSTHERESIS from the current output.
-#define VOLTAGE_UPDATE_HYSTHERESIS 1
-
-struct SteeringSpoofSettings {
-  // Maximum extra spoof torque voltage signal for a turn command, in LSB units
-  // of the DAC module.
-  int8_t max_steering_magnitude;
-
-  // The spoof torque voltage is changed gradually in 1 LSB increments to avoid
-  // sharp voltage jumps that the ECU may perceive as sensor faults. Spend this
-  // many loop() cycles between consecutive voltage changes.
-  uint16_t steps_per_adjustment_level;
-
-  // Spend this many loop() cycles at STEERING_MAGNITUDE spoof torque level,
-  // once
-  // it has been reached with consecutive 1 LSB increments (with
-  // STEERING_MAGNITUDE between each increment).
-  // After this many loop() cycles pass, the spoof torque extra voltage is
-  // gradually reduced back to zero.
-  // Overall loop() frequency for this sketch is on the order of 1KHz.
-  uint16_t steps_at_target_level;
-};
 
 // Read the current voltage level on the green wire
 uint8_t read_green_voltage() {
@@ -134,143 +95,6 @@ uint8_t read_blue_voltage() {
   return blue_voltage;
 }
 
-void update_voltage_running_total(uint8_t buffer[], int buffer_index,
-                                  int *running_total, uint8_t new_value) {
-  (*running_total) -= buffer[buffer_index];
-  buffer[buffer_index] = new_value;
-  (*running_total) += buffer[buffer_index];
-}
-
-class HistoricVoltageData {
-public:
-  void take_measurement() {
-    voltage_buffer_idx =
-        (voltage_buffer_idx + 1) % VOLTAGE_READINGS_BUFFER_SIZE;
-    update_voltage_running_total(green_voltage_readings, voltage_buffer_idx,
-                                 &total_green_voltage, read_green_voltage());
-    update_voltage_running_total(blue_voltage_readings, voltage_buffer_idx,
-                                 &total_blue_voltage, read_blue_voltage());
-  }
-
-  uint8_t get_avg_green_voltage() const {
-    return (total_green_voltage >> VOLTAGE_BUFFER_AVERAGING_SHIFT);
-  }
-
-  uint8_t get_avg_blue_voltage() const {
-    return (total_blue_voltage >> VOLTAGE_BUFFER_AVERAGING_SHIFT);
-  }
-
-  uint8_t get_latest_green_voltage() const {
-    return green_voltage_readings[voltage_buffer_idx];
-  }
-
-  uint8_t get_latest_blue_voltage() const {
-    return blue_voltage_readings[voltage_buffer_idx];
-  }
-
-private:
-  // Individual torque sensor voltage measurement buffers, necessary for
-  // computing
-  // the running averages.
-  uint8_t green_voltage_readings[VOLTAGE_READINGS_BUFFER_SIZE];
-  uint8_t blue_voltage_readings[VOLTAGE_READINGS_BUFFER_SIZE];
-  // Wraparound index of which sensor voltage measurement buffer element to use
-  // next.
-  uint16_t voltage_buffer_idx = 0;
-  // Running sums of the individual voltage measurement buffers.
-  uint16_t total_green_voltage = 0, total_blue_voltage = 0;
-};
-
-uint8_t smooth_voltage(uint8_t old_smooth_voltage, uint8_t new_voltage) {
-  return ((max(old_smooth_voltage, new_voltage) -
-           min(old_smooth_voltage, new_voltage)) > VOLTAGE_UPDATE_HYSTHERESIS)
-             ? new_voltage
-             : old_smooth_voltage;
-}
-
-uint8_t add_offset(uint8_t base, int8_t offset) {
-  if (offset == 0) {
-    return base;
-  } else if (offset > 0) {
-    return (0xFFU - base > offset) ? base + offset : 0xFFU;
-  } else {
-    return (base > -offset) ? base + offset : 0;
-  }
-}
-
-class TargetVoltageSmoother {
-public:
-  TargetVoltageSmoother(const SteeringSpoofSettings &steering_spoof_settings)
-      : steering_spoof_settings_(steering_spoof_settings) {}
-
-  void set_target_offset(int8_t new_target_offset) {
-    target_offset_ = new_target_offset;
-    if (target_offset_ == current_offset_) {
-      steps_spent_at_current_offset_ =
-          min(steps_spent_at_current_offset_,
-              steering_spoof_settings_.steps_per_adjustment_level);
-    }
-  }
-
-  void step() {
-    // Prevent overflow.
-    if (steps_spent_at_current_offset_ < 0xFFFFU) {
-      ++steps_spent_at_current_offset_;
-    }
-    if (target_offset_ != current_offset_) {
-      // We are still in progress of adjusting towards the target offset.
-      if (steps_spent_at_current_offset_ >
-          steering_spoof_settings_.steps_per_adjustment_level) {
-        // Enough steps have been spent at the current offset, can move one unit
-        // towards the target.
-        current_offset_ += (target_offset_ > current_offset_) ? 1 : -1;
-        steps_spent_at_current_offset_ = 0;
-      }
-    } else if (target_offset_ != 0 &&
-               steps_spent_at_current_offset_ >
-                   (steering_spoof_settings_.steps_at_target_level +
-                    steering_spoof_settings_.steps_per_adjustment_level)) {
-      // Enough time has been spent after reaching nonzero target offset, reset
-      // the target to 0.
-      target_offset_ = 0;
-    }
-  }
-
-  void update_measurments(const HistoricVoltageData &voltage_data) {
-    smoothed_blue_voltage_ = smooth_voltage(
-        smoothed_blue_voltage_, voltage_data.get_avg_blue_voltage());
-    smoothed_green_voltage_ = smooth_voltage(
-        smoothed_green_voltage_, voltage_data.get_avg_green_voltage());
-  }
-
-  uint8_t get_smoothed_blue_voltage() const { return smoothed_blue_voltage_; }
-
-  uint8_t get_smoothed_green_voltage() const { return smoothed_green_voltage_; }
-
-  uint8_t get_target_blue_voltage() const {
-    return add_offset(smoothed_blue_voltage_, -current_offset_);
-  }
-
-  uint8_t get_target_green_voltage() const {
-    return add_offset(smoothed_green_voltage_, current_offset_);
-  }
-
-  int8_t get_current_offset() const { return current_offset_; }
-
-private:
-  // Hystheresis-smoothed historical averages.
-  uint8_t smoothed_blue_voltage_ = 0, smoothed_green_voltage_ = 0;
-  // Effective torque voltage offset to be applied to the hystheresis-smoothed
-  // historical values at current step.
-  int8_t current_offset_ = 0;
-  // Target voltage offset to move to over time, spending a few steps on every
-  // intermediate voltage point.
-  int8_t target_offset_ = 0;
-  uint16_t steps_spent_at_current_offset_ = 0;
-
-  const SteeringSpoofSettings &steering_spoof_settings_;
-};
-
 // Set the BLUE DAC out to the target value.
 void set_blue_voltage(uint8_t target_voltage) {
   assert(i2c_start(PCF8591_ID << 1 | I2C_WRITE));
@@ -288,13 +112,14 @@ void set_green_voltage(uint8_t target_voltage) {
 }
 
 SteeringSpoofSettings steering_spoof_settings;
-HistoricVoltageData historic_voltage_data;
+HistoricVoltageData<4> historic_voltage_data;
 TargetVoltageSmoother voltage_smoother(steering_spoof_settings);
 
 void setup() {
   steering_spoof_settings.max_steering_magnitude = 5;
   steering_spoof_settings.steps_per_adjustment_level = 20;
   steering_spoof_settings.steps_at_target_level = 400;
+  steering_spoof_settings.voltage_update_hystheresis = 1;
 
   Serial.begin(115200);
 
@@ -310,7 +135,7 @@ void setup() {
   Wire.endTransmission();
 
   // Warm up the voltage buffers.
-  for (uint16_t i = 0; i < VOLTAGE_READINGS_BUFFER_SIZE; ++i) {
+  for (size_t i = 0; i < historic_voltage_data.get_buffer_size(); ++i) {
     historic_voltage_data.take_measurement();
   }
 }
@@ -319,7 +144,7 @@ int step_idx = 0;
 
 void loop() {
   historic_voltage_data.take_measurement();
-  voltage_smoother.update_measurments(historic_voltage_data);
+  voltage_smoother.update_measurments(historic_voltage_data.get_avg_voltage());
 
   if (Serial.available()) {
     char command = 0;
