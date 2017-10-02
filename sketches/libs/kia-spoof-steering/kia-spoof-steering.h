@@ -22,12 +22,14 @@ struct InstantVoltageData {
 // the sum of the individual measurements.
 template <uint8_t averaging_shift> class HistoricVoltageData {
 public:
-  void take_measurement() {
+  void take_measurement(const InstantVoltageData &voltage_data) {
     voltage_buffer_idx = (voltage_buffer_idx + 1) % buffer_size;
     update_voltage_running_total(green_voltage_readings + voltage_buffer_idx,
-                                 &total_green_voltage, read_green_voltage());
+                                 &total_green_voltage,
+                                 voltage_data.green_voltage);
     update_voltage_running_total(blue_voltage_readings + voltage_buffer_idx,
-                                 &total_blue_voltage, read_blue_voltage());
+                                 &total_blue_voltage,
+                                 voltage_data.blue_voltage);
   }
 
   uint16_t get_avg_green_voltage() const {
