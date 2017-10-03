@@ -4,9 +4,11 @@
 // Helpers for communicating over KIA Cee'd C-CAN bus.
 
 #include <algorithm>
+#include <condition_variable>
 #include <cstdint>
 #include <memory>
 #include <mutex>
+#include <thread>
 #include <vector>
 
 #include <linux/can.h>
@@ -72,6 +74,7 @@ public:
     std::unique_lock<std::mutex> lock(data_mutex_);
     latest_idx_ = (latest_idx_ + 1) % history_length_;
     values_.at(latest_idx_) = Timestamped<T>(t, timestamp);
+    data_update_condition_.notify_all();
   }
 
   // Returns a copy of the history properly sorted from the oldest to the most
@@ -88,11 +91,23 @@ public:
     return result;
   }
 
+  Timestamped<T> wait_get_next(const timeval &prev_timestamp) const {
+    std::unique_lock<std::mutex> lock(data_mutex_);
+    while (
+        prev_timestamp.tv_sec == values_.at(latest_idx_).timestamp().tv_sec &&
+        prev_timestamp.tv_usec == values_.at(latest_idx_).timestamp().tv_usec) {
+      data_update_condition_.wait(lock);
+    }
+    const Timestamped<T> result = values_.at(latest_idx_);
+    return result;
+  }
+
 private:
   const size_t history_length_;
   std::vector<Timestamped<T>> values_;
   size_t latest_idx_;
   mutable std::mutex data_mutex_;
+  mutable std::condition_variable data_update_condition_;
 };
 
 class CarMotionData {
@@ -101,12 +116,36 @@ public:
 
   void update(const can_frame &frame, const timeval &timestamp);
 
-  std::vector<Timestamped<SteeringAngle>> get_steering_angles_history() const;
-  std::vector<Timestamped<Velocity>> get_velocities_history() const;
+  const TimestampedHistory<SteeringAngle> &steering_angles() const;
+  const TimestampedHistory<Velocity> &velocities() const;
 
 private:
   TimestampedHistory<SteeringAngle> steering_angles_;
   TimestampedHistory<Velocity> velocities_;
+
+  bool update_thread_should_run_ = false;
+  std::unique_ptr<std::thread> update_thread_;
+  std::mutex update_thread_status_mutex_;
+};
+
+class CarMotionDataUpdater {
+public:
+  CarMotionDataUpdater(CarMotionData *car_motion_data,
+                       const std::string &can_interface_name,
+                       const std::vector<canid_t> &accepted_ids,
+                       const timeval &timeout);
+  void start();
+  void stop();
+
+private:
+  void updateLoop();
+
+  CarMotionData *car_motion_data_;
+  int can_socket_;
+
+  bool should_run_ = false;
+  std::unique_ptr<std::thread> update_thread_;
+  std::mutex thread_status_mutex_;
 };
 }
 }

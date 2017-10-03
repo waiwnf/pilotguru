@@ -1,7 +1,9 @@
+#include <car/can.hpp>
 #include <car/kia_can.hpp>
 
 #include <arpa/inet.h>
 #include <glog/logging.h>
+#include <sys/ioctl.h>
 
 namespace pilotguru {
 namespace kia {
@@ -94,14 +96,58 @@ void CarMotionData::update(const can_frame &frame, const timeval &timestamp) {
   }
 }
 
-std::vector<Timestamped<SteeringAngle>>
-CarMotionData::get_steering_angles_history() const {
-  return steering_angles_.get_history();
+const TimestampedHistory<SteeringAngle> &
+CarMotionData::steering_angles() const {
+  return steering_angles_;
+}
+const TimestampedHistory<Velocity> &CarMotionData::velocities() const {
+  return velocities_;
 }
 
-std::vector<Timestamped<Velocity>>
-CarMotionData::get_velocities_history() const {
-  return velocities_.get_history();
+CarMotionDataUpdater::CarMotionDataUpdater(
+    CarMotionData *car_motion_data, const std::string &can_interface_name,
+    const std::vector<canid_t> &accepted_ids, const timeval &timeout)
+    : car_motion_data_(car_motion_data) {
+  CHECK_NOTNULL(car_motion_data_);
+
+  can_socket_ = connect_new_can_soket(can_interface_name, accepted_ids);
+  CHECK_GE(can_socket_, 0);
+
+  const int set_timeout_result =
+      setsockopt(can_socket_, SOL_SOCKET, SO_RCVTIMEO, (const char *)&timeout,
+                 sizeof(timeval));
+  CHECK_EQ(set_timeout_result, 0);
+}
+
+void CarMotionDataUpdater::start() {
+  std::unique_lock<std::mutex> lock;
+  if (update_thread_ == nullptr) {
+    should_run_ = true;
+    update_thread_.reset(
+        new std::thread(&CarMotionDataUpdater::updateLoop, this));
+  }
+}
+
+void CarMotionDataUpdater::stop() {
+  std::unique_lock<std::mutex> lock;
+  if (update_thread_ != nullptr) {
+    should_run_ = false;
+    update_thread_->join();
+    update_thread_.reset(nullptr);
+  }
+}
+
+void CarMotionDataUpdater::updateLoop() {
+  can_frame frame;
+  timeval timestamp;
+
+  while (should_run_) {
+    const int nbytes = read(can_socket_, &frame, sizeof(struct can_frame));
+    if (nbytes == sizeof(can_frame)) {
+      ioctl(can_socket_, SIOCGSTAMP, &timestamp);
+      car_motion_data_->update(frame, timestamp);
+    }
+  }
 }
 }
 }

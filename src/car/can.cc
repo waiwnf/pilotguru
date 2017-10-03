@@ -73,6 +73,7 @@ can_filter make_can_filter(const std::vector<canid_t> &accepted_ids) {
     // equal among the acceted ids.
     filter &= id;
   }
-  return {filter, mask};
+  // TODO generalize this to support 29 bits too.
+  return {filter & 0x7FF, mask & 0x7FF};
 }
 }
