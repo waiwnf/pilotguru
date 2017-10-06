@@ -27,7 +27,9 @@ TargetVoltageSmoother::TargetVoltageSmoother(
     : steering_spoof_settings_(steering_spoof_settings) {}
 
 void TargetVoltageSmoother::set_target_offset(int16_t new_target_offset) {
-  target_offset_ = new_target_offset;
+  target_offset_ = constrain(new_target_offset,
+                             -steering_spoof_settings_.max_steering_magnitude,
+                             steering_spoof_settings_.max_steering_magnitude);
   if (target_offset_ == current_offset_) {
     steps_spent_at_current_offset_ =
         min(steps_spent_at_current_offset_,
@@ -86,5 +88,9 @@ uint16_t TargetVoltageSmoother::get_target_green_voltage() const {
 }
 
 int16_t TargetVoltageSmoother::get_current_offset() const {
+  return current_offset_;
+}
+
+int16_t TargetVoltageSmoother::get_target_offset() const {
   return current_offset_;
 }

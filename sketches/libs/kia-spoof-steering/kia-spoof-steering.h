@@ -109,6 +109,7 @@ public:
   uint16_t get_target_blue_voltage() const;
   uint16_t get_target_green_voltage() const;
   int16_t get_current_offset() const;
+  int16_t get_target_offset() const;
 
 private:
   // Hystheresis-smoothed historical averages.
