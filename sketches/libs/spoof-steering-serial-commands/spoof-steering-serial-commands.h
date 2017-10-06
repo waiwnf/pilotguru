@@ -49,11 +49,25 @@ public:
   };
 
   CommandStatus GetCommandStatus() const;
+
   // Copies the most recent parsed command to the argument. Only makes sense to
   // be called in READY_OK state, i.e. right after consuming COMMAND_END of a
   // well-formed command. Returns true if the resulting command is valid to use,
   // false otherwise (i.e. when called in state other than READY_OK).
   bool GetCurrentCommand(KiaControlCommand *command) const;
+
+  // Between a parse attempt of a complete command and consumption of the next
+  // character (i.e. in states other than INCOMPLETE), signals to the parser
+  // that the result of the previous parse attempt (either the parsed command or
+  // the error state) has been processed, and the parser should move on to a
+  // state waiting for the next command (i.e. state == INCOMPLETE and zero
+  // consumed characters).
+  // When called between the parse attempt and arrival of the next character,
+  // this resets the state and returns true.
+  // When called in the middle of receiving a new command (i.e. in INCOMPLETE
+  // state), this is a no-op and returns false.
+  bool startNextCommand();
+
   // Consume the next character from the serial connection; try to parse the
   // resulting string when consuming COMMAND_END. Returns the parser state after
   // consuming the argument and if applicable parsing attempt.

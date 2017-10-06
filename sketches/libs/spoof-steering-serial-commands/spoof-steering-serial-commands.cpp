@@ -24,6 +24,20 @@ bool KiaControlCommandProcessor::GetCurrentCommand(
   return true;
 }
 
+bool KiaControlCommandProcessor::startNextCommand() {
+  switch (command_status_) {
+  case INCOMPLETE:
+    return false;
+  case READY_OK:
+  case PARSE_FAIL:
+  case COMMAND_OVERFLOW:
+  default:
+    consumed_chars = 0;
+    command_status_ = INCOMPLETE;
+    return true;
+  }
+}
+
 KiaControlCommandProcessor::CommandStatus
 KiaControlCommandProcessor::ConsumeChar(char next_char) {
   if (consumed_chars < max_command_length) {
