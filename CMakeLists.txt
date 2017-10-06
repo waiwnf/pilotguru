@@ -11,7 +11,7 @@ ENDIF()
 find_package(Qt5Widgets REQUIRED)
 find_package(OpenCV 2.4.3 REQUIRED)
 
-# Instruct CMake to run moc automatically when needed.
+# For QT GUI projects, run MOC and UIC automatically when needed.
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
 
@@ -19,7 +19,55 @@ MESSAGE("Build type: " ${CMAKE_BUILD_TYPE})
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS}  -Wall -O3 -march=native -g")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -O3 -march=native -g -std=c++11")
 
+enable_testing()
+
 include(ExternalProject)
+
+# ---------------------- Google test start ----------------------
+# Adaped from http://www.kaizou.org/2014/11/gtest-cmake/
+
+# We need thread support
+find_package(Threads REQUIRED)
+
+# Download and install GoogleTest
+ExternalProject_Add(
+    gtest
+    GIT_REPOSITORY https://github.com/google/googletest.git
+    GIT_TAG           master
+    UPDATE_COMMAND    ""
+    PREFIX ${CMAKE_CURRENT_BINARY_DIR}/gtest
+    # Disable install step
+    INSTALL_COMMAND ""
+)
+
+# Get GTest source and binary directories from CMake project
+ExternalProject_Get_Property(gtest source_dir binary_dir)
+
+# Create a libgtest target to be used as a dependency by test programs
+add_library(libgtest_main IMPORTED STATIC GLOBAL)
+add_dependencies(libgtest_main gtest)
+
+# Set libgtest properties
+set_target_properties(libgtest_main PROPERTIES
+    "IMPORTED_LOCATION" "${binary_dir}/googlemock/gtest/libgtest_main.a"
+    "IMPORTED_LINK_INTERFACE_LIBRARIES" "${CMAKE_THREAD_LIBS_INIT}"
+)
+
+# Create a libgmock target to be used as a dependency by test programs
+add_library(libgmock IMPORTED STATIC GLOBAL)
+add_dependencies(libgmock gtest)
+
+# Set libgmock properties
+set_target_properties(libgmock PROPERTIES
+    "IMPORTED_LOCATION" "${binary_dir}/googlemock/libgmock.a"
+    "IMPORTED_LINK_INTERFACE_LIBRARIES" "${CMAKE_THREAD_LIBS_INIT}"
+)
+
+include_directories("${source_dir}/googletest/include"
+                    "${source_dir}/googlemock/include")
+
+# ---------------------- Google test end ----------------------
+
 ExternalProject_Add(can-utils
   PREFIX            ${CMAKE_BINARY_DIR}/can-utils
   GIT_REPOSITORY    https://github.com/waiwnf/can-utils.git
@@ -47,6 +95,7 @@ ${PROJECT_SOURCE_DIR}/thirdparty/g2o
 ${PROJECT_SOURCE_DIR}/thirdparty/LBFGS
 ${EIGEN3_INCLUDE_DIR}
 ${CMAKE_CURRENT_BINARY_DIR}/thirdparty/orb-slam2  # For generated proto files.
+${PROJECT_SOURCE_DIR}/sketches/libs/spoof-steering-serial-commands
 )
 
 add_library(pilotgurulib SHARED
@@ -65,6 +114,9 @@ add_library(pilotgurulib SHARED
 
 add_library(canlib SHARED ${PROJECT_SOURCE_DIR}/src/car/can.cc)
 add_library(kiacanlib SHARED ${PROJECT_SOURCE_DIR}/src/car/kia_can.cc)
+add_library(
+    steeringcommandslib SHARED
+    ${PROJECT_SOURCE_DIR}/sketches/libs/spoof-steering-serial-commands/spoof-steering-serial-commands.cpp)
 
 add_executable(annotate_frames src/annotate_frames.cc)
 add_executable(calibrate src/calibrate.cc)
@@ -77,6 +129,12 @@ add_executable(optical_trajectories src/optical_trajectories.cc)
 add_executable(project_translations src/project_translations.cc)
 add_executable(render_motion src/render_motion.cc)
 add_executable(smooth_heading_directions src/smooth_heading_directions.cc)
+
+add_executable(
+    steeringcommandslib_test
+    ${PROJECT_SOURCE_DIR}/sketches/libs/spoof-steering-serial-commands/test/spoof-steering-serial-commands_test.cpp)
+target_link_libraries(steeringcommandslib_test steeringcommandslib libgtest_main libgmock)
+add_test(SteeringCommandsTests steeringcommandslib_test)
 
 add_dependencies(pilotgurulib ORB_SLAM2)
 add_dependencies(annotate_frames pilotgurulib)
