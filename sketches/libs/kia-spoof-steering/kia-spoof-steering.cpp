@@ -2,7 +2,8 @@
 
 #include <Arduino.h>
 
-int SmoothedVoltageState::make_string(char *buf, size_t buf_size) const {
+int TargetVoltageSmoother::SmoothedVoltageState::make_string(
+    char *buf, size_t buf_size) const {
   if (buf == nullptr || buf_size < 1) {
     return -1;
   }
@@ -107,6 +108,7 @@ int16_t TargetVoltageSmoother::get_target_offset() const {
   return voltage_state_.current_offset_;
 }
 
-const SmoothedVoltageState &TargetVoltageSmoother::get_voltage_state() const {
+const TargetVoltageSmoother::SmoothedVoltageState &
+TargetVoltageSmoother::get_voltage_state() const {
   return voltage_state_;
 }
