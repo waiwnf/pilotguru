@@ -27,6 +27,8 @@ struct KiaControlCommand {
   int16_t value;
 };
 
+constexpr char VOLTAGE_REPORT_TAG = 'v';
+
 // Helper class to parse a stream of characters over a serial connection into
 // a sequence of KiaControlCommand objects.
 class KiaControlCommandProcessor {

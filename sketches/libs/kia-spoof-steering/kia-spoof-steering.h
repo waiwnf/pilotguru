@@ -99,6 +99,19 @@ struct SteeringSpoofSettings {
 
 class TargetVoltageSmoother {
 public:
+  struct SmoothedVoltageState {
+    // Hystheresis-smoothed historical averages.
+    uint16_t smoothed_blue_voltage_ = 0, smoothed_green_voltage_ = 0;
+    // Effective torque voltage offset to be applied to the hystheresis-smoothed
+    // historical values at current step.
+    int16_t current_offset_ = 0;
+    // Target voltage offset to move to over time, spending a few steps on every
+    // intermediate voltage point.
+    int16_t target_offset_ = 0;
+
+    int make_string(char *buf, size_t buf_size) const;
+  };
+
   TargetVoltageSmoother(const SteeringSpoofSettings &steering_spoof_settings);
 
   void set_target_offset(int16_t new_target_offset);
@@ -110,16 +123,10 @@ public:
   uint16_t get_target_green_voltage() const;
   int16_t get_current_offset() const;
   int16_t get_target_offset() const;
+  const SmoothedVoltageState &get_voltage_state() const;
 
 private:
-  // Hystheresis-smoothed historical averages.
-  uint16_t smoothed_blue_voltage_ = 0, smoothed_green_voltage_ = 0;
-  // Effective torque voltage offset to be applied to the hystheresis-smoothed
-  // historical values at current step.
-  int16_t current_offset_ = 0;
-  // Target voltage offset to move to over time, spending a few steps on every
-  // intermediate voltage point.
-  int16_t target_offset_ = 0;
+  SmoothedVoltageState voltage_state_;
   uint16_t steps_spent_at_current_offset_ = 0;
 
   const SteeringSpoofSettings &steering_spoof_settings_;

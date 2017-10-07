@@ -59,6 +59,8 @@
 // the PCF8591 will return the voltage on this channel.
 #define AIN3_ID 0x3
 
+#include <assert.h>
+
 // SoftI2CMaster I2C library.
 #include <SoftI2CMaster.h>
 // Stock Arduino I2C library.
