@@ -42,11 +42,14 @@ void runVelocityRead(pilotguru::kia::CarMotionData *car_motion_data,
 }
 }
 
-MainWindow::MainWindow(const std::string &can_interface, QWidget *parent)
+MainWindow::MainWindow(const std::string &can_interface,
+                       const std::string &arduino_tty, QWidget *parent)
     : QMainWindow(parent), ui(new Ui::MainWindow),
       car_motion_data_(new pilotguru::kia::CarMotionData(10)),
       car_motion_data_updater_(new pilotguru::kia::CarMotionDataUpdater(
-          car_motion_data_.get(), can_interface, {0x2B0, 0x4B0}, {1, 0})) {
+          car_motion_data_.get(), can_interface, {0x2B0, 0x4B0}, {1, 0})),
+      arduino_command_channel_(
+          new pilotguru::ArduinoCommandChannel(arduino_tty)) {
   ui->setupUi(this);
 
   steering_angle_read_thread_.reset(
@@ -60,6 +63,8 @@ MainWindow::MainWindow(const std::string &can_interface, QWidget *parent)
           &MainWindow::startMonitoring);
   connect(ui->monitoring_stop_button, &QPushButton::clicked, this,
           &MainWindow::stopMonitoring);
+  connect(ui->steering_torque_send_button, &QPushButton::clicked, this,
+          &MainWindow::sendSteering);
 }
 
 MainWindow::~MainWindow() {
@@ -72,3 +77,10 @@ MainWindow::~MainWindow() {
 void MainWindow::startMonitoring() { car_motion_data_updater_->start(); }
 
 void MainWindow::stopMonitoring() { car_motion_data_updater_->stop(); }
+
+void MainWindow::sendSteering() {
+  // TODO parse value, refactor to use the command struct.
+  const std::string command =
+      std::string("s") + ui->steering_torque_in_field->text().toStdString();
+  arduino_command_channel_->SendCommand(command);
+}
