@@ -71,8 +71,7 @@ char ExecuteKiaControlCommand() {
 void loop() {
   voltage_measurement.green_voltage = read_green_voltage();
   voltage_measurement.blue_voltage = read_blue_voltage();
-  // historic_voltage_data.take_measurement(voltage_measurement);
-  historic_voltage_data.take_measurement({128, 128});
+  historic_voltage_data.take_measurement(voltage_measurement);
   historic_avg_voltage = historic_voltage_data.get_avg_voltage();
   voltage_smoother.update_measurments(historic_avg_voltage);
 
@@ -118,8 +117,8 @@ void loop() {
 
   // Not using the requested offset for now, simply passing through the measured
   // sensors voltage.
-  set_blue_voltage(historic_avg_voltage.blue_voltage);
-  set_green_voltage(historic_avg_voltage.green_voltage);
+  set_blue_voltage(voltage_smoother.get_target_blue_voltage());
+  set_green_voltage(voltage_smoother.get_target_green_voltage());
 }
 
 void serialEvent() {
