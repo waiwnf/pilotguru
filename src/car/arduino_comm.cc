@@ -1,4 +1,5 @@
 #include <car/arduino_comm.hpp>
+#include <spoof-steering-serial-commands.h>
 
 #include <fcntl.h>
 #include <termios.h>
@@ -23,6 +24,9 @@ OpenedTty::OpenedTty(const std::string &tty_name) {
   cfmakeraw(&tios);
   tios.c_iflag &= ~IXOFF;
   tios.c_cflag &= ~CRTSCTS;
+  // Disable hang-up-on-close, to avoid Arduino resets on re-establishing the
+  // serial connection.
+  tios.c_cflag &= ~HUPCL;
 
   /* Baud Rate */
   cfsetispeed(&tios, B115200);
@@ -50,7 +54,7 @@ OpenedTty::~OpenedTty() {
 
 int OpenedTty::fd() const { return fd_; }
 
-int OpenedTty::wait_read(timeval *timeout) {
+int OpenedTty::wait_read(timeval *timeout) const {
   fd_set fd_set_singleton;
   FD_ZERO(&fd_set_singleton);
   FD_SET(fd_, &fd_set_singleton);
@@ -58,17 +62,31 @@ int OpenedTty::wait_read(timeval *timeout) {
   return select(fd_ + 1, &fd_set_singleton, nullptr, nullptr, timeout);
 }
 
+namespace {
+bool ReplaceEolWriteCommandStringToTty(const int fd,
+                                       char *null_terminated_command) {
+  if (fd < 0 || null_terminated_command == nullptr) {
+    return false;
+  }
+  const int command_length = strlen(null_terminated_command);
+  null_terminated_command[command_length] = COMMAND_EOL_OK;
+  const ssize_t write_result =
+      write(fd, null_terminated_command, command_length + 1);
+  return write_result == (command_length + 1);
+}
+}
+
 ArduinoCommandChannel::ArduinoCommandChannel(const std::string &tty_name)
     : arduino_tty_(tty_name) {
-  // TODO refactor.
-  constexpr char RESET_COMMAND[] = "r";
+  constexpr kia::KiaControlCommand reset_command = {
+      kia::KiaControlCommand::RESET, 0};
+  // Give Arduino time to run setup() after opening the serial connection.
+  sleep(2);
+  CHECK(reset_command.ToString(command_buffer_, max_command_length));
   // Send first reset command to stop Arduino from writing new data to the
   // serial conection. Note that the response to this reset may not arrive if
   // the serial buffer is already full.
-  const ssize_t reset_write_result = write(arduino_tty_.fd(), RESET_COMMAND, 1);
-  CHECK_EQ(reset_write_result, 1);
-  const ssize_t eol_write_result = write(arduino_tty_.fd(), &COMMAND_EOL_OK, 1);
-  CHECK_EQ(eol_write_result, 1);
+  CHECK(ReplaceEolWriteCommandStringToTty(arduino_tty_.fd(), command_buffer_));
   // Read everything that shows up in the serial buffer until it is empty.
   constexpr timeval ONE_SECOND = {1 /* seconds */, 0 /* micros */};
   timeval timeout = ONE_SECOND;
@@ -82,7 +100,7 @@ ArduinoCommandChannel::ArduinoCommandChannel(const std::string &tty_name)
   }
   // Once the buffer is empty, the second reset command should return an OK
   // result.
-  const char reset_result = SendCommand(RESET_COMMAND);
+  const char reset_result = SendCommand(reset_command);
   CHECK_EQ(reset_result, COMMAND_EOL_OK);
   // Make sure that what we got from the serial connection was actually in
   // response to the second reset command and there is nothing in the buffer
@@ -92,21 +110,18 @@ ArduinoCommandChannel::ArduinoCommandChannel(const std::string &tty_name)
   CHECK_EQ(wait_result, 0);
 }
 
-char ArduinoCommandChannel::SendCommand(const std::string &command) {
-  std::unique_lock<std::mutex> lock(tty_mutex_, std::try_to_lock);
+char ArduinoCommandChannel::SendCommand(const kia::KiaControlCommand &command) {
+  std::unique_lock<std::mutex> lock(mutex_, std::try_to_lock);
   if (!lock.owns_lock()) {
     // TODO separate signal for lock error.
     return COMMAND_EOL_ERR;
   }
-
-  const ssize_t command_length = command.length();
-  const ssize_t write_result =
-      write(arduino_tty_.fd(), command.c_str(), command_length);
-  const ssize_t eol_write_result = write(arduino_tty_.fd(), &COMMAND_EOL_OK, 1);
-  if (write_result != command_length || eol_write_result != 1) {
+  if (!command.ToString(command_buffer_, max_command_length)) {
     return COMMAND_EOL_ERR;
   }
-
+  if (!ReplaceEolWriteCommandStringToTty(arduino_tty_.fd(), command_buffer_)) {
+    return COMMAND_EOL_ERR;
+  }
   // Wait for reply
   const int wait_result = arduino_tty_.wait_read(nullptr);
   if (wait_result <= 0) {

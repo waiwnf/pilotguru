@@ -21,6 +21,13 @@ struct KiaControlCommand {
   // Reset the state to no spoofing.
   static constexpr char RESET = 'r';
 
+  // str must point to a null-terminated string.
+  // Returns true on success, false on failure.
+  // command may be modified (and in an invalid state) if parsing overall fails.
+  static bool TryParse(const char *str, KiaControlCommand *command);
+
+  bool ToString(char *str, int str_size) const;
+
   // Command type.
   char type;
   // Command magnitude, direction etc, depending on the type.

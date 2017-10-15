@@ -6,6 +6,8 @@
 
 #include <termios.h>
 
+#include <spoof-steering-serial-commands.h>
+
 // TODO refactor. The command struct should have a ToString().
 constexpr char COMMAND_EOL_OK = '\r';
 constexpr char COMMAND_EOL_ERR = 0x07;
@@ -15,11 +17,11 @@ namespace pilotguru {
 // TTY wrapper hardcoded to 115200 baud.
 class OpenedTty {
 public:
-  OpenedTty(const std::string& tty_name);
+  OpenedTty(const std::string &tty_name);
   ~OpenedTty();
 
   int fd() const;
-  int wait_read(timeval *timeout);
+  int wait_read(timeval *timeout) const;
 
 private:
   // Opened TTY file descriptor.
@@ -31,14 +33,20 @@ private:
 
 class ArduinoCommandChannel {
 public:
-  ArduinoCommandChannel(const std::string& tty_name);
-  char SendCommand(const std::string& command);
+  ArduinoCommandChannel(const std::string &tty_name);
+  char SendCommand(const kia::KiaControlCommand &command);
 
 private:
   OpenedTty arduino_tty_;
-  std::mutex tty_mutex_;
-};
 
+  // TODO does it make sense to unify buffer length with
+  // KiaControlCommandProcessor?
+  static constexpr uint16_t max_command_length = 16;
+  char command_buffer_[max_command_length];
+
+  // Guards both the tty and command buffer.
+  std::mutex mutex_;
+};
 }
 
 #endif

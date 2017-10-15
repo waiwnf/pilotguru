@@ -4,6 +4,8 @@
 #include "kia_steering_ui_main_window.h"
 #include <ui_kia_steering_ui_main_window.h>
 
+#include <spoof-steering-serial-commands.h>
+
 #include <glog/logging.h>
 
 namespace {
@@ -79,8 +81,14 @@ void MainWindow::startMonitoring() { car_motion_data_updater_->start(); }
 void MainWindow::stopMonitoring() { car_motion_data_updater_->stop(); }
 
 void MainWindow::sendSteering() {
-  // TODO parse value, refactor to use the command struct.
-  const std::string command =
-      std::string("s") + ui->steering_torque_in_field->text().toStdString();
-  arduino_command_channel_->SendCommand(command);
+  using pilotguru::kia::KiaControlCommand;
+
+  const std::string command_in_str =
+      std::string(1, KiaControlCommand::STEER) +
+      ui->steering_torque_in_field->text().toStdString();
+  KiaControlCommand command;
+  if (KiaControlCommand::TryParse(command_in_str.c_str(), &command)) {
+    // Only try to send out the command if it parsed properly.
+    arduino_command_channel_->SendCommand(command);
+  }
 }
