@@ -4,6 +4,7 @@
 // Helpers for communicating over KIA Cee'd C-CAN bus.
 
 #include <algorithm>
+#include <chrono>
 #include <condition_variable>
 #include <cstdint>
 #include <memory>
@@ -91,15 +92,31 @@ public:
     return result;
   }
 
-  Timestamped<T> wait_get_next(const timeval &prev_timestamp) const {
-    std::unique_lock<std::mutex> lock(data_mutex_);
-    while (
-        prev_timestamp.tv_sec == values_.at(latest_idx_).timestamp().tv_sec &&
-        prev_timestamp.tv_usec == values_.at(latest_idx_).timestamp().tv_usec) {
-      data_update_condition_.wait(lock);
+  bool wait_get_next(const timeval &prev_timestamp,
+                     const std::chrono::microseconds *timeout,
+                     Timestamped<T> *result) const {
+    if (result == nullptr) {
+      return false;
     }
-    const Timestamped<T> result = values_.at(latest_idx_);
-    return result;
+    std::unique_lock<std::mutex> lock(data_mutex_);
+    auto predicate = [this, &prev_timestamp]() {
+      return !(prev_timestamp.tv_sec ==
+                   this->values_.at(this->latest_idx_).timestamp().tv_sec &&
+               prev_timestamp.tv_usec ==
+                   this->values_.at(this->latest_idx_).timestamp().tv_usec);
+    };
+    if (timeout != nullptr) {
+      const bool wait_result =
+          data_update_condition_.wait_for(lock, *timeout, predicate);
+      if (!wait_result) {
+        return false;
+      }
+      // else fall out of the condition to assign result and return true.
+    } else {
+      data_update_condition_.wait(lock, predicate);
+    }
+    *result = values_.at(latest_idx_);
+    return true;
   }
 
 private:

@@ -1,47 +1,27 @@
-#include <cstdio>
-#include <iostream>
-
 #include "kia_steering_ui_main_window.h"
 #include <ui_kia_steering_ui_main_window.h>
 
 #include <spoof-steering-serial-commands.h>
 
-#include <glog/logging.h>
+SteeringAngleReadThread::SteeringAngleReadThread(
+    const pilotguru::kia::TimestampedHistory<pilotguru::kia::SteeringAngle>
+        *values_history)
+    : TimestampedValueReadThread<pilotguru::kia::SteeringAngle>(
+          values_history) {}
 
-namespace {
-void runSteeringAngleRead(pilotguru::kia::CarMotionData *car_motion_data,
-                          QLabel *steering_angle_value_label,
-                          std::mutex *ui_elements_mutex) {
-  constexpr size_t buffer_size = 64;
-  char text[buffer_size];
-  pilotguru::kia::Timestamped<pilotguru::kia::SteeringAngle> steering_instance(
-      {}, {0, 0});
-  while (true) {
-    steering_instance = car_motion_data->steering_angles().wait_get_next(
-        steering_instance.timestamp());
-    snprintf(text, buffer_size, "%d",
-             steering_instance.data().angle_deci_degrees);
-    std::unique_lock<std::mutex> lock(*ui_elements_mutex);
-    steering_angle_value_label->setText(text);
-  }
+void SteeringAngleReadThread::ProcessValue(
+    const pilotguru::kia::Timestamped<pilotguru::kia::SteeringAngle> &value) {
+  emit SteeringAngleChanged(QString::number(value.data().angle_deci_degrees));
 }
 
-void runVelocityRead(pilotguru::kia::CarMotionData *car_motion_data,
-                     QLabel *velocity_value_label,
-                     std::mutex *ui_elements_mutex) {
-  constexpr size_t buffer_size = 64;
-  char text[buffer_size];
-  pilotguru::kia::Timestamped<pilotguru::kia::Velocity> velocity_instance(
-      {}, {0, 0});
-  while (true) {
-    velocity_instance = car_motion_data->velocities().wait_get_next(
-        velocity_instance.timestamp());
-    snprintf(text, buffer_size, "%d",
-             velocity_instance.data().average_wheel_speed());
-    std::unique_lock<std::mutex> lock(*ui_elements_mutex);
-    velocity_value_label->setText(text);
-  }
-}
+VelocityReadThread::VelocityReadThread(
+    const pilotguru::kia::TimestampedHistory<pilotguru::kia::Velocity>
+        *values_history)
+    : TimestampedValueReadThread<pilotguru::kia::Velocity>(values_history) {}
+
+void VelocityReadThread::ProcessValue(
+    const pilotguru::kia::Timestamped<pilotguru::kia::Velocity> &value) {
+  emit VelocityChanged(QString::number(value.data().average_wheel_speed()));
 }
 
 MainWindow::MainWindow(const std::string &can_interface,
@@ -54,33 +34,35 @@ MainWindow::MainWindow(const std::string &can_interface,
           new pilotguru::ArduinoCommandChannel(arduino_tty)) {
   ui->setupUi(this);
 
-  steering_angle_read_thread_.reset(
-      new std::thread(runSteeringAngleRead, car_motion_data_.get(),
-                      ui->steering_angle_value_label, &ui_elements_mutex_));
-  velocity_read_thread_.reset(
-      new std::thread(runVelocityRead, car_motion_data_.get(),
-                      ui->velocity_value_label, &ui_elements_mutex_));
+  car_motion_data_updater_->start();
 
-  connect(ui->monitoring_start_button, &QPushButton::clicked, this,
-          &MainWindow::startMonitoring);
-  connect(ui->monitoring_stop_button, &QPushButton::clicked, this,
-          &MainWindow::stopMonitoring);
+  steering_angle_read_thread_.reset(
+      new SteeringAngleReadThread(&(car_motion_data_->steering_angles())));
+  connect(steering_angle_read_thread_.get(),
+          &SteeringAngleReadThread::SteeringAngleChanged, this,
+          &MainWindow::OnSteeringAngleChanged);
+  steering_angle_read_thread_->start();
+
+  velocity_read_thread_.reset(
+      new VelocityReadThread(&(car_motion_data_->velocities())));
+  connect(velocity_read_thread_.get(), &VelocityReadThread::VelocityChanged,
+          this, &MainWindow::OnVelocityChanged);
+  velocity_read_thread_->start();
+
   connect(ui->steering_torque_send_button, &QPushButton::clicked, this,
-          &MainWindow::sendSteering);
+          &MainWindow::SendSteering);
 }
 
 MainWindow::~MainWindow() {
+  steering_angle_read_thread_->RequestStop();
+  velocity_read_thread_->RequestStop();
+  steering_angle_read_thread_->wait();
+  velocity_read_thread_->wait();
   car_motion_data_updater_->stop();
-  steering_angle_read_thread_->detach();
-  velocity_read_thread_->detach();
   delete ui;
 }
 
-void MainWindow::startMonitoring() { car_motion_data_updater_->start(); }
-
-void MainWindow::stopMonitoring() { car_motion_data_updater_->stop(); }
-
-void MainWindow::sendSteering() {
+void MainWindow::SendSteering() {
   using pilotguru::kia::KiaControlCommand;
 
   const std::string command_in_str =
@@ -91,4 +73,12 @@ void MainWindow::sendSteering() {
     // Only try to send out the command if it parsed properly.
     arduino_command_channel_->SendCommand(command);
   }
+}
+
+void MainWindow::OnSteeringAngleChanged(QString text) {
+  ui->steering_angle_value_label->setText(text);
+}
+
+void MainWindow::OnVelocityChanged(QString text) {
+  ui->velocity_value_label->setText(text);
 }

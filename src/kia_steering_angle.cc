@@ -20,8 +20,8 @@ void steeringAngleLogger(const pilotguru::kia::CarMotionData *motion_data) {
   pilotguru::kia::Timestamped<pilotguru::kia::SteeringAngle> steering_instance{
       {}, {0, 0}};
   while (true) {
-    steering_instance = motion_data->steering_angles().wait_get_next(
-        steering_instance.timestamp());
+    motion_data->steering_angles().wait_get_next(steering_instance.timestamp(),
+                                                 nullptr, &steering_instance);
     std::cout << "Steering angle: "
               << steering_instance.data().angle_deci_degrees << std::endl;
   }
