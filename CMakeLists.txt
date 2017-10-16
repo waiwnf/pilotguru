@@ -111,13 +111,27 @@ add_library(pilotgurulib SHARED
   ${PROJECT_SOURCE_DIR}/src/slam/track_image_sequence.cc
   ${PROJECT_SOURCE_DIR}/src/slam/smoothing.cc
 )
+target_link_libraries(pilotgurulib ORB_SLAM2)
 
-add_library(arduinocommlib SHARED ${PROJECT_SOURCE_DIR}/src/car/arduino_comm.cc)
-add_library(canlib SHARED ${PROJECT_SOURCE_DIR}/src/car/can.cc)
-add_library(kiacanlib SHARED ${PROJECT_SOURCE_DIR}/src/car/kia_can.cc)
 add_library(
     steeringcommandslib SHARED
     ${PROJECT_SOURCE_DIR}/sketches/libs/spoof-steering-serial-commands/spoof-steering-serial-commands.cpp)
+
+
+add_library(arduinocommlib SHARED ${PROJECT_SOURCE_DIR}/src/car/arduino_comm.cc)
+target_link_libraries(arduinocommlib steeringcommandslib)
+
+add_library(canlib SHARED ${PROJECT_SOURCE_DIR}/src/car/can.cc)
+add_dependencies(canlib can-utils)
+target_link_libraries(arduinocommlib steeringcommandslib socketcanlib)
+
+add_library(kiacanlib SHARED ${PROJECT_SOURCE_DIR}/src/car/kia_can.cc)
+target_link_libraries(kiacanlib canlib glog)
+
+add_library(
+    kia_steering_angle_holder_lib SHARED
+    ${PROJECT_SOURCE_DIR}/src/car/kia_steering_angle_holder.cc)
+target_link_libraries(kia_steering_angle_holder_lib kiacanlib arduinocommlib glog)
 
 add_executable(annotate_frames src/annotate_frames.cc)
 add_executable(calibrate src/calibrate.cc)
@@ -137,28 +151,20 @@ add_executable(
 target_link_libraries(steeringcommandslib_test steeringcommandslib libgtest_main libgmock)
 add_test(SteeringCommandsTests steeringcommandslib_test)
 
-add_dependencies(pilotgurulib ORB_SLAM2)
-add_dependencies(annotate_frames pilotgurulib)
-add_dependencies(fit_motion pilotgurulib ORB_SLAM2)
-add_dependencies(integrate_motion pilotgurulib ORB_SLAM2)
-add_dependencies(interpolate_velocity pilotgurulib ORB_SLAM2)
-add_dependencies(kiacanlib canlib)
-add_dependencies(kia_steering_angle canlib kiacanlib socketcanlib)
-add_dependencies(kia_steering_ui canlib kiacanlib socketcanlib arduinocommlib)
-add_dependencies(optical_trajectories pilotgurulib ORB_SLAM2)
-add_dependencies(project_translations pilotgurulib ORB_SLAM2)
-add_dependencies(render_motion pilotgurulib ORB_SLAM2)
-add_dependencies(socketcanlib can-utils)
-add_dependencies(smooth_heading_directions pilotgurulib ORB_SLAM2)
+add_executable(
+    kia_steering_angle_holder_test
+    ${PROJECT_SOURCE_DIR}/src/car/kia_steering_angle_holder_test.cc)
+target_link_libraries(kia_steering_angle_holder_test kia_steering_angle_holder_lib arduinocommlib kiacanlib canlib steeringcommandslib libgtest_main libgmock glog)  
+add_test(KiaSteeringAngleHolderTests kia_steering_angle_holder_test)
 
-target_link_libraries(annotate_frames pilotgurulib ORB_SLAM2 ${OpenCV_LIBS} glog gflags)
+target_link_libraries(annotate_frames pilotgurulib ${OpenCV_LIBS} glog gflags)
 target_link_libraries(calibrate ${OpenCV_LIBS} glog gflags)
-target_link_libraries(fit_motion pilotgurulib ORB_SLAM2 glog gflags)
-target_link_libraries(integrate_motion pilotgurulib ORB_SLAM2 glog gflags)
-target_link_libraries(interpolate_velocity pilotgurulib ORB_SLAM2 glog gflags)
-target_link_libraries(kia_steering_angle kiacanlib canlib socketcanlib glog gflags pthread)
-target_link_libraries(kia_steering_ui arduinocommlib steeringcommandslib kiacanlib canlib socketcanlib glog gflags pthread Qt5::Widgets)
-target_link_libraries(optical_trajectories pilotgurulib ORB_SLAM2 ${OpenCV_LIBS} glog gflags)
-target_link_libraries(project_translations pilotgurulib ORB_SLAM2 ${OpenCV_LIBS} glog gflags)
-target_link_libraries(render_motion pilotgurulib ORB_SLAM2 ${OpenCV_LIBS} glog gflags)
-target_link_libraries(smooth_heading_directions pilotgurulib ORB_SLAM2 glog gflags)
+target_link_libraries(fit_motion pilotgurulib glog gflags)
+target_link_libraries(integrate_motion pilotgurulib glog gflags)
+target_link_libraries(interpolate_velocity pilotgurulib glog gflags)
+target_link_libraries(kia_steering_angle kiacanlib glog gflags pthread)
+target_link_libraries(kia_steering_ui arduinocommlib kiacanlib glog gflags pthread Qt5::Widgets)
+target_link_libraries(optical_trajectories pilotgurulib ${OpenCV_LIBS} glog gflags)
+target_link_libraries(project_translations pilotgurulib ${OpenCV_LIBS} glog gflags)
+target_link_libraries(render_motion pilotgurulib ${OpenCV_LIBS} glog gflags)
+target_link_libraries(smooth_heading_directions pilotgurulib glog gflags)
