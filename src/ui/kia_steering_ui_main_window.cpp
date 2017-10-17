@@ -3,35 +3,61 @@
 
 #include <spoof-steering-serial-commands.h>
 
+using pilotguru::kia::KiaControlCommand;
+using pilotguru::kia::SteeringAngle;
+using pilotguru::kia::Timestamped;
+using pilotguru::kia::TimestampedHistory;
+using pilotguru::kia::Velocity;
+
 SteeringAngleReadThread::SteeringAngleReadThread(
-    const pilotguru::kia::TimestampedHistory<pilotguru::kia::SteeringAngle>
-        *values_history)
-    : TimestampedValueReadThread<pilotguru::kia::SteeringAngle>(
-          values_history) {}
+    const TimestampedHistory<SteeringAngle> *values_history)
+    : TimestampedValueReadThread<SteeringAngle>(values_history) {}
 
 void SteeringAngleReadThread::ProcessValue(
-    const pilotguru::kia::Timestamped<pilotguru::kia::SteeringAngle> &value) {
+    const Timestamped<SteeringAngle> &value) {
   emit SteeringAngleChanged(QString::number(value.data().angle_deci_degrees));
 }
 
 VelocityReadThread::VelocityReadThread(
-    const pilotguru::kia::TimestampedHistory<pilotguru::kia::Velocity>
-        *values_history)
-    : TimestampedValueReadThread<pilotguru::kia::Velocity>(values_history) {}
+    const TimestampedHistory<Velocity> *values_history)
+    : TimestampedValueReadThread<Velocity>(values_history) {}
 
-void VelocityReadThread::ProcessValue(
-    const pilotguru::kia::Timestamped<pilotguru::kia::Velocity> &value) {
+void VelocityReadThread::ProcessValue(const Timestamped<Velocity> &value) {
   emit VelocityChanged(QString::number(value.data().average_wheel_speed()));
 }
 
+SteeringTorqueOffsetReadThread::SteeringTorqueOffsetReadThread(
+    const TimestampedHistory<KiaControlCommand> *values_history)
+    : TimestampedValueReadThread<KiaControlCommand>(values_history) {}
+
+void SteeringTorqueOffsetReadThread::ProcessValue(
+    const Timestamped<KiaControlCommand> &value) {
+  const KiaControlCommand &command = value.data();
+  if (command.type == KiaControlCommand::STEER) {
+    emit SteeringTorqueChanged(QString::number(command.value));
+  } else {
+    LOG(ERROR) << "SteeringTorqueOffsetReadThread received a non-steering "
+                  "command. Command type: "
+               << command.type;
+  }
+}
+
 MainWindow::MainWindow(const std::string &can_interface,
-                       const std::string &arduino_tty, QWidget *parent)
+                       const std::string &arduino_tty,
+                       const pilotguru::kia::SteeringAngleHolderSettings
+                           &steering_controller_settings,
+                       QWidget *parent)
     : QMainWindow(parent), ui(new Ui::MainWindow),
       car_motion_data_(new pilotguru::kia::CarMotionData(10)),
       car_motion_data_updater_(new pilotguru::kia::CarMotionDataUpdater(
           car_motion_data_.get(), can_interface, {0x2B0, 0x4B0}, {1, 0})),
+      steering_commands_history_(new TimestampedHistory<KiaControlCommand>(2)),
       arduino_command_channel_(
-          new pilotguru::ArduinoCommandChannel(arduino_tty)) {
+          new pilotguru::ArduinoCommandChannel(arduino_tty)),
+      steering_controller_(new pilotguru::kia::SteeringAngleHolderController(
+          &(car_motion_data_->steering_angles()),
+          arduino_command_channel_.get(), steering_commands_history_.get(),
+          steering_controller_settings)) {
   ui->setupUi(this);
 
   car_motion_data_updater_->start();
@@ -49,22 +75,32 @@ MainWindow::MainWindow(const std::string &can_interface,
           this, &MainWindow::OnVelocityChanged);
   velocity_read_thread_->start();
 
+  steering_torque_offset_read_thread_.reset(
+      new SteeringTorqueOffsetReadThread(steering_commands_history_.get()));
+  connect(steering_torque_offset_read_thread_.get(),
+          &SteeringTorqueOffsetReadThread::SteeringTorqueChanged, this,
+          &MainWindow::OnSteeringTorqueChanged);
+  steering_torque_offset_read_thread_->start();
+
   connect(ui->steering_torque_send_button, &QPushButton::clicked, this,
-          &MainWindow::SendSteering);
+          &MainWindow::SendSingleSteeringCommand);
+  connect(ui->target_angle_send_button, &QPushButton::clicked, this,
+          &MainWindow::SetTargetSteeringAngle);
 }
 
 MainWindow::~MainWindow() {
   steering_angle_read_thread_->RequestStop();
   velocity_read_thread_->RequestStop();
+  steering_torque_offset_read_thread_->RequestStop();
   steering_angle_read_thread_->wait();
   velocity_read_thread_->wait();
+  steering_torque_offset_read_thread_->wait();
+  steering_controller_->Stop();
   car_motion_data_updater_->stop();
   delete ui;
 }
 
-void MainWindow::SendSteering() {
-  using pilotguru::kia::KiaControlCommand;
-
+void MainWindow::SendSingleSteeringCommand() {
   const std::string command_in_str =
       std::string(1, KiaControlCommand::STEER) +
       ui->steering_torque_in_field->text().toStdString();
@@ -75,10 +111,25 @@ void MainWindow::SendSteering() {
   }
 }
 
+void MainWindow::SetTargetSteeringAngle() {
+  bool parse_success = false;
+  const short target_angle =
+      ui->target_angle_in_field->text().toShort(&parse_success);
+  if (parse_success &&
+      std::abs(target_angle) <=
+          steering_controller_->settings().max_angle_amplitude) {
+    steering_controller_->SetTargetAngle(target_angle);
+  }
+}
+
 void MainWindow::OnSteeringAngleChanged(QString text) {
   ui->steering_angle_value_label->setText(text);
 }
 
 void MainWindow::OnVelocityChanged(QString text) {
   ui->velocity_value_label->setText(text);
+}
+
+void MainWindow::OnSteeringTorqueChanged(QString text) {
+  ui->torque_offset_value_label->setText(text);
 }

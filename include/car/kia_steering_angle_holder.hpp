@@ -33,17 +33,24 @@ public:
   SteeringAngleHolderController(
       const TimestampedHistory<SteeringAngle> *steering_angle_sensor,
       ArduinoCommandChannel *arduino_command_channel,
-      const SteeringAngleHolderSettings& settings);
+      TimestampedHistory<KiaControlCommand> *commands_sink,
+      const SteeringAngleHolderSettings &settings);
 
+  const SteeringAngleHolderSettings &settings() const;
   bool SetTargetAngle(int16_t target_angle_degrees);
   void ClearTargetAngle();
   void ControllerLoop();
-  void RequestStop();
+  void RequestStop(); // non-blocking
+  void Join();
+  void Stop(); // blocking
 
 private:
+  void PostSteeringCommand(const KiaControlCommand &command);
+
   // Initialized by the constructor.
-  const TimestampedHistory<SteeringAngle> * const steering_angle_sensor_;
-  ArduinoCommandChannel * const arduino_command_channel_;
+  const TimestampedHistory<SteeringAngle> *const steering_angle_sensor_;
+  ArduinoCommandChannel *const arduino_command_channel_;
+  TimestampedHistory<KiaControlCommand> *const commands_sink_;
   const SteeringAngleHolderSettings settings_;
 
   // Adjusted at runtime.
