@@ -3,10 +3,10 @@
 
 #include <spoof-steering-serial-commands.h>
 
+using pilotguru::Timestamped;
+using pilotguru::TimestampedHistory;
 using pilotguru::kia::KiaControlCommand;
 using pilotguru::kia::SteeringAngle;
-using pilotguru::kia::Timestamped;
-using pilotguru::kia::TimestampedHistory;
 using pilotguru::kia::Velocity;
 
 SteeringAngleReadThread::SteeringAngleReadThread(
@@ -27,18 +27,16 @@ void VelocityReadThread::ProcessValue(const Timestamped<Velocity> &value) {
 }
 
 SteeringTorqueOffsetReadThread::SteeringTorqueOffsetReadThread(
-    const TimestampedHistory<KiaControlCommand> *values_history)
-    : TimestampedValueReadThread<KiaControlCommand>(values_history) {}
+    const TimestampedHistory<std::string> *values_history)
+    : TimestampedValueReadThread<std::string>(values_history) {}
 
 void SteeringTorqueOffsetReadThread::ProcessValue(
-    const Timestamped<KiaControlCommand> &value) {
-  const KiaControlCommand &command = value.data();
-  if (command.type == KiaControlCommand::STEER) {
+    const Timestamped<std::string> &value) {
+  KiaControlCommand command;
+  const bool parse_result = pilotguru::kia::ParseSingleKiaControlCommand(
+      value.data().c_str(), value.data().length(), &command);
+  if (parse_result && (command.type == KiaControlCommand::STEER)) {
     emit SteeringTorqueChanged(QString::number(command.value));
-  } else {
-    LOG(ERROR) << "SteeringTorqueOffsetReadThread received a non-steering "
-                  "command. Command type: "
-               << command.type;
   }
 }
 
@@ -51,13 +49,11 @@ MainWindow::MainWindow(const std::string &can_interface,
       car_motion_data_(new pilotguru::kia::CarMotionData(10)),
       car_motion_data_updater_(new pilotguru::kia::CarMotionDataUpdater(
           car_motion_data_.get(), can_interface, {0x2B0, 0x4B0}, {1, 0})),
-      steering_commands_history_(new TimestampedHistory<KiaControlCommand>(2)),
       arduino_command_channel_(
           new pilotguru::ArduinoCommandChannel(arduino_tty)),
       steering_controller_(new pilotguru::kia::SteeringAngleHolderController(
           &(car_motion_data_->steering_angles()),
-          arduino_command_channel_.get(), steering_commands_history_.get(),
-          steering_controller_settings)) {
+          arduino_command_channel_.get(), steering_controller_settings)) {
   ui->setupUi(this);
 
   car_motion_data_updater_->start();
@@ -75,8 +71,8 @@ MainWindow::MainWindow(const std::string &can_interface,
           this, &MainWindow::OnVelocityChanged);
   velocity_read_thread_->start();
 
-  steering_torque_offset_read_thread_.reset(
-      new SteeringTorqueOffsetReadThread(steering_commands_history_.get()));
+  steering_torque_offset_read_thread_.reset(new SteeringTorqueOffsetReadThread(
+      &(arduino_command_channel_->CommandsHistory())));
   connect(steering_torque_offset_read_thread_.get(),
           &SteeringTorqueOffsetReadThread::SteeringTorqueChanged, this,
           &MainWindow::OnSteeringTorqueChanged);

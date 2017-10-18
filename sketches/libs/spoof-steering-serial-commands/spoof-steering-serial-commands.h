@@ -92,6 +92,9 @@ private:
   KiaControlCommand current_command_;
   CommandStatus command_status_ = INCOMPLETE;
 };
+
+bool ParseSingleKiaControlCommand(const char *text, uint16_t length,
+                                  KiaControlCommand *result);
 }
 }
 

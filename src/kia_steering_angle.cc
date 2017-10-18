@@ -17,7 +17,7 @@ DEFINE_string(can_interface, "slcan0", "");
 namespace {
 void steeringAngleLogger(const pilotguru::kia::CarMotionData *motion_data) {
   CHECK_NOTNULL(motion_data);
-  pilotguru::kia::Timestamped<pilotguru::kia::SteeringAngle> steering_instance{
+  pilotguru::Timestamped<pilotguru::kia::SteeringAngle> steering_instance{
       {}, {0, 0}};
   while (true) {
     motion_data->steering_angles().wait_get_next(steering_instance.timestamp(),

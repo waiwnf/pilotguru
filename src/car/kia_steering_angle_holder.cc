@@ -69,11 +69,9 @@ int16_t SteeringAngleHolderEffectiveTorque(
 SteeringAngleHolderController::SteeringAngleHolderController(
     const TimestampedHistory<SteeringAngle> *steering_angle_sensor,
     ArduinoCommandChannel *arduino_command_channel,
-    TimestampedHistory<KiaControlCommand> *commands_sink,
     const SteeringAngleHolderSettings &settings)
     : steering_angle_sensor_(steering_angle_sensor),
-      arduino_command_channel_(arduino_command_channel),
-      commands_sink_(commands_sink), settings_(settings) {
+      arduino_command_channel_(arduino_command_channel), settings_(settings) {
   CHECK_NOTNULL(steering_angle_sensor_);
   CHECK_NOTNULL(arduino_command_channel_);
   CHECK(settings_.IsValid());
@@ -117,14 +115,14 @@ void SteeringAngleHolderController::ControllerLoop() {
         steering_command.value = SteeringAngleHolderEffectiveTorque(
             target_angle_degrees_,
             steering_instance.data().angle_deci_degrees / 10, settings_);
-        PostSteeringCommand(steering_command);
+        arduino_command_channel_->SendCommand(steering_command);
       }
     } else {
       // Steering angle sensor timed out. This should not happen. Clear the
       // target steering angle and restore the spoof stering torque to 0.
       ClearTargetAngle();
       steering_command.value = 0;
-      PostSteeringCommand(steering_command);
+      arduino_command_channel_->SendCommand(steering_command);
     }
   }
 }
@@ -136,17 +134,6 @@ void SteeringAngleHolderController::Join() { controller_loop_thread_->join(); }
 void SteeringAngleHolderController::Stop() {
   RequestStop();
   Join();
-}
-
-void SteeringAngleHolderController::PostSteeringCommand(
-    const KiaControlCommand &command) {
-  CHECK_EQ(command.type, KiaControlCommand::STEER);
-  if (commands_sink_ != nullptr) {
-    timeval time_now;
-    gettimeofday(&time_now, nullptr);
-    commands_sink_->update(command, time_now);
-  }
-  arduino_command_channel_->SendCommand(command);
 }
 }
 }

@@ -178,5 +178,18 @@ KiaControlCommandProcessor::ParseCommand() {
              : PARSE_FAIL;
 }
 
+bool ParseSingleKiaControlCommand(const char *text, uint16_t length,
+                                  KiaControlCommand *result) {
+  if (text == nullptr || result == nullptr) {
+    return KiaControlCommandProcessor::PARSE_FAIL;
+  }
+
+  KiaControlCommandProcessor parser;
+  for (uint16_t i = 0; i < length; ++i) {
+    parser.ConsumeChar(text[i]);
+  }
+  return parser.GetCurrentCommand(result);
+}
+
 } // namespace kia
 } // namespace pilotguru

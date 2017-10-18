@@ -29,19 +29,19 @@ template <typename T> class TimestampedValueReadThread : public QThread {
 public:
   // Does not take ownership of the pointer.
   TimestampedValueReadThread(
-      const pilotguru::kia::TimestampedHistory<T> *values_history)
+      const pilotguru::TimestampedHistory<T> *values_history)
       : values_history_(values_history) {
     CHECK_NOTNULL(values_history_);
   }
 
   // Actual processing logic to be implemented by derivative classes.
-  virtual void ProcessValue(const pilotguru::kia::Timestamped<T> &value) = 0;
+  virtual void ProcessValue(const pilotguru::Timestamped<T> &value) = 0;
 
   void run() override {
     // Need a timeout waiting for new value to be able to check must_run_
     // regularly.
     const std::chrono::microseconds wait_timeout = std::chrono::seconds(1);
-    pilotguru::kia::Timestamped<T> value_instance{{}, {0, 0}};
+    pilotguru::Timestamped<T> value_instance{{}, {0, 0}};
     while (must_run_) {
       if (values_history_->wait_get_next(value_instance.timestamp(),
                                          &wait_timeout, &value_instance)) {
@@ -53,7 +53,7 @@ public:
   void RequestStop() { must_run_ = false; }
 
 private:
-  const pilotguru::kia::TimestampedHistory<T> *values_history_ = nullptr;
+  const pilotguru::TimestampedHistory<T> *values_history_ = nullptr;
   bool must_run_ = true;
 };
 
@@ -62,11 +62,10 @@ class SteeringAngleReadThread
     : public TimestampedValueReadThread<pilotguru::kia::SteeringAngle> {
   Q_OBJECT
 public:
-  SteeringAngleReadThread(const pilotguru::kia::TimestampedHistory<
+  SteeringAngleReadThread(const pilotguru::TimestampedHistory<
                           pilotguru::kia::SteeringAngle> *values_history);
-  void ProcessValue(
-      const pilotguru::kia::Timestamped<pilotguru::kia::SteeringAngle> &value)
-      override;
+  void ProcessValue(const pilotguru::Timestamped<pilotguru::kia::SteeringAngle>
+                        &value) override;
 
 signals:
   void SteeringAngleChanged(QString text);
@@ -78,10 +77,10 @@ class VelocityReadThread
     : public TimestampedValueReadThread<pilotguru::kia::Velocity> {
   Q_OBJECT
 public:
-  VelocityReadThread(const pilotguru::kia::TimestampedHistory<
+  VelocityReadThread(const pilotguru::TimestampedHistory<
                      pilotguru::kia::Velocity> *values_history);
-  void ProcessValue(const pilotguru::kia::Timestamped<pilotguru::kia::Velocity>
-                        &value) override;
+  void ProcessValue(
+      const pilotguru::Timestamped<pilotguru::kia::Velocity> &value) override;
 
 signals:
   void VelocityChanged(QString text);
@@ -90,14 +89,12 @@ signals:
 // Reads Velocity values off the queue and formats average wheel velocity as
 // text.
 class SteeringTorqueOffsetReadThread
-    : public TimestampedValueReadThread<pilotguru::kia::KiaControlCommand> {
+    : public TimestampedValueReadThread<std::string> {
   Q_OBJECT
 public:
   SteeringTorqueOffsetReadThread(
-      const pilotguru::kia::TimestampedHistory<
-          pilotguru::kia::KiaControlCommand> *values_history);
-  void ProcessValue(const pilotguru::kia::Timestamped<
-                    pilotguru::kia::KiaControlCommand> &value) override;
+      const pilotguru::TimestampedHistory<std::string> *values_history);
+  void ProcessValue(const pilotguru::Timestamped<std::string> &value) override;
 
 signals:
   void SteeringTorqueChanged(QString text);
@@ -126,9 +123,6 @@ private:
   std::unique_ptr<pilotguru::kia::CarMotionData> car_motion_data_;
   std::unique_ptr<pilotguru::kia::CarMotionDataUpdater>
       car_motion_data_updater_;
-  std::unique_ptr<
-      pilotguru::kia::TimestampedHistory<pilotguru::kia::KiaControlCommand>>
-      steering_commands_history_;
   std::unique_ptr<pilotguru::ArduinoCommandChannel> arduino_command_channel_;
   std::unique_ptr<pilotguru::kia::SteeringAngleHolderController>
       steering_controller_;
