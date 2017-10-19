@@ -51,12 +51,21 @@ public:
   }
 };
 
+class SteeringAngleJsonWriter
+    : public pilotguru::JsonSteamWriter<SteeringAngle> {
+public:
+  void WriteAsJsonString(const SteeringAngle &data,
+                         std::ostream &file_stream) override {
+    file_stream << "\"angle_deci_degrees\" : " << data.angle_deci_degrees
+                << "\n";
+  }
+};
+
 MainWindow::MainWindow(const std::string &can_interface,
                        const std::string &arduino_tty,
                        const pilotguru::kia::SteeringAngleHolderSettings
                            &steering_controller_settings,
-                       const std::string &steering_commands_log_name,
-                       QWidget *parent)
+                       const std::string &log_dir, QWidget *parent)
     : QMainWindow(parent), ui(new Ui::MainWindow),
       car_motion_data_(new pilotguru::kia::CarMotionData(10)),
       car_motion_data_updater_(new pilotguru::kia::CarMotionDataUpdater(
@@ -68,10 +77,18 @@ MainWindow::MainWindow(const std::string &can_interface,
           arduino_command_channel_.get(), steering_controller_settings)),
       kia_commands_logger_(
           new pilotguru::TimestampedJsonLogger<KiaControlCommand>(
-              steering_commands_log_name, STEERING_COMMANDS_LOG_ROOT_ELEMENT,
+              log_dir + "/" + STEERING_COMMANDS_LOG_ROOT_ELEMENT + ".json",
+              STEERING_COMMANDS_LOG_ROOT_ELEMENT,
               std::unique_ptr<pilotguru::JsonSteamWriter<KiaControlCommand>>(
                   new SteeringCommandsJsonWriter()),
-              &(arduino_command_channel_->CommandsHistory()))) {
+              &(arduino_command_channel_->CommandsHistory()))),
+      steering_angles_logger_(
+          new pilotguru::TimestampedJsonLogger<SteeringAngle>(
+              log_dir + "/" + STEERING_ANGLES_LOG_ROOT_ELEMENT + ".json",
+              STEERING_ANGLES_LOG_ROOT_ELEMENT,
+              std::unique_ptr<pilotguru::JsonSteamWriter<SteeringAngle>>(
+                  new SteeringAngleJsonWriter()),
+              &(car_motion_data_->steering_angles()))) {
   ui->setupUi(this);
 
   car_motion_data_updater_->start();
@@ -110,6 +127,7 @@ MainWindow::~MainWindow() {
   velocity_read_thread_->wait();
   steering_torque_offset_read_thread_->wait();
   kia_commands_logger_->Stop();
+  steering_angles_logger_->Stop();
   steering_controller_->Stop();
   car_motion_data_updater_->stop();
   delete ui;

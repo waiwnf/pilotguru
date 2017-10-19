@@ -6,7 +6,7 @@
 
 DEFINE_string(can_interface, "slcan0", "");
 DEFINE_string(arduino_tty, "", "");
-DEFINE_string(steering_commands_log_json, "steering_commands.json", "");
+DEFINE_string(kia_log_dir, ".", "");
 
 int main(int argc, char *argv[]) {
   google::InitGoogleLogging(argv[0]);
@@ -17,7 +17,7 @@ int main(int argc, char *argv[]) {
 
   pilotguru::kia::SteeringAngleHolderSettings settings;
   MainWindow w(FLAGS_can_interface, FLAGS_arduino_tty, settings,
-               FLAGS_steering_commands_log_json);
+               FLAGS_kia_log_dir);
   w.show();
 
   return a.exec();

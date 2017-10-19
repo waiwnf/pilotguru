@@ -19,7 +19,8 @@ namespace Ui {
 class MainWindow;
 }
 
-constexpr char STEERING_COMMANDS_LOG_ROOT_ELEMENT[] = "commands";
+constexpr char STEERING_COMMANDS_LOG_ROOT_ELEMENT[] = "steering_commands";
+constexpr char STEERING_ANGLES_LOG_ROOT_ELEMENT[] = "steering_angles";
 
 // Common logic for a separate thread continuously picking new timestamped
 // values from a queue and processing them.
@@ -114,8 +115,7 @@ public:
                       const std::string &arduino_tty,
                       const pilotguru::kia::SteeringAngleHolderSettings
                           &steering_controller_settings,
-                      const std::string &steering_commands_log_name,
-                      QWidget *parent = 0);
+                      const std::string &log_dir, QWidget *parent = 0);
   virtual ~MainWindow();
 
 private:
@@ -142,6 +142,9 @@ private:
   std::unique_ptr<
       pilotguru::TimestampedJsonLogger<pilotguru::kia::KiaControlCommand>>
       kia_commands_logger_;
+  std::unique_ptr<
+      pilotguru::TimestampedJsonLogger<pilotguru::kia::SteeringAngle>>
+      steering_angles_logger_;
 };
 
 #endif // MAINWINDOW_H
