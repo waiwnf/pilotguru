@@ -36,11 +36,11 @@ class ArduinoCommandChannel {
 public:
   ArduinoCommandChannel(const std::string &tty_name, size_t history_length = 5);
   char SendCommand(const kia::KiaControlCommand &command);
-  const TimestampedHistory<std::string> &CommandsHistory() const;
+  const TimestampedHistory<kia::KiaControlCommand> &CommandsHistory() const;
 
 private:
   OpenedTty arduino_tty_;
-  std::unique_ptr<TimestampedHistory<std::string>> commands_history_;
+  std::unique_ptr<TimestampedHistory<kia::KiaControlCommand>> commands_history_;
 
   // TODO does it make sense to unify buffer length with
   // KiaControlCommandProcessor?

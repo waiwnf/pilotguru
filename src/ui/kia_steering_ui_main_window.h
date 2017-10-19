@@ -13,10 +13,13 @@
 #include <car/can.hpp>
 #include <car/kia_can.hpp>
 #include <car/kia_steering_angle_holder.hpp>
+#include <io/timestamped_json_logger.hpp>
 
 namespace Ui {
 class MainWindow;
 }
+
+constexpr char STEERING_COMMANDS_LOG_ROOT_ELEMENT[] = "commands";
 
 // Common logic for a separate thread continuously picking new timestamped
 // values from a queue and processing them.
@@ -89,12 +92,15 @@ signals:
 // Reads Velocity values off the queue and formats average wheel velocity as
 // text.
 class SteeringTorqueOffsetReadThread
-    : public TimestampedValueReadThread<std::string> {
+    : public TimestampedValueReadThread<pilotguru::kia::KiaControlCommand> {
   Q_OBJECT
 public:
   SteeringTorqueOffsetReadThread(
-      const pilotguru::TimestampedHistory<std::string> *values_history);
-  void ProcessValue(const pilotguru::Timestamped<std::string> &value) override;
+      const pilotguru::TimestampedHistory<pilotguru::kia::KiaControlCommand>
+          *values_history);
+  void ProcessValue(
+      const pilotguru::Timestamped<pilotguru::kia::KiaControlCommand> &value)
+      override;
 
 signals:
   void SteeringTorqueChanged(QString text);
@@ -108,6 +114,7 @@ public:
                       const std::string &arduino_tty,
                       const pilotguru::kia::SteeringAngleHolderSettings
                           &steering_controller_settings,
+                      const std::string &steering_commands_log_name,
                       QWidget *parent = 0);
   virtual ~MainWindow();
 
@@ -131,6 +138,10 @@ private:
   std::unique_ptr<VelocityReadThread> velocity_read_thread_;
   std::unique_ptr<SteeringTorqueOffsetReadThread>
       steering_torque_offset_read_thread_;
+
+  std::unique_ptr<
+      pilotguru::TimestampedJsonLogger<pilotguru::kia::KiaControlCommand>>
+      kia_commands_logger_;
 };
 
 #endif // MAINWINDOW_H

@@ -27,23 +27,35 @@ void VelocityReadThread::ProcessValue(const Timestamped<Velocity> &value) {
 }
 
 SteeringTorqueOffsetReadThread::SteeringTorqueOffsetReadThread(
-    const TimestampedHistory<std::string> *values_history)
-    : TimestampedValueReadThread<std::string>(values_history) {}
+    const TimestampedHistory<KiaControlCommand> *values_history)
+    : TimestampedValueReadThread<KiaControlCommand>(values_history) {}
 
 void SteeringTorqueOffsetReadThread::ProcessValue(
-    const Timestamped<std::string> &value) {
-  KiaControlCommand command;
-  const bool parse_result = pilotguru::kia::ParseSingleKiaControlCommand(
-      value.data().c_str(), value.data().length(), &command);
-  if (parse_result && (command.type == KiaControlCommand::STEER)) {
-    emit SteeringTorqueChanged(QString::number(command.value));
+    const Timestamped<KiaControlCommand> &command) {
+  if (command.data().type == KiaControlCommand::STEER) {
+    emit SteeringTorqueChanged(QString::number(command.data().value));
   }
 }
+
+class SteeringCommandsJsonWriter
+    : public pilotguru::JsonSteamWriter<KiaControlCommand> {
+public:
+  void WriteAsJsonString(const KiaControlCommand &command,
+                         std::ostream &file_stream) override {
+    file_stream << "\"command\" : {";
+    file_stream << "\"type\" : \"" << command.type << "\" ";
+    if (command.type != KiaControlCommand::RESET) {
+      file_stream << ", \"value\" : " << command.value << " ";
+    }
+    file_stream << "}\n";
+  }
+};
 
 MainWindow::MainWindow(const std::string &can_interface,
                        const std::string &arduino_tty,
                        const pilotguru::kia::SteeringAngleHolderSettings
                            &steering_controller_settings,
+                       const std::string &steering_commands_log_name,
                        QWidget *parent)
     : QMainWindow(parent), ui(new Ui::MainWindow),
       car_motion_data_(new pilotguru::kia::CarMotionData(10)),
@@ -53,7 +65,13 @@ MainWindow::MainWindow(const std::string &can_interface,
           new pilotguru::ArduinoCommandChannel(arduino_tty)),
       steering_controller_(new pilotguru::kia::SteeringAngleHolderController(
           &(car_motion_data_->steering_angles()),
-          arduino_command_channel_.get(), steering_controller_settings)) {
+          arduino_command_channel_.get(), steering_controller_settings)),
+      kia_commands_logger_(
+          new pilotguru::TimestampedJsonLogger<KiaControlCommand>(
+              steering_commands_log_name, STEERING_COMMANDS_LOG_ROOT_ELEMENT,
+              std::unique_ptr<pilotguru::JsonSteamWriter<KiaControlCommand>>(
+                  new SteeringCommandsJsonWriter()),
+              &(arduino_command_channel_->CommandsHistory()))) {
   ui->setupUi(this);
 
   car_motion_data_updater_->start();
@@ -91,6 +109,7 @@ MainWindow::~MainWindow() {
   steering_angle_read_thread_->wait();
   velocity_read_thread_->wait();
   steering_torque_offset_read_thread_->wait();
+  kia_commands_logger_->Stop();
   steering_controller_->Stop();
   car_motion_data_updater_->stop();
   delete ui;

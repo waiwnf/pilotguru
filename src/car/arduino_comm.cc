@@ -63,9 +63,8 @@ int OpenedTty::wait_read(timeval *timeout) const {
 }
 
 namespace {
-bool ReplaceEolWriteCommandStringToTty(
-    const int fd, char *null_terminated_command,
-    TimestampedHistory<std::string> *history) {
+bool ReplaceEolWriteCommandStringToTty(const int fd,
+                                       char *null_terminated_command) {
   if (fd < 0 || null_terminated_command == nullptr) {
     return false;
   }
@@ -73,13 +72,6 @@ bool ReplaceEolWriteCommandStringToTty(
   null_terminated_command[command_length] = COMMAND_EOL_OK;
   const ssize_t write_result =
       write(fd, null_terminated_command, command_length + 1);
-  if (history != nullptr) {
-    timeval time_now;
-    gettimeofday(&time_now, nullptr);
-    history->update(std::string(null_terminated_command, command_length + 1),
-                    time_now);
-  }
-
   return write_result == (command_length + 1);
 }
 }
@@ -87,7 +79,8 @@ bool ReplaceEolWriteCommandStringToTty(
 ArduinoCommandChannel::ArduinoCommandChannel(const std::string &tty_name,
                                              size_t history_length)
     : arduino_tty_(tty_name),
-      commands_history_(new TimestampedHistory<std::string>(history_length)) {
+      commands_history_(
+          new TimestampedHistory<kia::KiaControlCommand>(history_length)) {
   constexpr kia::KiaControlCommand reset_command = {
       kia::KiaControlCommand::RESET, 0};
   // Give Arduino time to run setup() after opening the serial connection.
@@ -96,8 +89,7 @@ ArduinoCommandChannel::ArduinoCommandChannel(const std::string &tty_name,
   // Send first reset command to stop Arduino from writing new data to the
   // serial conection. Note that the response to this reset may not arrive if
   // the serial buffer is already full.
-  CHECK(ReplaceEolWriteCommandStringToTty(arduino_tty_.fd(), command_buffer_,
-                                          commands_history_.get()));
+  CHECK(ReplaceEolWriteCommandStringToTty(arduino_tty_.fd(), command_buffer_));
   // Read everything that shows up in the serial buffer until it is empty.
   constexpr timeval ONE_SECOND = {1 /* seconds */, 0 /* micros */};
   timeval timeout = ONE_SECOND;
@@ -130,10 +122,17 @@ char ArduinoCommandChannel::SendCommand(const kia::KiaControlCommand &command) {
   if (!command.ToString(command_buffer_, max_command_length)) {
     return COMMAND_EOL_ERR;
   }
-  if (!ReplaceEolWriteCommandStringToTty(arduino_tty_.fd(), command_buffer_,
-                                         commands_history_.get())) {
+  if (!ReplaceEolWriteCommandStringToTty(arduino_tty_.fd(), command_buffer_)) {
     return COMMAND_EOL_ERR;
   }
+
+  // Defer logging command to history until after it has been written to the
+  // serial connection.
+  // TODO: consider logging on above errors also, and log the outcome too.
+  timeval time_now;
+  gettimeofday(&time_now, nullptr);
+  commands_history_->update(command, time_now);
+
   // Wait for reply
   const int wait_result = arduino_tty_.wait_read(nullptr);
   if (wait_result <= 0) {
@@ -148,7 +147,7 @@ char ArduinoCommandChannel::SendCommand(const kia::KiaControlCommand &command) {
   return result;
 }
 
-const TimestampedHistory<std::string> &
+const TimestampedHistory<kia::KiaControlCommand> &
 ArduinoCommandChannel::CommandsHistory() const {
   return *commands_history_;
 }
