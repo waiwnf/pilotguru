@@ -68,3 +68,4 @@ RUN apt-get -y install code
 
 RUN apt-get -y install autoconf libtool psmisc net-tools
 RUN apt-get -y install qtcreator qtbase5-dev
+RUN pip3 install matplotlib
