@@ -57,10 +57,27 @@ public:
 private:
   void Loop() {
     Timestamped<T> element = {{}, {0, 0}};
+    constexpr int time_string_buffer_size = 64;
+    char time_string_buffer[time_string_buffer_size];
+    LoopWaitEffectiveTimeout loop_timeout({0 /* seconds */, 50000 /* usec */});
     while (must_run_) {
-      // TODO timeout
-      if (elements_source_->wait_get_next(element.timestamp(), nullptr,
-                                          &element)) {
+      timeval wait_timeout = loop_timeout.GetRemainingTimeout();
+      const bool wait_result = elements_source_->wait_get_next(
+          element.timestamp(), &wait_timeout, &element);
+      loop_timeout.WaitFinished();
+      if (wait_result) {
+        // Make a string with the total number of microseconds in the timestamp.
+        const timeval &timestamp = element.timestamp();
+        const int time_string_written_size =
+            snprintf(time_string_buffer, time_string_buffer_size, "%ld%06ld",
+                     static_cast<long>(timestamp.tv_sec), timestamp.tv_usec);
+        if (time_string_written_size >= time_string_buffer_size) {
+          LOG(ERROR) << "Timestamp string did not fit into a buffer: "
+                     << static_cast<long>(timestamp.tv_sec) << " "
+                     << timestamp.tv_usec;
+          continue;
+        }
+
         if (first_element_already_written_) {
           // We are not the first element, write out comma separator after the
           // previous one.
@@ -69,10 +86,8 @@ private:
         first_element_already_written_ = true;
         *json_ostream_ << "    {\n";
 
-        const timeval &timestamp = element.timestamp();
-        *json_ostream_ << "      \"time_usec\" : "
-                       << static_cast<long>(timestamp.tv_sec)
-                       << timestamp.tv_usec << ",\n";
+        *json_ostream_ << "      \"time_usec\" : " << time_string_buffer
+                       << ",\n";
         *json_ostream_ << "      ";
         value_writer_->WriteAsJsonString(element.data(), *json_ostream_);
         *json_ostream_ << "    }";

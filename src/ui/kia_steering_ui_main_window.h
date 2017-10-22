@@ -44,11 +44,15 @@ public:
   void run() override {
     // Need a timeout waiting for new value to be able to check must_run_
     // regularly.
-    const std::chrono::microseconds wait_timeout = std::chrono::seconds(1);
     pilotguru::Timestamped<T> value_instance{{}, {0, 0}};
+    pilotguru::LoopWaitEffectiveTimeout loop_timeout(
+        {0 /* seconds */, 50000 /* usec */});
     while (must_run_) {
-      if (values_history_->wait_get_next(value_instance.timestamp(),
-                                         &wait_timeout, &value_instance)) {
+      timeval wait_timeout = loop_timeout.GetRemainingTimeout();
+      const bool wait_result = values_history_->wait_get_next(
+          value_instance.timestamp(), &wait_timeout, &value_instance);
+      loop_timeout.WaitFinished();
+      if (wait_result) {
         ProcessValue(value_instance);
       }
     }

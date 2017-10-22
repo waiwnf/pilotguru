@@ -105,11 +105,13 @@ void SteeringAngleHolderController::ClearTargetAngle() {
 void SteeringAngleHolderController::ControllerLoop() {
   Timestamped<SteeringAngle> steering_instance = {{}, {0, 0}};
   KiaControlCommand steering_command = {KiaControlCommand::STEER, 0};
+  LoopWaitEffectiveTimeout loop_timeout({0 /* seconds */, 50000 /* usec */});
   while (must_run_) {
-    // TODO wait timeout;
-    // TODO subtract time spent in the rest of the iteration from the timeout.
-    if (steering_angle_sensor_->wait_get_next(steering_instance.timestamp(),
-                                              nullptr, &steering_instance)) {
+    timeval wait_timeout = loop_timeout.GetRemainingTimeout();
+    const bool steering_wait_result = steering_angle_sensor_->wait_get_next(
+        steering_instance.timestamp(), &wait_timeout, &steering_instance);
+    loop_timeout.WaitFinished();
+    if (steering_wait_result) {
       std::unique_lock<std::mutex> lock(mutex_);
       if (is_target_angle_set_) {
         steering_command.value = SteeringAngleHolderEffectiveTorque(
