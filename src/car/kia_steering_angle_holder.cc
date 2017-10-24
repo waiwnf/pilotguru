@@ -25,22 +25,25 @@ bool SteeringAngleHolderSettings::IsValid() const {
       target_angle_magnitude_max_torque) {
     return false;
   }
+  if (kalman_filter_observation_variance <= 0 ||
+      kalman_filter_perturbation_variance_per_second <= 0) {
+    return false;
+  }
   // All checks passed.
   return true;
 }
 
 int16_t SteeringAngleHolderEffectiveTorque(
-    int16_t target_angle_degrees, int16_t measured_angle_degrees,
+    double target_angle_degrees, double measured_angle_degrees,
     const SteeringAngleHolderSettings &settings) {
   if (std::abs(measured_angle_degrees) > settings.max_angle_amplitude) {
     // Steering angle is out of bounds. Remove the steering torque completely to
     // avoid accidentally damaging the power steering drive.
     return 0;
   } else {
-    // Upcast to full ints to avoid over/underflow in linear interpolation
-    // below.
-    const int target_angle_diff = target_angle_degrees - measured_angle_degrees;
-    const int abs_target_angle_diff = std::abs(target_angle_diff);
+    const double target_angle_diff =
+        target_angle_degrees - measured_angle_degrees;
+    const double abs_target_angle_diff = std::abs(target_angle_diff);
     const int sign_target_angle_diff = target_angle_diff >= 0 ? 1 : -1;
     // Steering torque is stepwise:
     // * 0 within target_angle_accuracy_tolerance_degrees of the target angle.
@@ -76,6 +79,10 @@ SteeringAngleHolderController::SteeringAngleHolderController(
   CHECK_NOTNULL(arduino_command_channel_);
   CHECK(settings_.IsValid());
 
+  angle_sensor_filter_.reset(new pilotguru::KalmanFilter1D(
+      settings_.kalman_filter_observation_variance,
+      settings_.kalman_filter_perturbation_variance_per_second));
+
   controller_loop_thread_.reset(
       new std::thread(&SteeringAngleHolderController::ControllerLoop, this));
 }
@@ -86,7 +93,7 @@ SteeringAngleHolderController::settings() const {
 }
 
 bool SteeringAngleHolderController::SetTargetAngle(
-    int16_t target_angle_degrees) {
+    double target_angle_degrees) {
   if (std::abs(target_angle_degrees) > settings_.max_angle_amplitude) {
     return false;
   }
@@ -105,18 +112,28 @@ void SteeringAngleHolderController::ClearTargetAngle() {
 void SteeringAngleHolderController::ControllerLoop() {
   Timestamped<SteeringAngle> steering_instance = {{}, {0, 0}};
   KiaControlCommand steering_command = {KiaControlCommand::STEER, 0};
-  LoopWaitEffectiveTimeout loop_timeout({0 /* seconds */, 50000 /* usec */});
+  LoopWaitEffectiveTimeout loop_timeout({0 /* seconds */, 200000 /* usec */});
   while (must_run_) {
     timeval wait_timeout = loop_timeout.GetRemainingTimeout();
     const bool steering_wait_result = steering_angle_sensor_->wait_get_next(
         steering_instance.timestamp(), &wait_timeout, &steering_instance);
     loop_timeout.WaitFinished();
     if (steering_wait_result) {
+      const double raw_steering_angle_degrees =
+          static_cast<double>(steering_instance.data().angle_deci_degrees) /
+          10.0;
+      angle_sensor_filter_->Update(
+          {raw_steering_angle_degrees, steering_instance.timestamp()});
+      const KalmanFilter1D::EstimateValue &kalman_estimate =
+          angle_sensor_filter_->LatestEstimate().data();
+      const double effective_steering_angle_degrees = kalman_estimate.mean(0);
+      const double effective_angular_velocity_degrees_per_second =
+          kalman_estimate.mean(1);
       std::unique_lock<std::mutex> lock(mutex_);
       if (is_target_angle_set_) {
         steering_command.value = SteeringAngleHolderEffectiveTorque(
-            target_angle_degrees_,
-            steering_instance.data().angle_deci_degrees / 10, settings_);
+            target_angle_degrees_, effective_steering_angle_degrees, settings_);
+        // TODO take command sending out of the locked section
         arduino_command_channel_->SendCommand(steering_command);
       }
     } else {

@@ -125,13 +125,16 @@ add_library(canlib SHARED ${PROJECT_SOURCE_DIR}/src/car/can.cc)
 add_dependencies(canlib can-utils)
 target_link_libraries(arduinocommlib steeringcommandslib socketcanlib)
 
+add_library(kalman_filter_lib SHARED ${PROJECT_SOURCE_DIR}/src/car/kalman_filter.cc)
+target_link_libraries(kalman_filter_lib glog)
+
 add_library(kiacanlib SHARED ${PROJECT_SOURCE_DIR}/src/car/kia_can.cc)
 target_link_libraries(kiacanlib canlib glog)
 
 add_library(
     kia_steering_angle_holder_lib SHARED
     ${PROJECT_SOURCE_DIR}/src/car/kia_steering_angle_holder.cc)
-target_link_libraries(kia_steering_angle_holder_lib kiacanlib arduinocommlib glog)
+target_link_libraries(kia_steering_angle_holder_lib kalman_filter_lib kiacanlib arduinocommlib glog)
 
 add_executable(annotate_frames src/annotate_frames.cc)
 add_executable(calibrate src/calibrate.cc)
@@ -156,6 +159,12 @@ add_executable(
     ${PROJECT_SOURCE_DIR}/src/car/kia_steering_angle_holder_test.cc)
 target_link_libraries(kia_steering_angle_holder_test kia_steering_angle_holder_lib arduinocommlib kiacanlib canlib steeringcommandslib libgtest_main libgmock glog)  
 add_test(KiaSteeringAngleHolderTests kia_steering_angle_holder_test)
+
+add_executable(
+    kalman_filter_lib_test
+    ${PROJECT_SOURCE_DIR}/src/car/kalman_filter_test.cc)
+target_link_libraries(kalman_filter_lib_test kalman_filter_lib libgtest_main libgmock glog)  
+add_test(KalmanFilterTests kalman_filter_lib_test)
 
 target_link_libraries(annotate_frames pilotgurulib ${OpenCV_LIBS} glog gflags)
 target_link_libraries(calibrate ${OpenCV_LIBS} glog gflags)

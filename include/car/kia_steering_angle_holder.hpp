@@ -6,6 +6,7 @@
 #include <thread>
 
 #include <car/arduino_comm.hpp>
+#include <car/kalman_filter.hpp>
 #include <car/kia_can.hpp>
 
 namespace pilotguru {
@@ -19,13 +20,15 @@ struct SteeringAngleHolderSettings {
   int16_t max_torque = 5;
   int16_t target_angle_accuracy_tolerance_degrees = 2;
   int16_t target_angle_magnitude_max_torque = 10;
+  double kalman_filter_observation_variance = 2.0;
+  double kalman_filter_perturbation_variance_per_second = 1e6;
 
   bool IsValid() const;
 };
 
 int16_t
-SteeringAngleHolderEffectiveTorque(int16_t target_angle_degrees,
-                                   int16_t measured_angle_degrees,
+SteeringAngleHolderEffectiveTorque(double target_angle_degrees,
+                                   double measured_angle_degrees,
                                    const SteeringAngleHolderSettings &settings);
 
 class SteeringAngleHolderController {
@@ -36,7 +39,7 @@ public:
       const SteeringAngleHolderSettings &settings);
 
   const SteeringAngleHolderSettings &settings() const;
-  bool SetTargetAngle(int16_t target_angle_degrees);
+  bool SetTargetAngle(double target_angle_degrees);
   void ClearTargetAngle();
   void ControllerLoop();
   void RequestStop(); // non-blocking
@@ -48,9 +51,10 @@ private:
   const TimestampedHistory<SteeringAngle> *const steering_angle_sensor_;
   ArduinoCommandChannel *const arduino_command_channel_;
   const SteeringAngleHolderSettings settings_;
+  std::unique_ptr<KalmanFilter1D> angle_sensor_filter_;
 
   // Adjusted at runtime.
-  int16_t target_angle_degrees_ = 0;
+  double target_angle_degrees_ = 0;
   bool is_target_angle_set_ = false;
   bool must_run_ = true;
 
