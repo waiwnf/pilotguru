@@ -36,6 +36,7 @@ public:
   void update(const T &t, const timeval &timestamp) {
     // TODO timestamp checks.
     std::unique_lock<std::mutex> lock(data_mutex_);
+    num_valid_values_ = std::min(num_valid_values_ + 1, values_.size());
     latest_idx_ = (latest_idx_ + 1) % history_length_;
     values_.at(latest_idx_) = Timestamped<T>(t, timestamp);
     data_update_condition_.notify_all();
@@ -43,6 +44,7 @@ public:
 
   // Returns a copy of the history properly sorted from the oldest to the most
   // recent element.
+  // TODO only copy the valid values.
   std::vector<Timestamped<T>> get_history() const {
     std::vector<Timestamped<T>> result(history_length_);
     std::unique_lock<std::mutex> lock(data_mutex_);
@@ -53,6 +55,16 @@ public:
     const size_t tail_size = history_length_ - latest_idx_;
     std::copy(values_.begin(), values_oldest, result.begin() + tail_size);
     return result;
+  }
+
+  bool get_latest(Timestamped<T> *result) const {
+    std::unique_lock<std::mutex> lock(data_mutex_);
+    if (num_valid_values_ > 0) {
+      *result = values_.at(latest_idx_);
+      return true;
+    } else {
+      return false;
+    }
   }
 
   bool wait_get_next(const timeval &prev_timestamp, const timeval *timeout,
@@ -88,6 +100,7 @@ private:
   const size_t history_length_;
   std::vector<Timestamped<T>> values_;
   size_t latest_idx_;
+  size_t num_valid_values_ = 0;
   mutable std::mutex data_mutex_;
   mutable std::condition_variable data_update_condition_;
 };
