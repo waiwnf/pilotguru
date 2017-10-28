@@ -27,7 +27,7 @@ int step_idx = 0;
 
 void setup() {
   steering_spoof_settings.max_steering_magnitude = 5;
-  steering_spoof_settings.steps_per_adjustment_level = 20;
+  steering_spoof_settings.steps_per_adjustment_level = 2;
   steering_spoof_settings.steps_at_target_level = 200;
   steering_spoof_settings.voltage_update_hystheresis = 1;
 
