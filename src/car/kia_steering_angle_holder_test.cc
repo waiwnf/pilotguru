@@ -6,57 +6,102 @@ namespace pilotguru {
 namespace kia {
 namespace {
 
-class SteeringAngleHolderTest : public ::testing::Test {
+class BoundedRotationVelocityEffectiveTorqueTest : public ::testing::Test {
 protected:
   SteeringAngleHolderSettings settings;
 };
 
-TEST_F(SteeringAngleHolderTest, MeasuredOutOfBounds) {
-  EXPECT_EQ(0, SteeringAngleHolderEffectiveTorque(0, 200, settings));
-  EXPECT_EQ(0, SteeringAngleHolderEffectiveTorque(0, -200, settings));
-  EXPECT_EQ(0, SteeringAngleHolderEffectiveTorque(200, -200, settings));
+TEST_F(BoundedRotationVelocityEffectiveTorqueTest, ValuesOutOfBounds) {
+  // Current torque out of bounds.
+  EXPECT_EQ(0,
+            BoundedRotationVelocityEffectiveTorque(40, 20, -20, 0, settings));
+  EXPECT_EQ(0,
+            BoundedRotationVelocityEffectiveTorque(-40, 20, -20, 0, settings));
+
+  // Measured angle out of bounds.
+  EXPECT_EQ(0, BoundedRotationVelocityEffectiveTorque(0, 0, 200, 0, settings));
+  EXPECT_EQ(0, BoundedRotationVelocityEffectiveTorque(0, 0, -200, 0, settings));
 }
 
-TEST_F(SteeringAngleHolderTest, ActualWithinToleranceOfTarget) {
-  // Strict equality.
-  EXPECT_EQ(0, SteeringAngleHolderEffectiveTorque(0, 0, settings));
-  EXPECT_EQ(0, SteeringAngleHolderEffectiveTorque(50, 50, settings));
-  EXPECT_EQ(0, SteeringAngleHolderEffectiveTorque(-100, -100, settings));
+TEST_F(BoundedRotationVelocityEffectiveTorqueTest,
+       RotationVelocityWithinBounds) {
+  // Positive direction saturated.
+  EXPECT_EQ(
+      3, BoundedRotationVelocityEffectiveTorque(3, 20, -20, 100.0, settings));
+  EXPECT_EQ(
+      -3, BoundedRotationVelocityEffectiveTorque(-3, 20, -20, 100.0, settings));
 
-  // Small difference.
-  EXPECT_EQ(0, SteeringAngleHolderEffectiveTorque(1, -1, settings));
-  EXPECT_EQ(0, SteeringAngleHolderEffectiveTorque(50, 52, settings));
-  EXPECT_EQ(0, SteeringAngleHolderEffectiveTorque(-100, -99, settings));
+  // Negative direction saturated.
+  EXPECT_EQ(
+      4, BoundedRotationVelocityEffectiveTorque(4, -20, 20, -100.0, settings));
+  EXPECT_EQ(-4, BoundedRotationVelocityEffectiveTorque(-4, -20, 20, -100.0,
+                                                       settings));
+
+  // Linear interpolation between
+  // -min_steering_rotation_degrees_per_second = -90 and 0
+  // within
+  // [-target_angle_diff_full_angular_velocity_lower_bound,
+  // -target_angle_accuracy_tolerance_degrees] = 9 degrees
+  // results in a slope of 10, so 1 degree diff shifts the acceptable rotation
+  // velocity interval by 10.
+  EXPECT_EQ(3, BoundedRotationVelocityEffectiveTorque(3, 4, 3, 20, settings));
+  EXPECT_EQ(-3,
+            BoundedRotationVelocityEffectiveTorque(-3, 3, 4, -20, settings));
+
+  EXPECT_EQ(3,
+            BoundedRotationVelocityEffectiveTorque(3, -20, -18, -10, settings));
+  EXPECT_EQ(
+      -3, BoundedRotationVelocityEffectiveTorque(-3, -20, -18, -30, settings));
 }
 
-TEST_F(SteeringAngleHolderTest, LinearInterpolation) {
-  // 5 * 8 / 8 = 5
-  EXPECT_EQ(5, SteeringAngleHolderEffectiveTorque(56, 46, settings));
-  EXPECT_EQ(-5, SteeringAngleHolderEffectiveTorque(-56, -46, settings));
-  // 5 * 7 / 8 = 4.375
-  EXPECT_EQ(4, SteeringAngleHolderEffectiveTorque(56, 47, settings));
-  EXPECT_EQ(-4, SteeringAngleHolderEffectiveTorque(-56, -47, settings));
-  // 5 * 6 / 8 = 3.75
-  EXPECT_EQ(3, SteeringAngleHolderEffectiveTorque(56, 48, settings));
-  EXPECT_EQ(-3, SteeringAngleHolderEffectiveTorque(-56, -48, settings));
-  // 5 * 5 / 8 = 3.125
-  EXPECT_EQ(3, SteeringAngleHolderEffectiveTorque(56, 49, settings));
-  EXPECT_EQ(-3, SteeringAngleHolderEffectiveTorque(-56, -49, settings));
-  // 5 * 4 / 8 = 2.5
-  EXPECT_EQ(2, SteeringAngleHolderEffectiveTorque(56, 50, settings));
-  EXPECT_EQ(-2, SteeringAngleHolderEffectiveTorque(-56, -50, settings));
-  // 5 * 3 / 8 = 1.875
-  EXPECT_EQ(1, SteeringAngleHolderEffectiveTorque(56, 51, settings));
-  EXPECT_EQ(-1, SteeringAngleHolderEffectiveTorque(-56, -51, settings));
-  // 5 * 2 / 8 = 1.25
-  EXPECT_EQ(1, SteeringAngleHolderEffectiveTorque(56, 52, settings));
-  EXPECT_EQ(-1, SteeringAngleHolderEffectiveTorque(-56, -52, settings));
-  // 5 * 1 / 8 = 0.625
-  EXPECT_EQ(0, SteeringAngleHolderEffectiveTorque(56, 53, settings));
-  EXPECT_EQ(0, SteeringAngleHolderEffectiveTorque(-56, -53, settings));
-  // 5 * 0 / 8 = 0
-  EXPECT_EQ(0, SteeringAngleHolderEffectiveTorque(56, 54, settings));
-  EXPECT_EQ(0, SteeringAngleHolderEffectiveTorque(-56, -54, settings));
+TEST_F(BoundedRotationVelocityEffectiveTorqueTest,
+       RotationVelocityOutOfBoundsTorqueNotSaturated) {
+  // Constant hard caps region.
+  EXPECT_EQ(3.2,
+            BoundedRotationVelocityEffectiveTorque(3, 20, -20, 89, settings));
+  EXPECT_EQ(-3.2, BoundedRotationVelocityEffectiveTorque(-3, 20, -20, 271.0,
+                                                         settings));
+
+  EXPECT_EQ(3.8,
+            BoundedRotationVelocityEffectiveTorque(4, -20, 20, -5.0, settings));
+  EXPECT_EQ(-3.8, BoundedRotationVelocityEffectiveTorque(-4, -20, 20, -335.0,
+                                                         settings));
+
+  // Linear interpolation region.
+  EXPECT_EQ(-3.2,
+            BoundedRotationVelocityEffectiveTorque(-3, 20, 19, 21.0, settings));
+  EXPECT_EQ(3.2,
+            BoundedRotationVelocityEffectiveTorque(3, 20, 19, -1.0, settings));
+
+  EXPECT_EQ(
+      2.8, BoundedRotationVelocityEffectiveTorque(3, -20, -18, -9.0, settings));
+  EXPECT_EQ(-2.8, BoundedRotationVelocityEffectiveTorque(-3, -20, -18, -31.0,
+                                                         settings));
+}
+
+TEST_F(BoundedRotationVelocityEffectiveTorqueTest,
+       RotationVelocityOutOfBoundsTorqueSaturated) {
+  // Constant hard caps region.
+  EXPECT_EQ(5,
+            BoundedRotationVelocityEffectiveTorque(5, 20, -20, 89, settings));
+  EXPECT_EQ(
+      -5, BoundedRotationVelocityEffectiveTorque(-5, 20, -20, 271.0, settings));
+
+  EXPECT_EQ(
+      -5, BoundedRotationVelocityEffectiveTorque(-5, -20, 20, -5.0, settings));
+  EXPECT_EQ(
+      5, BoundedRotationVelocityEffectiveTorque(5, -20, 20, -335.0, settings));
+
+  // Linear interpolation region.
+  EXPECT_EQ(-5,
+            BoundedRotationVelocityEffectiveTorque(-5, 20, 19, 21.0, settings));
+  EXPECT_EQ(5,
+            BoundedRotationVelocityEffectiveTorque(5, 20, 19, -1.0, settings));
+
+  EXPECT_EQ(
+      -5, BoundedRotationVelocityEffectiveTorque(-5, -20, -18, -9.0, settings));
+  EXPECT_EQ(
+      5, BoundedRotationVelocityEffectiveTorque(5, -20, -18, -31.0, settings));
 }
 }
 }

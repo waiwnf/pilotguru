@@ -18,6 +18,9 @@ namespace kia {
 
 constexpr uint32_t STEERING_WHEEL_ANGLE_CAN_ID = 0x2B0;
 constexpr uint8_t STEERING_WHEEL_ANGLE_FRAME_PAYLOAD_SIZE = 5;
+// The value that the sensor produces to unducate that the true angle is
+// unknown.
+constexpr int16_t STEERING_WHEEL_ANGLE_INVALID_VALUE = 32767;
 
 constexpr uint32_t VELOCITY_CAN_ID = 0x4B0;
 constexpr uint8_t VELOCITY_FRAME_PAYLOAD_SIZE = 8;
