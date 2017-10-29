@@ -14,6 +14,7 @@ import android.hardware.camera2.TotalCaptureResult;
 import android.location.Location;
 import android.location.LocationListener;
 import android.media.MediaScannerConnection;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.StatFs;
 import android.os.SystemClock;
@@ -260,7 +261,11 @@ public class SensorDataSaver extends CameraCaptureSession.CaptureCallback implem
         locationsWriter.beginObject();
         locationsWriter.name("lat").value(location.getLatitude());
         locationsWriter.name("lon").value(location.getLongitude());
+        locationsWriter.name("altitude_m").value(location.getAltitude());
         locationsWriter.name("accuracy_m").value(location.getAccuracy());
+        if (Build.VERSION.SDK_INT >= 26) {
+          locationsWriter.name("vertical_accuracy_m").value(location.getVerticalAccuracyMeters());
+        }
         locationsWriter.name("speed_m_s").value(location.getSpeed());
         locationsWriter.name("bearing_degrees").value(location.getBearing());
         locationsWriter.name(TIME_USEC)
