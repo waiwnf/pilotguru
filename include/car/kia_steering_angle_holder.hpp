@@ -14,7 +14,7 @@ namespace kia {
 
 struct SteeringAngleHolderSettings {
   static constexpr double angle_amplitude_hard_limit = 180.0;
-  static constexpr int16_t torque_hard_limit = 10;
+  static constexpr int16_t torque_hard_limit = 80;
 
   // Maximum absolute angle amplitude for which the controller will attempt to
   // compute nonzero spoof steering torque. For absolute steering angles
