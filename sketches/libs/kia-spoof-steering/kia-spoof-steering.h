@@ -4,6 +4,11 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include <spoof-steering-serial-commands.h>
+
+constexpr uint8_t LW232_RET_ASCII_OK = 0x0D;
+constexpr uint8_t LW232_RET_ASCII_ERROR = 0x07;
+
 struct InstantVoltageData {
   uint16_t green_voltage, blue_voltage;
 };
@@ -131,5 +136,21 @@ private:
 
   const SteeringSpoofSettings &steering_spoof_settings_;
 };
+
+bool ExecuteKiaControlCommand(
+    const pilotguru::kia::KiaControlCommand &control_command,
+    TargetVoltageSmoother *voltage_smoother, bool *is_echo_on);
+
+void HandleCommandProcessorState(
+    pilotguru::kia::KiaControlCommandProcessor *command_processor,
+    pilotguru::kia::KiaControlCommand *control_command,
+    TargetVoltageSmoother *voltage_smoother, bool *is_echo_on);
+
+void ProcessAvailableSerialBuffer(
+    pilotguru::kia::KiaControlCommandProcessor *command_processor);
+
+void SerialWriteCurrentSpoofVoltages(
+    const TargetVoltageSmoother &voltage_smoother, char *voltage_state_string,
+    size_t voltage_state_buffer_size);
 
 #endif // PILOTGURU_KIA_SPOOF_STEERING_LIB_
