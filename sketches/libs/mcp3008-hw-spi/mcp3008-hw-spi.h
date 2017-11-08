@@ -8,7 +8,7 @@
 #include <Arduino.h>
 #include <SPI.h>
 
-#define MCP3008_SPI_MAX_FREQUENCY_5V 3600000
+constexpr uint32_t MCP3008_SPI_MAX_FREQUENCY_5V = 3600000;
 
 class Mcp3008HwSpi {
 public:
