@@ -9,6 +9,7 @@
 #include <SPI.h>
 
 constexpr uint32_t MCP3008_SPI_MAX_FREQUENCY_5V = 3600000;
+constexpr uint8_t MCP3008_RESOLUTION_BITS = 10;
 
 class Mcp3008HwSpi {
 public:

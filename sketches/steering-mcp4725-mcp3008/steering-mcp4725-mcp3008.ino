@@ -4,6 +4,7 @@
 #include <mcp3008-hw-spi.h>
 #include <mcp4725-lib.h>
 #include <spoof-steering-serial-commands.h>
+#include <spoof-voltage-smoothing.h>
 
 #define STEPS_ECHO_EVERY 1000
 
@@ -20,7 +21,9 @@ constexpr uint8_t MCP3008_ADC_CS_PIN = 10;
 SteeringSpoofSettings steering_spoof_settings;
 HistoricVoltageData<4> historic_voltage_data;
 InstantVoltageData voltage_measurement, historic_avg_voltage;
-TargetVoltageSmoother voltage_smoother(steering_spoof_settings);
+TargetVoltageSmoother voltage_smoother(steering_spoof_settings,
+                                       MCP3008_RESOLUTION_BITS,
+                                       MCP4725_RESOLUTION_BITS);
 pilotguru::kia::KiaControlCommandProcessor command_processor;
 pilotguru::kia::KiaControlCommand control_command;
 Mcp3008HwSpi mcp3008_adc(MCP3008_SPI_MAX_FREQUENCY_5V, MCP3008_ADC_CS_PIN);
@@ -77,9 +80,9 @@ void loop() {
   }
 
   SetMcp4725OutVoltageFastMode(MCP4725_DAC_BLUE,
-                               voltage_smoother.get_target_blue_voltage() << 2);
+                               voltage_smoother.get_target_blue_voltage_dac_units());
   SetMcp4725OutVoltageFastMode(
-      MCP4725_DAC_GREEN, voltage_smoother.get_target_green_voltage() << 2);
+      MCP4725_DAC_GREEN, voltage_smoother.get_target_green_voltage_dac_units());
 }
 
 void serialEvent() { ProcessAvailableSerialBuffer(&command_processor); }

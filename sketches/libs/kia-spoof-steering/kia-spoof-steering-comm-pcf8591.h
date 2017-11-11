@@ -59,6 +59,8 @@
 // the PCF8591 will return the voltage on this channel.
 #define AIN3_ID 0x3
 
+constexpr uint8_t PCF8591_RESOLUTION_BITS = 8;
+
 #include <assert.h>
 
 // SoftI2CMaster I2C library.

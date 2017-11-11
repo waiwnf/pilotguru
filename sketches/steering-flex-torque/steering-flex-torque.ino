@@ -7,7 +7,9 @@
 SteeringSpoofSettings steering_spoof_settings;
 HistoricVoltageData<4> historic_voltage_data;
 InstantVoltageData voltage_measurement, historic_avg_voltage;
-TargetVoltageSmoother voltage_smoother(steering_spoof_settings);
+TargetVoltageSmoother voltage_smoother(steering_spoof_settings,
+                                       PCF8591_RESOLUTION_BITS,
+                                       PCF8591_RESOLUTION_BITS);
 pilotguru::kia::KiaControlCommandProcessor command_processor;
 pilotguru::kia::KiaControlCommand control_command;
 
@@ -58,8 +60,8 @@ void loop() {
                                     voltage_state_buffer_size);
   }
 
-  set_blue_voltage(voltage_smoother.get_target_blue_voltage());
-  set_green_voltage(voltage_smoother.get_target_green_voltage());
+  set_blue_voltage(voltage_smoother.get_target_blue_voltage_dac_units());
+  set_green_voltage(voltage_smoother.get_target_green_voltage_dac_units());
 }
 
 void serialEvent() { ProcessAvailableSerialBuffer(&command_processor); }

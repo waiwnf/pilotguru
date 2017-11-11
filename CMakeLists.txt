@@ -95,6 +95,7 @@ ${PROJECT_SOURCE_DIR}/thirdparty/g2o
 ${PROJECT_SOURCE_DIR}/thirdparty/LBFGS
 ${EIGEN3_INCLUDE_DIR}
 ${CMAKE_CURRENT_BINARY_DIR}/thirdparty/orb-slam2  # For generated proto files.
+${PROJECT_SOURCE_DIR}/sketches/libs/kia-spoof-steering
 ${PROJECT_SOURCE_DIR}/sketches/libs/spoof-steering-serial-commands
 )
 
@@ -136,6 +137,10 @@ add_library(
     ${PROJECT_SOURCE_DIR}/src/car/kia_steering_angle_holder.cc)
 target_link_libraries(kia_steering_angle_holder_lib kalman_filter_lib kiacanlib arduinocommlib glog)
 
+add_library(
+	spoof_voltage_smoothing_lib SHARED
+	${PROJECT_SOURCE_DIR}/sketches/libs/kia-spoof-steering/spoof-voltage-smoothing.cpp)
+
 add_executable(annotate_frames src/annotate_frames.cc)
 add_executable(calibrate src/calibrate.cc)
 add_executable(fit_motion src/fit_motion.cc)
@@ -165,6 +170,12 @@ add_executable(
     ${PROJECT_SOURCE_DIR}/src/car/kalman_filter_test.cc)
 target_link_libraries(kalman_filter_lib_test kalman_filter_lib libgtest_main libgmock glog)  
 add_test(KalmanFilterTests kalman_filter_lib_test)
+
+add_executable(
+    spoof_voltage_smoothing_lib_test
+    ${PROJECT_SOURCE_DIR}/sketches/libs/kia-spoof-steering/test/spoof-voltage-smoothing_test.cpp)
+target_link_libraries(spoof_voltage_smoothing_lib_test spoof_voltage_smoothing_lib libgtest_main libgmock glog)  
+add_test(SpoofVoltageSmoothingLibTest spoof_voltage_smoothing_lib_test)
 
 target_link_libraries(annotate_frames pilotgurulib ${OpenCV_LIBS} glog gflags)
 target_link_libraries(calibrate ${OpenCV_LIBS} glog gflags)
