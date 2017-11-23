@@ -11,6 +11,8 @@
 
 namespace pilotguru {
 
+constexpr double ROTATION_AXIS_NORMALIZATION_TOLERANCE = 1e-2;
+
 cv::Mat GetPrincipalRotationAxes(
     const std::vector<TimestampedRotationVelocity> &raw_rotations,
     long integration_interval_usec) {
@@ -54,13 +56,13 @@ cv::Mat GetPrincipalRotationAxes(
   return rotations_pca.eigenvectors;
 }
 
-std::vector<double> GetHorizontalTurnAngles(
+std::vector<double> GetHorizontalAngularVelocities(
     const std::vector<TimestampedRotationVelocity> &raw_rotations,
     const cv::Vec3d &vertical_axis) {
   const double axis_norm = cv::norm(vertical_axis, cv::NORM_L2);
   // The axis should be normalized.
-  CHECK_GT(axis_norm, 0.9);
-  CHECK_LT(axis_norm, 1.1);
+  CHECK_GT(axis_norm, 1.0 - ROTATION_AXIS_NORMALIZATION_TOLERANCE);
+  CHECK_LT(axis_norm, 1.0 + ROTATION_AXIS_NORMALIZATION_TOLERANCE);
 
   std::vector<double> result{0};
   for (size_t rotation_idx = 1; rotation_idx < raw_rotations.size();
@@ -97,4 +99,50 @@ std::vector<double> GetHorizontalTurnAngles(
   }
   return result;
 }
+
+std::vector<double> GetAngularVelocitiesAroundAxisDirect(
+    const std::vector<TimestampedRotationVelocity> &raw_rotations,
+    const cv::Vec3d &axis) {
+  const double axis_norm = cv::norm(axis, cv::NORM_L2);
+  // The axis should be normalized.
+  CHECK_GT(axis_norm, 1.0 - ROTATION_AXIS_NORMALIZATION_TOLERANCE);
+  CHECK_LT(axis_norm, 1.0 + ROTATION_AXIS_NORMALIZATION_TOLERANCE);
+
+  std::vector<double> result;
+  for (const TimestampedRotationVelocity &raw_rotation : raw_rotations) {
+    const cv::Vec3d rotation_angluar_velocity(raw_rotation.rate_x_rad_s,
+                                              raw_rotation.rate_y_rad_s,
+                                              raw_rotation.rate_z_rad_s);
+    result.push_back(rotation_angluar_velocity.dot(axis) / axis_norm);
+  }
+  return result;
+}
+
+std::vector<TimestampedRotationVelocity>
+GetRotationsComplementaryToAxisDirect(
+    const std::vector<TimestampedRotationVelocity> &raw_rotations,
+    const cv::Vec3d &axis) {
+  const double axis_norm = cv::norm(axis, cv::NORM_L2);
+  // The axis should be normalized.
+  CHECK_GT(axis_norm, 1.0 - ROTATION_AXIS_NORMALIZATION_TOLERANCE);
+  CHECK_LT(axis_norm, 1.0 + ROTATION_AXIS_NORMALIZATION_TOLERANCE);
+
+  std::vector<TimestampedRotationVelocity> result;
+  for (const TimestampedRotationVelocity &raw_rotation : raw_rotations) {
+    const cv::Vec3d rotation_angluar_velocity(raw_rotation.rate_x_rad_s,
+                                              raw_rotation.rate_y_rad_s,
+                                              raw_rotation.rate_z_rad_s);
+    const double angular_velocity_magnitude_along_axis =
+        rotation_angluar_velocity.dot(axis) / axis_norm;
+    const cv::Vec3d angular_velocity_along_axis =
+        axis * (angular_velocity_magnitude_along_axis / axis_norm);
+    const cv::Vec3d complementary_angular_velocity =
+        rotation_angluar_velocity - angular_velocity_along_axis;
+    result.push_back(
+        {complementary_angular_velocity(0), complementary_angular_velocity(1),
+         complementary_angular_velocity(2), raw_rotation.time_usec});
+  }
+  return result;
+}
+
 } // namespace pilotguru

@@ -9,6 +9,7 @@
 namespace pilotguru {
 constexpr char kAccelerations[] = "accelerations";
 constexpr char kAngularVelocity[] = "angular_velocity";
+constexpr char kForwardAxis[] = "forward_axis";
 constexpr char kFrames[] = "frames";
 constexpr char kLocations[] = "locations";
 constexpr char kPlane[] = "plane";

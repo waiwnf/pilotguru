@@ -281,10 +281,10 @@ double FixedForwardAxisCalibrator::operator()(const Eigen::VectorXd &x,
 
   // Named aliases for biases.
   const Eigen::Vector3d acceleration_global_bias =
-      x.segment(ACCELERATION_GLOBAL_BIAS_START, 3);
+      x.segment<3>(ACCELERATION_GLOBAL_BIAS_START);
   const Eigen::Vector3d acceleration_local_bias =
-      x.segment(ACCELERATION_LOCAL_BIAS_START, 3);
-  const Eigen::Vector3d local_forward_axis = x.segment(FORWARD_AXIS_START, 3);
+      x.segment<3>(ACCELERATION_LOCAL_BIAS_START);
+  const Eigen::Vector3d local_forward_axis = x.segment<3>(FORWARD_AXIS_START);
   const Eigen::VectorBlock<const Eigen::VectorXd> scalar_velocities =
       x.segment(VELOCITY_SCALES_START, imu_times_.MergedEvents().size());
 
@@ -297,7 +297,7 @@ double FixedForwardAxisCalibrator::operator()(const Eigen::VectorXd &x,
   double acceleration_match_loss = 0;
 
   const double forward_axis_length = local_forward_axis.norm();
-  const double forward_axis_magnitude_weight = 0.05;
+  const double forward_axis_magnitude_weight = 5e-3;
   double forward_axis_magnitude_loss = forward_axis_magnitude_weight *
                                        (forward_axis_length - 1.0) *
                                        (forward_axis_length - 1.0);
@@ -305,7 +305,7 @@ double FixedForwardAxisCalibrator::operator()(const Eigen::VectorXd &x,
       forward_axis_magnitude_weight * local_forward_axis * 2.0 *
       (1.0 - 1.0 / (forward_axis_length + 1e-5));
 
-  grad.segment(FORWARD_AXIS_START, 3) += forward_axis_magnitude_loss_gradient;
+  grad.segment<3>(FORWARD_AXIS_START) += forward_axis_magnitude_loss_gradient;
 
   // Without loss of generality on the first step take the device to be aligned
   // with the fixed reference frame.
@@ -384,10 +384,10 @@ double FixedForwardAxisCalibrator::operator()(const Eigen::VectorXd &x,
       acceleration_match_loss += delta_velocity_diff.squaredNorm();
 
       // wrt forward axis
-      grad.segment(FORWARD_AXIS_START, 3) +=
+      grad.segment<3>(FORWARD_AXIS_START) +=
           2.0 * delta_forward_transform.transpose() * delta_forward_transform *
           local_forward_axis;
-      grad.segment(FORWARD_AXIS_START, 3) -=
+      grad.segment<3>(FORWARD_AXIS_START) -=
           2.0 * delta_forward_transform.transpose() * imu_delta_velocity;
 
       // wrt velocity magnitudes before and after
@@ -417,21 +417,21 @@ double FixedForwardAxisCalibrator::operator()(const Eigen::VectorXd &x,
            imu_delta_velocity);
 
       // wrt global acceleration bias
-      grad.segment(ACCELERATION_GLOBAL_BIAS_START, 3) +=
+      grad.segment<3>(ACCELERATION_GLOBAL_BIAS_START) +=
           2.0 * imu_duration_sec * imu_duration_sec * acceleration_global_bias;
-      grad.segment(ACCELERATION_GLOBAL_BIAS_START, 3) +=
+      grad.segment<3>(ACCELERATION_GLOBAL_BIAS_START) +=
           2.0 * imu_duration_sec *
           (imu_duration_sec * integrated_rotation_matrix *
            (acceleration_local_bias + raw_acceleration));
-      grad.segment(ACCELERATION_GLOBAL_BIAS_START, 3) -=
+      grad.segment<3>(ACCELERATION_GLOBAL_BIAS_START) -=
           2.0 * imu_duration_sec * forward_axis_delta_velocity;
 
       // wrt local acceleration bias
-      grad.segment(ACCELERATION_LOCAL_BIAS_START, 3) +=
+      grad.segment<3>(ACCELERATION_LOCAL_BIAS_START) +=
           2.0 * imu_duration_sec * imu_duration_sec *
           integrated_rotation_matrix.transpose() * integrated_rotation_matrix *
           acceleration_local_bias;
-      grad.segment(ACCELERATION_LOCAL_BIAS_START, 3) -=
+      grad.segment<3>(ACCELERATION_LOCAL_BIAS_START) -=
           2.0 * imu_duration_sec * integrated_rotation_matrix.transpose() *
           (forward_axis_delta_velocity -
            imu_duration_sec * acceleration_global_bias -
@@ -444,7 +444,7 @@ double FixedForwardAxisCalibrator::operator()(const Eigen::VectorXd &x,
                                             integrated_travel /
                                             (integrated_travel.norm() + 1e-5);
 
-    grad.segment(FORWARD_AXIS_START, 3) +=
+    grad.segment<3>(FORWARD_AXIS_START) +=
         d_integrated_travel_d_forward_axis.transpose() * d_loss_d_travel;
 
     for (size_t reference_imu_idx = 0;
@@ -467,6 +467,30 @@ double FixedForwardAxisCalibrator::operator()(const Eigen::VectorXd &x,
             << "; forward axis: " << forward_axis_magnitude_loss;
 
   return result;
+}
+
+void FixedForwardAxisCalibrator::NormalizeVelocities(
+    Eigen::VectorXd &calibrated_motion) {
+  CHECK_GT(calibrated_motion.size(), VELOCITY_SCALES_START);
+  const double forward_axis_scale =
+      calibrated_motion.segment<3>(FORWARD_AXIS_START).norm();
+  // Make sure the forward axis absolute magnitude is not absurdly small.
+  CHECK_GT(forward_axis_scale, 1e-5);
+  calibrated_motion.segment<3>(FORWARD_AXIS_START) /= forward_axis_scale;
+  calibrated_motion.segment(VELOCITY_SCALES_START,
+                            calibrated_motion.size() - VELOCITY_SCALES_START) *=
+      forward_axis_scale;
+}
+
+FixedForwardAxisCalibrator::CalibrationResult
+FixedForwardAxisCalibrator::StateVectorToCalibrationResult(
+    const Eigen::VectorXd &state_vector) {
+  CHECK_GT(state_vector.size(), VELOCITY_SCALES_START);
+  return {state_vector.segment<3>(ACCELERATION_GLOBAL_BIAS_START),
+          state_vector.segment<3>(ACCELERATION_LOCAL_BIAS_START),
+          state_vector.segment<3>(FORWARD_AXIS_START),
+          state_vector.segment(VELOCITY_SCALES_START,
+                               state_vector.size() - VELOCITY_SCALES_START)};
 }
 
 const MergedTimeSeries &FixedForwardAxisCalibrator::ImuTimes() const {

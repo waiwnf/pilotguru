@@ -26,9 +26,24 @@ cv::Mat GetPrincipalRotationAxes(
 // rotation magnitudes.
 // Useful for computing rotation magnitudes in horizontal plane (i.e. around the
 // vertical axis), which correspond to vehicle steering.
-std::vector<double> GetHorizontalTurnAngles(
+std::vector<double> GetHorizontalAngularVelocities(
     const std::vector<TimestampedRotationVelocity> &raw_rotations,
     const cv::Vec3d &vertical_axis);
+
+// Project angular velocities onto the given axis and return a vector of
+// projected angular velocities. Unlike GetHorizontalTurnAngles(), does not
+// integrate the rotations over time before projection. Instead, the projection
+// is done directly in angular velocity space.
+std::vector<double> GetAngularVelocitiesAroundAxisDirect(
+    const std::vector<TimestampedRotationVelocity> &raw_rotations,
+    const cv::Vec3d &axis);
+
+// Returns the input 3D angular velocities with rotational component around the
+// given axis subtracted out. This produces the complementary rotations to those
+// computed by GetAngularVelocitiesAroundAxisDirect.
+std::vector<TimestampedRotationVelocity> GetRotationsComplementaryToAxisDirect(
+    const std::vector<TimestampedRotationVelocity> &raw_rotations,
+    const cv::Vec3d &axis);
 }
 
 #endif // PILOTGURU_CALIBRATION_ROTATION_HPP_

@@ -57,7 +57,7 @@ public:
                       const Eigen::Vector3d &acceleration_local_bias,
                       const Eigen::Vector3d &initial_velocity);
 
-  const MergedTimeSeries& ImuTimes() const; 
+  const MergedTimeSeries &ImuTimes() const;
 
 private:
   const std::vector<TimestampedVelocity> &reference_velocities_;
@@ -76,15 +76,23 @@ private:
 };
 
 // Autocalibrator with the assumption that forward motion is possible
-// only along one axis, fixed in the vehicle reference frame (i.e. the 
-// longitudinal axis of the vehicle). Finds the optimal accelerometer 
-// calibration parameters (local and global bias), the local forward motion axis 
+// only along one axis, fixed in the vehicle reference frame (i.e. the
+// longitudinal axis of the vehicle). Finds the optimal accelerometer
+// calibration parameters (local and global bias), the local forward motion axis
 // and scalar velocity on each IMU measurement interval.
-// 
+//
 // The constraint on the motion axis magnitude is soft, so it is important to
-// compute the forward velocity as (scalar velocity) * (motion axis).
+// call NormalizeVelocities() after optimization to normalize the axis and scale
+// the forward velocities accordingly.
 class FixedForwardAxisCalibrator {
 public:
+  struct CalibrationResult {
+    Eigen::Vector3d acceleration_global_bias;
+    Eigen::Vector3d acceleration_local_bias;
+    Eigen::Vector3d forward_axis;
+    Eigen::VectorXd velocities;
+  };
+
   // Does not take ownership of arguments. All vectors must outlive this object.
   FixedForwardAxisCalibrator(
       const std::vector<TimestampedVelocity>
@@ -95,9 +103,13 @@ public:
   // For the LBFGS implementation.
   double operator()(const Eigen::VectorXd &x, Eigen::VectorXd &grad);
 
-  const MergedTimeSeries& ImuTimes() const;
+  const MergedTimeSeries &ImuTimes() const;
 
-  // Offsets into the flat overall parameters vector corresponding to first 
+  static void NormalizeVelocities(Eigen::VectorXd &calibrated_motion);
+  static CalibrationResult
+  StateVectorToCalibrationResult(const Eigen::VectorXd &state_vector);
+
+  // Offsets into the flat overall parameters vector corresponding to first
   // elements of the respective calibration parameters.
   static const size_t ACCELERATION_GLOBAL_BIAS_START = 0;
   static const size_t ACCELERATION_LOCAL_BIAS_START = 3;
