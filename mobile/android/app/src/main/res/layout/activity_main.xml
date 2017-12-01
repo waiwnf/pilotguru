@@ -58,6 +58,14 @@
         android:layout_below="@id/textview_fps"
         android:textColor="#00ff00"/>
 
+    <TextView
+        android:id="@+id/textview_elm327"
+        android:text="OBD"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/textview_camera"
+        android:textColor="#ff0000"/>
+
     <ImageButton
         android:id="@+id/btn_takepicture"
         android:src="@mipmap/icon_rec"

@@ -44,36 +44,39 @@ import java.util.Collection;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.TimeUnit;
 
 import ru.pilotguru.recorder.elm327.BluetoothELM327Connector;
+import ru.pilotguru.recorder.elm327.ELM327LastPacketTimestampUpdater;
 import ru.pilotguru.recorder.elm327.ELM327Receiver;
 import ru.pilotguru.recorder.elm327.ELM327Settings;
+import ru.pilotguru.recorder.elm327.ELM327StatusTextUpdater;
 
 public class MainActivity extends Activity {
-  // UI - text fields.
-  private TextView textViewBattery;
-  private TextView textViewCoords;
-  private TextView textViewFps;
-  private TextView textViewImu;
-  private TextView textViewCamera;
-  // UI - video preview panel.
-  private TextureView textureView;
-  // UI - buttons.
-  private ImageButton takePictureButton, settingsButton;
-
   private static final int REQUEST_ALL_PERMISSIONS = 200;
+
   private static final String[] necessaryPermissions =
       {Manifest.permission.CAMERA, Manifest.permission.WRITE_EXTERNAL_STORAGE,
           Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.BLUETOOTH};
+
+  // UI - video preview panel.
+  private TextureView textureView;
+
+  // UI - buttons.
+  private ImageButton takePictureButton, settingsButton;
 
   // Status bits for camera connections.
   private boolean isPreviewTextureAvailable = false;
   private boolean isCameraOpened = false;
 
   private ELM327Receiver elm327Receiver;
+  private final LastPacketTimestamp elm327LastPacketTimestamp = new LastPacketTimestamp();
+  private final ELM327LastPacketTimestampUpdater elm327LastPacketTimestampUpdater =
+      new ELM327LastPacketTimestampUpdater(elm327LastPacketTimestamp);
 
   private CameraDevice cameraDevice;
   private CameraCaptureSession cameraCaptureSession;
+
   private SensorAndVideoRecorder recorder = new SensorAndVideoRecorder(this,
       new File(Environment.getExternalStorageDirectory(), "PilotGuru"));
 
@@ -163,10 +166,13 @@ public class MainActivity extends Activity {
           cameraCaptureSession.stopRepeating();
           cameraCaptureSession.close();
           final int displayRotationEnum = getWindowManager().getDefaultDisplay().getRotation();
-          final Surface videoRecorderSurface = recorder
-              .start(effectiveCamcorderProfile(), textViewFps, textViewCamera, displayRotationEnum,
-                  getCameraCharacteristics());
-          createCameraSession(cameraDevice, Arrays.asList(videoRecorderSurface),
+          final Surface videoRecorderSurface = recorder.start(effectiveCamcorderProfile(),
+              (TextView) findViewById(R.id.textview_fps),
+              (TextView) findViewById(R.id.textview_camera),
+              displayRotationEnum,
+              getCameraCharacteristics());
+          createCameraSession(cameraDevice,
+              Arrays.asList(videoRecorderSurface),
               recorder.getSensorDataSaver());
         } catch (CameraAccessException e) {
           Errors.dieOnException(MainActivity.this, e, "Camer access exception, exiting.");
@@ -192,12 +198,6 @@ public class MainActivity extends Activity {
     PreferenceManager.setDefaultValues(this, R.xml.preferences, false /* readAgain */);
 
     setContentView(R.layout.activity_main);
-
-    textViewBattery = (TextView) findViewById(R.id.textview_battery);
-    textViewCoords = (TextView) findViewById(R.id.textview_coords);
-    textViewImu = (TextView) findViewById(R.id.textview_imu);
-    textViewFps = (TextView) findViewById(R.id.textview_fps);
-    textViewCamera = (TextView) findViewById(R.id.textview_camera);
 
     textureView = (TextureView) findViewById(R.id.texture);
     if (textureView == null) {
@@ -230,7 +230,8 @@ public class MainActivity extends Activity {
     }
 
     if (!lackingPermissions.isEmpty()) {
-      ActivityCompat.requestPermissions(this, lackingPermissions.toArray(new String[0]),
+      ActivityCompat.requestPermissions(this,
+          lackingPermissions.toArray(new String[0]),
           REQUEST_ALL_PERMISSIONS);
       // The rest is in onRequestPermissionsResult().
     } else {
@@ -259,15 +260,16 @@ public class MainActivity extends Activity {
   }
 
   @Override
-  public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions,
-                                         @NonNull int[] grantResults) {
+  public void onRequestPermissionsResult(int requestCode,
+      @NonNull String[] permissions,
+      @NonNull int[] grantResults) {
     if (requestCode == REQUEST_ALL_PERMISSIONS) {
       for (int i = 0; i < permissions.length; ++i) {
         if (grantResults[i] != PackageManager.PERMISSION_GRANTED) {
           // close the app
-          final String errorMessage = String
-              .format(Locale.US, "Sorry, you can't use this app without granting permission %s",
-                  permissions[i]);
+          final String errorMessage = String.format(Locale.US,
+              "Sorry, you can't use this app without granting permission %s",
+              permissions[i]);
           Toast.makeText(this, errorMessage, Toast.LENGTH_LONG).show();
           finish();
           return;
@@ -303,11 +305,11 @@ public class MainActivity extends Activity {
         if (elm327Receiver == null) {
           // Either there was no receiver, or the old one was connected to a different device and
           // was cleaned up in the block above. Create a new one.
-          elm327Receiver = new ELM327Receiver(
-              new BluetoothELM327Connector(elm327DeviceAddress),
+          elm327Receiver = new ELM327Receiver(new BluetoothELM327Connector(elm327DeviceAddress),
               elm327Settings.getCanIdFilter(),
               elm327Settings.getCanIdMask());
           elm327Receiver.addSubscriber(recorder.getSensorDataSaver());
+          elm327Receiver.addSubscriber(elm327LastPacketTimestampUpdater);
         }
         elm327Receiver.startMonitoringAsync(-1 /* unlimited lines requested */);
       } catch (IOException e) {
@@ -317,10 +319,16 @@ public class MainActivity extends Activity {
 
     subscribeToLocationUpdates(recorder.getSensorDataSaver(), 20 /* minTimeMsec */);
     subscribeToImuUpdates(recorder.getSensorDataSaver(), SensorManager.SENSOR_DELAY_FASTEST);
-    subscribeToLocationUpdates(new PreviewCoordinatesTextUpdater(textViewCoords), 100 /* minTimeMsec */);
-    subscribeToImuUpdates(new PreviewImuTextUpdater(textViewImu, 500 /* minUpdateIntervalMillis */),
+    subscribeToLocationUpdates(new PreviewCoordinatesTextUpdater((TextView) findViewById(R.id.textview_coords)),
+        500 /* minTimeMsec */);
+    subscribeToImuUpdates(
+        new PreviewImuTextUpdater(TimeUnit.MILLISECONDS.toNanos(500),
+            (TextView) findViewById(R.id.textview_imu)),
         SensorManager.SENSOR_DELAY_NORMAL);
-
+    subscribeToImuUpdates(new ELM327StatusTextUpdater(TimeUnit.MILLISECONDS.toNanos(500),
+        TimeUnit.SECONDS.toNanos(1),
+        elm327LastPacketTimestamp,
+        (TextView) findViewById(R.id.textview_elm327)), SensorManager.SENSOR_DELAY_NORMAL);
     maybeConnectCamera();
   }
 
@@ -358,8 +366,8 @@ public class MainActivity extends Activity {
   }
 
   protected void createCameraSession(@NonNull CameraDevice camera,
-                                     @NonNull Collection<Surface> nonPreviewSurfaces,
-                                     final @Nullable CameraCaptureSession.CaptureCallback captureListener) {
+      @NonNull Collection<Surface> nonPreviewSurfaces,
+      final @Nullable CameraCaptureSession.CaptureCallback captureListener) {
     final SurfaceTexture texture = textureView.getSurfaceTexture();
     if (texture == null) {
       throw new AssertionError("Preview surface texture is null");
@@ -376,8 +384,9 @@ public class MainActivity extends Activity {
       surfaces.add(new Surface(texture));  // Preview surface is always used.
       final CaptureSettings captureSettings =
           new CaptureSettings(PreferenceManager.getDefaultSharedPreferences(this));
-      final CaptureRequest.Builder captureRequestBuilder = captureSettings
-          .makeCaptureRequestBuilder(camera, surfaces,
+      final CaptureRequest.Builder captureRequestBuilder =
+          captureSettings.makeCaptureRequestBuilder(camera,
+              surfaces,
               getWindowManager().getDefaultDisplay().getRotation());
       final CameraCaptureSession.StateCallback captureSessionStateCallback =
           new CameraCaptureSession.StateCallback() {
@@ -387,8 +396,9 @@ public class MainActivity extends Activity {
                 cameraCaptureSession = session;
                 session.setRepeatingRequest(captureRequestBuilder.build(), captureListener, null);
               } catch (CameraAccessException e) {
-                Errors
-                    .dieOnException(MainActivity.this, e, "Camera access error occured, exiting.");
+                Errors.dieOnException(MainActivity.this,
+                    e,
+                    "Camera access error occured, exiting.");
               }
             }
 
@@ -409,8 +419,9 @@ public class MainActivity extends Activity {
     return cameraManager.getCameraCharacteristics(cameraId);
   }
 
-  private void configureTransform(CamcorderProfile camcorderProfile, int viewWidth,
-                                  int viewHeight) {
+  private void configureTransform(CamcorderProfile camcorderProfile,
+      int viewWidth,
+      int viewHeight) {
     final int rotation = getWindowManager().getDefaultDisplay().getRotation();
     final Matrix transform = new Matrix();
     final RectF viewRect = new RectF(0, 0, viewWidth, viewHeight);
