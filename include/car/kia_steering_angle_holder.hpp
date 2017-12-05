@@ -23,7 +23,7 @@ struct SteeringAngleHolderSettings {
   // the hardware.
   double max_angle_amplitude = 180.0;
   // Maximum absolute spoof torque voltage, in controller-internal units.
-  int16_t max_torque = 5;
+  int16_t max_torque = 80;
 
   // Maximum absolute difference between the actual steering angle and the
   // requested angle. Within this tolerance, it is acceptable to have zero
@@ -91,6 +91,8 @@ public:
 
   const SteeringAngleHolderSettings &settings() const;
   bool SetTargetAngle(double target_angle_degrees);
+  bool IsTargetAngleSet() const;
+  double GetTargetAngle();
   void ClearTargetAngle();
   void ControllerLoop();
   void RequestStop(); // non-blocking

@@ -171,6 +171,16 @@ void SteeringAngleHolderController::ClearTargetAngle() {
   is_target_angle_set_ = false;
 }
 
+bool SteeringAngleHolderController::IsTargetAngleSet() const {
+  return is_target_angle_set_;
+}
+
+double SteeringAngleHolderController::GetTargetAngle() {
+  std::unique_lock<std::mutex> lock(mutex_);
+  CHECK(is_target_angle_set_);
+  return target_angle_degrees_;
+}
+
 void SteeringAngleHolderController::ControllerLoop() {
   Timestamped<SteeringAngle> steering_instance = {{}, {0, 0}};
   KiaControlCommand steering_command = {KiaControlCommand::STEER, 0};
