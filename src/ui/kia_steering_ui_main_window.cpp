@@ -15,7 +15,7 @@ SteeringAngleReadThread::SteeringAngleReadThread(
 
 void SteeringAngleReadThread::ProcessValue(
     const Timestamped<SteeringAngle> &value) {
-  emit SteeringAngleChanged(QString::number(value.data().angle_deci_degrees));
+  emit SteeringAngleChanged(value.data().angle_deci_degrees);
 }
 
 VelocityReadThread::VelocityReadThread(
@@ -116,7 +116,13 @@ MainWindow::MainWindow(const std::string &can_interface,
   connect(ui->steering_torque_send_button, &QPushButton::clicked, this,
           &MainWindow::SendSingleSteeringCommand);
   connect(ui->target_angle_send_button, &QPushButton::clicked, this,
-          &MainWindow::SetTargetSteeringAngle);
+          &MainWindow::SetTargetSteeringAngleFromInputField);
+  connect(ui->target_angle_clear_button, &QPushButton::clicked, this,
+          &MainWindow::ClearTargetSteeringAngle);
+  connect(ui->left_turn_button, &QPushButton::clicked, this,
+          &MainWindow::TurnLeft);
+  connect(ui->right_turn_button, &QPushButton::clicked, this,
+          &MainWindow::TurnRight);
 }
 
 MainWindow::~MainWindow() {
@@ -144,19 +150,24 @@ void MainWindow::SendSingleSteeringCommand() {
   }
 }
 
-void MainWindow::SetTargetSteeringAngle() {
+void MainWindow::SetTargetSteeringAngleFromInputField() {
   bool parse_success = false;
-  const short target_angle =
+  const short target_angle_degrees =
       ui->target_angle_in_field->text().toShort(&parse_success);
-  if (parse_success &&
-      std::abs(target_angle) <=
-          steering_controller_->settings().max_angle_amplitude) {
-    steering_controller_->SetTargetAngle(target_angle);
+  if (parse_success) {
+    SetTargetSteeringAngle(target_angle_degrees);
   }
 }
 
-void MainWindow::OnSteeringAngleChanged(QString text) {
-  ui->steering_angle_value_label->setText(text);
+void MainWindow::ClearTargetSteeringAngle() {
+  steering_controller_->ClearTargetAngle();
+  ui->target_angle_value_label->setText("not set");
+}
+
+void MainWindow::OnSteeringAngleChanged(int16_t angle_deci_degrees) {
+  const double angle_degrees = static_cast<double>(angle_deci_degrees) / 10.0;
+  LOG(INFO) << "Set angle: " << angle_degrees;
+  ui->steering_angle_value_label->setText(QString::number(angle_degrees));
 }
 
 void MainWindow::OnVelocityChanged(QString text) {
@@ -165,4 +176,30 @@ void MainWindow::OnVelocityChanged(QString text) {
 
 void MainWindow::OnSteeringTorqueChanged(QString text) {
   ui->torque_offset_value_label->setText(text);
+}
+
+constexpr double turns_angle_change_degrees = 5.0;
+
+void MainWindow::TurnLeft() {
+  ShiftTargetSteeringAngle(turns_angle_change_degrees);
+}
+
+void MainWindow::TurnRight() {
+  ShiftTargetSteeringAngle(-turns_angle_change_degrees);
+}
+
+void MainWindow::SetTargetSteeringAngle(double target_angle_degrees) {
+  if (std::abs(target_angle_degrees) <=
+      steering_controller_->settings().max_angle_amplitude) {
+    steering_controller_->SetTargetAngle(target_angle_degrees);
+    ui->target_angle_value_label->setText(
+        QString::number(target_angle_degrees));
+  }
+}
+
+void MainWindow::ShiftTargetSteeringAngle(double target_angle_shift_degrees) {
+  if (steering_controller_->IsTargetAngleSet()) {
+    SetTargetSteeringAngle(steering_controller_->GetTargetAngle() +
+                           target_angle_shift_degrees);
+  }
 }

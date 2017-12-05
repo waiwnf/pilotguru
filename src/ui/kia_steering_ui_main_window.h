@@ -65,7 +65,7 @@ private:
   bool must_run_ = true;
 };
 
-// Reads SteeringAngle values off the queue and formats them as text.
+// Reads SteeringAngle values off the queue.
 class SteeringAngleReadThread
     : public TimestampedValueReadThread<pilotguru::kia::SteeringAngle> {
   Q_OBJECT
@@ -76,7 +76,7 @@ public:
                         &value) override;
 
 signals:
-  void SteeringAngleChanged(QString text);
+  void SteeringAngleChanged(int16_t angle_deci_degrees);
 };
 
 // Reads Velocity values off the queue and formats average wheel velocity as
@@ -124,10 +124,16 @@ public:
 
 private:
   void SendSingleSteeringCommand();
-  void SetTargetSteeringAngle();
-  void OnSteeringAngleChanged(QString text);
+  void SetTargetSteeringAngleFromInputField();
+  void ClearTargetSteeringAngle();
+  void TurnLeft();
+  void TurnRight();
+  void OnSteeringAngleChanged(int16_t angle_deci_degrees);
   void OnVelocityChanged(QString text);
   void OnSteeringTorqueChanged(QString text);
+
+  void SetTargetSteeringAngle(double target_angle_degrees);
+  void ShiftTargetSteeringAngle(double target_angle_shift_degrees);
 
   Ui::MainWindow *ui;
 

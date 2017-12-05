@@ -25,6 +25,8 @@ int main(int argc, char *argv[]) {
   settings.max_torque = FLAGS_max_spoof_steering_torque;
   settings.torque_change_step = FLAGS_torque_change_step;
 
+  qRegisterMetaType<int16_t>("int16_t");
+
   QApplication a(argc, argv);
   MainWindow w(FLAGS_can_interface, FLAGS_arduino_tty, settings,
                FLAGS_kia_log_dir);
