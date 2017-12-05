@@ -13,8 +13,8 @@ constexpr uint8_t MCP4725_DAC_BLUE = 0x62;
 constexpr uint8_t MCP4725_DAC_GREEN = 0x63;
 
 // ADC settings.
-constexpr uint8_t MCP3008_ADC_CHANNEL_BLUE = 4;
-constexpr uint8_t MCP3008_ADC_CHANNEL_GREEN = 7;
+constexpr uint8_t MCP3008_ADC_CHANNEL_BLUE = 7;
+constexpr uint8_t MCP3008_ADC_CHANNEL_GREEN = 3;
 constexpr uint8_t MCP3008_ADC_CS_PIN = 10;
 
 // Preallocate everything
@@ -46,7 +46,7 @@ void TakeVoltageMeasurement() {
 }
 
 void setup() {
-  steering_spoof_settings.max_steering_magnitude = 20;
+  steering_spoof_settings.max_steering_magnitude = 80;
   steering_spoof_settings.steps_per_adjustment_level = 2;
   steering_spoof_settings.steps_at_target_level = 300;
   steering_spoof_settings.voltage_update_hystheresis = 1;
