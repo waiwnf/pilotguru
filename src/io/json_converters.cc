@@ -1,5 +1,7 @@
 #include <io/json_converters.hpp>
 
+#include <iostream>
+
 namespace pilotguru {
 nlohmann::json PoseToJson(const ORB_SLAM2::Pose &pose) {
   nlohmann::json result;
@@ -172,6 +174,11 @@ std::unique_ptr<nlohmann::json> ReadJsonFile(const std::string &filename) {
   std::unique_ptr<nlohmann::json> result(new nlohmann::json());
   file_stream >> *result;
   return std::move(result);
+}
+
+void WriteJsonFile(const nlohmann::json &data, const std::string &filename) {
+  std::ofstream json_ostream(filename);
+  json_ostream << data.dump(2) << std::endl;
 }
 
 void JsonWriteTimestampedRealData(const std::vector<long> &times_usec,

@@ -9,6 +9,8 @@
 namespace pilotguru {
 constexpr char kAccelerations[] = "accelerations";
 constexpr char kAngularVelocity[] = "angular_velocity";
+constexpr char kCanFrames[] = "can_frames";
+constexpr char kCanFrame[] = "can_frame";
 constexpr char kForwardAxis[] = "forward_axis";
 constexpr char kFrames[] = "frames";
 constexpr char kLocations[] = "locations";
@@ -22,6 +24,7 @@ constexpr char kPlanarDirection[] = "planar_direction";
 constexpr char kRotations[] = "rotations";
 constexpr char kSpeedMS[] = "speed_m_s";
 constexpr char kSteering[] = "steering";
+constexpr char kSteeringAngleDegrees[] = "steering_angle_degrees";
 constexpr char kVelocities[] = "velocities";
 
 constexpr char kTranslation[] = "translation";
@@ -62,6 +65,7 @@ void WriteTrajectoryToFile(
     const vector<double> *turn_angles /* optional */, int frame_id_offset);
 
 std::unique_ptr<nlohmann::json> ReadJsonFile(const std::string &filename);
+void WriteJsonFile(const nlohmann::json &data, const std::string &filename);
 
 void JsonWriteTimestampedRealData(const std::vector<long> &times_usec,
                                   const std::vector<double> &values,

@@ -1,5 +1,6 @@
 #include <car/can.hpp>
 
+#include <algorithm>
 #include <cstring>
 #include <limits>
 
@@ -8,6 +9,8 @@
 #include <sys/socket.h>
 
 #include <linux/can/raw.h>
+
+#include <glog/logging.h>
 
 namespace pilotguru {
 
@@ -56,6 +59,56 @@ std::string can_frame_payload_to_hex_string(const can_frame &frame) {
     sprintf(frame_data_hex_string + idx * 2, "%02X", frame.data[idx]);
   }
   return std::string(frame_data_hex_string);
+}
+
+can_frame parse_can_frame_or_die(const std::string &can_frame_string) {
+  constexpr char kBytesSeparator = ' ';
+
+  can_frame result;
+
+  // CAN frame ID may be up to 29 bits, soup to 8 characters hex-encoded.
+  const auto frame_id_end = std::find(can_frame_string.begin(),
+                                      can_frame_string.end(), kBytesSeparator);
+  const std::string frame_id_str(can_frame_string.begin(), frame_id_end);
+  const int id_filled = sscanf(frame_id_str.c_str(), "%X", &(result.can_id));
+  CHECK_EQ(id_filled, 1);
+
+  // Payload decoding.
+  result.can_dlc = 0;
+  // Always expect exactly 2 characters for every encoded payload byte.
+  constexpr size_t BYTE_HEX_ENCODED_LENGTH = 2;
+  // C string to fill for parsing.
+  char payload_byte_string[BYTE_HEX_ENCODED_LENGTH + 1];
+  size_t payload_byte_end_idx = frame_id_end - can_frame_string.begin();
+  while (payload_byte_end_idx < can_frame_string.length()) {
+    // Make sure there is exactly one separator character between encoded
+    // payload bytes.
+    CHECK_EQ(can_frame_string[payload_byte_end_idx], kBytesSeparator);
+    // Move indices to the next encoded byte.
+    const size_t payload_byte_start_idx = payload_byte_end_idx + 1;
+    payload_byte_end_idx = payload_byte_start_idx + BYTE_HEX_ENCODED_LENGTH;
+    // There may be a trailing space in the input
+    if (payload_byte_start_idx >= can_frame_string.length()) {
+      break;
+    }
+    // Make sure we are still within the input string with the new indices.
+    CHECK_LE(payload_byte_end_idx, can_frame_string.length())
+        << can_frame_string;
+    // Make sure we are not overfilling the payload.
+    CHECK_LT(result.can_dlc, CAN_MAX_DLEN);
+    // Copy the encoded byte to the C string.
+    for (size_t i = 0; i < BYTE_HEX_ENCODED_LENGTH; ++i) {
+      payload_byte_string[i] = can_frame_string[payload_byte_start_idx + i];
+    }
+    payload_byte_string[BYTE_HEX_ENCODED_LENGTH] = '\0';
+    // Parse the encoded byte, check success.
+    const int payload_filled =
+        sscanf(payload_byte_string, "%hhX", &(result.data[result.can_dlc]));
+    CHECK_EQ(payload_filled, 1);
+    ++result.can_dlc;
+  }
+
+  return result;
 }
 
 can_filter make_can_filter(const std::vector<canid_t> &accepted_ids) {

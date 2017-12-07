@@ -34,6 +34,10 @@ struct SteeringAngle {
   SteeringAngle();
   SteeringAngle(int16_t angle_deci_degrees_in);
 
+  double degrees() const {
+    return static_cast<double>(angle_deci_degrees) / 10.0;
+  }
+
   int16_t angle_deci_degrees;
 };
 
