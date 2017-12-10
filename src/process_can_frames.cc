@@ -1,3 +1,6 @@
+// Convert the Cee'd CAN bus log (recorded by PilotGuru Recorder) to steering
+// wheel turn angles and vehicle velocity time series.
+
 #include <cstdlib>
 
 #include <gflags/gflags.h>
@@ -11,21 +14,29 @@
 
 // Inputs.
 
-DEFINE_string(can_frames_json, "", "");
+DEFINE_string(
+    can_frames_json, "",
+    "JSON file with CAN bus data log. Comes from PilotGuru Recorder raw data.");
 
 // Outputs.
 
-DEFINE_string(steering_out_json, "", "");
-DEFINE_string(velocities_out_json, "", "");
+DEFINE_string(steering_out_json, "",
+              "JSON file to write timestamped steering wheel turn angles to.");
+DEFINE_string(velocities_out_json, "",
+              "JSON file to write timestamped vehicle velocity values to.");
 
 // Config.
 
-// TODO velocities scaling factor.
+DEFINE_double(velocity_scale_can_units_to_m_s, 1.0,
+              "Multiplier to convert from car-internal units used on the CAN "
+              "bus to meters per second.");
 
 int main(int argc, char **argv) {
   google::InitGoogleLogging(argv[0]);
   google::ParseCommandLineFlags(&argc, &argv, true);
   google::InstallFailureSignalHandler();
+
+  CHECK_GT(FLAGS_velocity_scale_can_units_to_m_s, 0.0);
 
   std::unique_ptr<nlohmann::json> can_json_root =
       pilotguru::ReadJsonFile(FLAGS_can_frames_json);
@@ -60,8 +71,9 @@ int main(int argc, char **argv) {
       std::unique_ptr<pilotguru::kia::Velocity> velocity =
           pilotguru::kia::ParseVelocity(frame);
       CHECK(velocity != nullptr);
-      // TODO scaling.
-      out_element[pilotguru::kSpeedMS] = velocity->average_wheel_speed();
+      out_element[pilotguru::kSpeedMS] =
+          static_cast<double>(velocity->average_wheel_speed()) *
+          FLAGS_velocity_scale_can_units_to_m_s;
       velocities_out_json.push_back(out_element);
       break;
     }
