@@ -135,6 +135,7 @@ class SequentialNet(nn.Module):
     if self.options[FC][BATCHNORM] == True:
       bn = self.AddBatchNorm1d()
     activation = self.AddActivation(self.options[FC][ACTIVATION])
+    dropout = None
     if dropout_prob > 0:
       dropout = self.AddDropout(dropout_prob, self.options[FC][DROPOUT])
     return fc, bn, activation, dropout
