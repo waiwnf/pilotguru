@@ -49,7 +49,7 @@ int main(int argc, char **argv) {
   std::unique_ptr<nlohmann::json> velocities_out_json_root(
       new nlohmann::json());
   nlohmann::json &velocities_out_json =
-      (*steering_out_json_root)[pilotguru::kVelocities];
+      (*velocities_out_json_root)[pilotguru::kVelocities];
 
   for (const nlohmann::json &timestamped_can_frame : can_json) {
     nlohmann::json out_element;
@@ -82,8 +82,9 @@ int main(int argc, char **argv) {
     }
   }
 
-  pilotguru::WriteJsonFile(steering_out_json, FLAGS_steering_out_json);
-  pilotguru::WriteJsonFile(velocities_out_json, FLAGS_velocities_out_json);
+  pilotguru::WriteJsonFile(*steering_out_json_root, FLAGS_steering_out_json);
+  pilotguru::WriteJsonFile(*velocities_out_json_root,
+                           FLAGS_velocities_out_json);
 
   return EXIT_SUCCESS;
 }
