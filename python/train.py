@@ -17,7 +17,7 @@ if __name__ == '__main__':
   parser = argparse.ArgumentParser()
   parser.add_argument('--data_dirs', required=True)
   parser.add_argument('--validation_data_dirs', required=True)
-  parser.add_argument('--labels_file_suffix', default='inverse-radius')
+  parser.add_argument('--labels_file_suffix', default='steering')
   parser.add_argument('--batch_size', type=int, required=True)
   parser.add_argument('--epochs', type=int, required=True)
   parser.add_argument('--in_channels', type=int, default=3)

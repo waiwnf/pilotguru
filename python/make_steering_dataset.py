@@ -18,20 +18,67 @@ import numpy as np
 
 import image_helpers
 
-FrameData = collections.namedtuple(
-    'FrameData', ['frame_id', 'angular_velocity', 'speed_m_s'])
+_FRAME_ID = 'frame_id'
+_ANGULAR_VELOCITY = 'angular_velocity'
+_SPEED_M_S = 'speed_m_s'
+_STEERING = 'steering'
+_STEERING_GENERIC_VALUE = 'steering_generic_value'
+_STEERING_ANGLE_DEGREES = 'steering_angle_degrees'
+_VELOCITIES = 'velocities'
 
-def FillFrameData(steering, velocity):
+_IMU = 'imu'
+_CAN = 'can'
+
+# Multipliers to bring steering data inferred from IMU and obtained directly
+# from the CAN bus to uniform units to be used as labels for the trained models.
+#
+# The generic steering unit is 90 degrees of steering wheel rotation.
+# Empirically, we have
+# [degrees of steering wheel rotation] ~= 2500 * [inverse steering radius],
+# hence the multipliers.
+_CAN_DEGREES_TO_STEERING_UNITS = 1.0 / 90.0
+_INVERSE_RADIUS_METERS_TO_STEERING_UNITS = 28.0
+
+# JSON field names to look at for the steering data, depending on the data 
+# source.
+_STEERING_VALUE_BY_SOURCE = {
+  _IMU: _ANGULAR_VELOCITY,
+  _CAN: _STEERING_ANGLE_DEGREES
+}
+
+# Temporal smoothing settings for the steering data.
+# IMU-derived data is rather noisy, so a little temporal smoothing is useful.
+# Data coming from the CAN bus is good enough (noise within 0.5 steering wheel 
+# turn degree), so extra smoothing is not necessary.
+_SMOOTHING_SETTINGS_BY_STEERING_SOURCE = {
+  _IMU: ['--smoothing_sigma', '0.1'],
+  _CAN: []
+}
+
+# Internal data structure to hold per-frame steering and velocity vales.
+# The steering value is interpreted differently by the helpers, depending on the
+# specified steering data source (CAN bus or IMU).
+FrameData = collections.namedtuple(
+    'FrameData', [_FRAME_ID, _STEERING_GENERIC_VALUE, _SPEED_M_S])
+
+def FillFrameData(steering, velocity, steering_source):
   assert velocity is not None or steering is not None
   if velocity is not None and steering is not None:
-    assert velocity['frame_id'] == steering['frame_id']
+    assert velocity[_FRAME_ID] == steering[_FRAME_ID]
   frame_id = (
-      velocity['frame_id'] if velocity is not None else steering['frame_id'])
-  s = velocity['speed_m_s'] if velocity is not None else None
-  av = steering['angular_velocity'] if steering is not None else None
-  return FrameData(frame_id, av, s)
+      velocity[_FRAME_ID] if velocity is not None else steering[_FRAME_ID])
+  
+  velocity_value = None
+  if velocity is not None:
+    velocity_value = velocity[_SPEED_M_S]
 
-def JoinFrameData(steering, velocities):
+  steering_value = None
+  if steering is not None:
+    steering_value = steering[_STEERING_VALUE_BY_SOURCE[steering_source]]
+
+  return FrameData(frame_id, steering_value, velocity_value)
+
+def JoinFrameData(steering, velocities, steering_source):
   steering_idx = 0
   velocities_idx = 0
   result = []
@@ -39,22 +86,19 @@ def JoinFrameData(steering, velocities):
     v = None if velocities_idx >= len(velocities) else (
         velocities[velocities_idx])
     s = None if steering_idx >= len(steering) else steering[steering_idx]
-    if v is None:
-      result.append(FillFrameData(s, None))
+    if v is not None and s is not None:
+      if s[_FRAME_ID] < v[_FRAME_ID]:
+        v = None
+      elif s[_FRAME_ID] > v[_FRAME_ID]:
+        s = None
+    
+    result.append(FillFrameData(s, v, steering_source))
+    
+    if s is not None:
       steering_idx += 1
-    elif s is None:
-      result.append(FillFrameData(None, v))
+    if v is not None:
       velocities_idx += 1
-    elif s['frame_id'] < v['frame_id']:
-      result.append(FillFrameData(s, None))
-      steering_idx += 1
-    elif s['frame_id'] > v['frame_id']:
-      result.append(FillFrameData(None, v))
-      velocities_idx += 1
-    else:
-      result.append(FillFrameData(s, v))
-      steering_idx += 1
-      velocities_idx += 1
+
   return result
 
 def FrameToModelInput(
@@ -97,6 +141,33 @@ def LabelDataWithLookaheads(raw_labels, write_indices, lookaheads):
             for lookahead in lookaheads], 0]
   return result
 
+def AnnotateFramesSteering(
+    annotate_frames_bin,
+    frames_json,
+    in_steering_json,
+    out_steering_json,
+    steering_source):
+  subprocess.call(
+    [annotate_frames_bin,
+      '--frames_json', frames_json,
+      '--in_json', in_steering_json,
+      '--json_root_element_name', _STEERING,
+      '--json_value_name', _STEERING_VALUE_BY_SOURCE[steering_source],
+      '--out_json', steering_frames_json_name] + 
+      _SMOOTHING_SETTINGS_BY_STEERING_SOURCE[steering_source])
+
+# Interpret the steering data as either angular velocity from IMU or steering
+# wheel turn angle from the CAN bus and apply the appropriate multiplier to
+# bring the data to the uniform scale.
+def RawSteeringDataToSteeringLabels(raw_steering, velocities, steering_source):
+  if steering_source == _CAN:
+    return raw_steering * _CAN_DEGREES_TO_STEERING_UNITS
+  elif steering_source == _IMU:
+    inverse_radius = raw_steering / (velocities + 1.0)
+    return inverse_radius * _INVERSE_RADIUS_METERS_TO_STEERING_UNITS
+  else:
+    assert False
+    return None
 
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()
@@ -110,6 +181,9 @@ if __name__ == '__main__':
     '--in_steering_json', required=True,
     help='Timestamped steering angular velocities JSON, produced by ' +
       'fit_motion.')
+  parser.add_argument('--steering_source', default=_CAN,
+      help='Steering data source. Supported values: ' + 
+            _CAN + ' and ' + _IMU + '.')
   parser.add_argument(
     '--in_velocities_json', required=True,
     help='Timestamped absolute forward velocities JSON, produced by ' +
@@ -162,27 +236,27 @@ if __name__ == '__main__':
 
   out_color_channels = 1 if args.convert_to_grayscale else 3
   
+  annotate_frames_bin = os.path.join(args.binary_dir, 'annotate_frames')
+
   # Compute per-frame steering angular velocity annotations from the raw 
   # angular velocity time series.
-  annotate_frames_bin = os.path.join(args.binary_dir, 'annotate_frames')
-  steering_frames_json_name = os.path.join(args.out_dir, 'steering.json')
-  subprocess.call(
-    [annotate_frames_bin,
-      '--frames_json', args.in_frames_json,
-      '--in_json', args.in_steering_json,
-      '--json_root_element_name', 'steering',
-      '--json_value_name', 'angular_velocity',
-      '--smoothing_sigma', '0.1',
-      '--out_json', steering_frames_json_name])
+  steering_frames_json_name = os.path.join(args.out_dir, 'steering_frames.json')
+  AnnotateFramesSteering(
+      annotate_frames_bin,
+      args.in_frames_json,
+      args.in_steering_json,
+      steering_frames_json_name,
+      args.steering_source)
 
   # Per-frame forward velocities annotations.
-  velocities_frames_json_name = os.path.join(args.out_dir, 'velocities.json')
+  velocities_frames_json_name = os.path.join(
+      args.out_dir, 'velocities_frames.json')
   subprocess.call(
     [annotate_frames_bin,
       '--frames_json', args.in_frames_json,
       '--in_json', args.in_velocities_json,
-      '--json_root_element_name', 'velocities',
-      '--json_value_name', 'speed_m_s',
+      '--json_root_element_name', _VELOCITIES,
+      '--json_value_name', _SPEED_M_S,
       '--out_json', velocities_frames_json_name])
   
   label_lookahead_frames = [
@@ -215,7 +289,9 @@ if __name__ == '__main__':
   with open(velocities_frames_json_name) as f:
     velocities_frames_json = json.load(f)
   frames_data = JoinFrameData(
-      steering_frames_json['steering'], velocities_frames_json['velocities'])
+      steering_frames_json[_STEERING],
+      velocities_frames_json[_VELOCITIES],
+      args.steering_source)
 
   # Open the video file for reading the frames.
   frames_generator = image_helpers.VideoFrameGenerator(args.in_video)
@@ -224,8 +300,8 @@ if __name__ == '__main__':
   prev_saved_frame_id = None
   prev_seen_frame_data_id = None
   for frame_data in frames_data:
-    # Skip if no angular velocity data
-    if frame_data.angular_velocity is None:
+    # Skip if no steering data
+    if frame_data.steering_generic_value is None:
       remaining_unfilled_history = raw_history_size
       continue
     # Skip if no forward velocity data or forward velocity is too low.
@@ -259,7 +335,7 @@ if __name__ == '__main__':
         args.target_height, args.target_width, args.convert_to_grayscale,
         args.convert_to_yuv)
     raw_frames_history[history_index, ...] = frame_chw
-    raw_steering_history[history_index, 0] = frame_data.angular_velocity
+    raw_steering_history[history_index, 0] = frame_data.steering_generic_value
     raw_velocity_history[history_index, 0] = frame_data.speed_m_s
     remaining_unfilled_history = max(0, remaining_unfilled_history - 1)
 
@@ -286,16 +362,14 @@ if __name__ == '__main__':
     np.save(image_out_name, raw_frames_history[write_indices, ...])
     # Write out the PNG picture too for checking the inputs by hand.
     scipy.misc.imsave(image_out_name + '.png', np.squeeze(frame_hwc))
-    # Steering angular velocity is the label.
-    angular_out_name = OutFileName(args.out_dir, out_frame_id, 'angular')
-    angular_out_data = LabelDataWithLookaheads(
+    # Raw steering and velocity data.
+    raw_steering_data = LabelDataWithLookaheads(
         raw_steering_history, write_indices, label_lookahead_frames)
-    np.save(angular_out_name, angular_out_data)
-    velocity_out_data = LabelDataWithLookaheads(
+    velocities_data = LabelDataWithLookaheads(
         raw_velocity_history, write_indices, label_lookahead_frames)
-    # Inverse turn radius.
-    inverse_radius_out_name = OutFileName(
-        args.out_dir, out_frame_id, 'inverse-radius')
-    inverse_radius_data = (
-        angular_out_data / (velocity_out_data + 1.0)).astype(np.float32)
-    np.save(inverse_radius_out_name, inverse_radius_data)
+    # Steering data normalized to the uniform (CAN, IMU) label space.
+    steering_labels_data = RawSteeringDataToSteeringLabels(
+        raw_steering_data, velocities_data, args.steering_source)
+    steering_labels_out_name = OutFileName(
+        args.out_dir, out_frame_id, 'steering')
+    np.save(steering_labels_out_name, steering_labels_data.astype(np.float32))
