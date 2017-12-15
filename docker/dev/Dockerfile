@@ -1,4 +1,4 @@
-FROM nvidia/cuda:8.0-cudnn6-devel-ubuntu16.04
+FROM nvidia/cuda:9.0-cudnn7-devel-ubuntu16.04
 
 RUN apt-get update
 
@@ -28,13 +28,6 @@ RUN mkdir /opt/pangolin && \
 
 RUN cd /usr/include/ && wget https://github.com/nlohmann/json/releases/download/v2.1.1/json.hpp
 
-RUN apt-get -y install python3-pip
-RUN pip3 install http://download.pytorch.org/whl/cu80/torch-0.2.0.post3-cp35-cp35m-manylinux1_x86_64.whl 
-RUN pip3 install torchvision
-RUN pip3 install jupyter
-RUN pip3 install scipy
-RUN pip3 install sklearn
-
 RUN apt-get -y install \
     libavformat-dev \
     libavcodec-dev \
@@ -43,11 +36,8 @@ RUN apt-get -y install \
     libswscale-dev \
     libavresample-dev \
     libavfilter-dev
-RUN pip3 install av
 
 RUN apt-get -y install libcupti-dev
-RUN pip3 install tensorflow-gpu
-RUN pip3 install tensorboard_logger
 
 RUN apt-get -y install \
     gdb \
@@ -58,6 +48,14 @@ RUN apt-get -y install \
     valgrind \
     clang-format \
     curl
+
+RUN apt-get -y install autoconf libtool psmisc net-tools
+RUN apt-get -y install qtcreator qtbase5-dev
+
+RUN apt-get -y install python3-pip
+RUN pip3 install http://download.pytorch.org/whl/cu90/torch-0.3.0.post4-cp35-cp35m-linux_x86_64.whl 
+RUN pip3 install av torchvision jupyter scipy sklearn tensorflow-gpu tensorboard_logger matplotlib gpustat
+
 RUN mkdir /opt/install && \
     cd /opt/install && \
     curl https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor > microsoft.gpg && \
@@ -66,6 +64,3 @@ RUN echo "deb [arch=amd64] http://packages.microsoft.com/repos/vscode stable mai
 RUN apt-get update
 RUN apt-get -y install code
 
-RUN apt-get -y install autoconf libtool psmisc net-tools
-RUN apt-get -y install qtcreator qtbase5-dev
-RUN pip3 install matplotlib
