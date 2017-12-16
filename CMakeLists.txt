@@ -151,6 +151,7 @@ add_executable(kia_steering_ui src/kia_steering_ui.cc src/ui/kia_steering_ui_mai
 add_executable(optical_trajectories src/optical_trajectories.cc)
 add_executable(process_can_frames src/process_can_frames.cc)
 add_executable(project_translations src/project_translations.cc)
+add_executable(render_frame_numbers src/render_frame_numbers.cc)
 add_executable(render_motion src/render_motion.cc)
 add_executable(smooth_heading_directions src/smooth_heading_directions.cc)
 
@@ -188,5 +189,6 @@ target_link_libraries(kia_steering_ui kia_steering_angle_holder_lib arduinocomml
 target_link_libraries(optical_trajectories pilotgurulib ${OpenCV_LIBS} glog gflags)
 target_link_libraries(process_can_frames pilotgurulib kiacanlib glog gflags)
 target_link_libraries(project_translations pilotgurulib ${OpenCV_LIBS} glog gflags)
+target_link_libraries(render_frame_numbers pilotgurulib ${OpenCV_LIBS} glog gflags)
 target_link_libraries(render_motion pilotgurulib ${OpenCV_LIBS} glog gflags)
 target_link_libraries(smooth_heading_directions pilotgurulib glog gflags)
