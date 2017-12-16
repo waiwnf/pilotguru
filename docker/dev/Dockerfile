@@ -2,6 +2,11 @@ FROM nvidia/cuda:9.0-cudnn7-devel-ubuntu16.04
 
 RUN apt-get update
 
+# Get newer QT libraries and QTCreator.
+RUN apt-get -y install software-properties-common
+RUN add-apt-repository -y ppa:kubuntu-ppa/backports
+RUN apt-get update
+
 RUN apt-get -y install \
     git \
     cmake \
