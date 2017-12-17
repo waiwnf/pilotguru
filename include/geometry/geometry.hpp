@@ -12,8 +12,8 @@ Eigen::Quaterniond RotationMotionToQuaternion(double rate_x_rad_s,
                                               double duration_sec);
 
 struct MotionIntegrationOutcome {
-  Eigen::Quaterniond orientation;
-  Eigen::Vector3d velocity;
+  Eigen::Quaternion<double, Eigen::DontAlign> orientation;
+  Eigen::Matrix<double, 3, 1, Eigen::DontAlign> velocity;
   long duration_usec;
 };
 
