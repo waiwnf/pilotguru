@@ -60,7 +60,7 @@ public class MainActivity extends Activity {
           Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.BLUETOOTH};
 
   // UI - video preview panel.
-  private TextureView textureView;
+  private TextureView videoPreviewTextureView;
 
   // UI - buttons.
   private ImageButton takePictureButton, settingsButton;
@@ -199,8 +199,8 @@ public class MainActivity extends Activity {
 
     setContentView(R.layout.activity_main);
 
-    textureView = (TextureView) findViewById(R.id.texture);
-    if (textureView == null) {
+    videoPreviewTextureView = (TextureView) findViewById(R.id.video_preview_texture);
+    if (videoPreviewTextureView == null) {
       throw new AssertionError("Preview texture not found in resources.");
     }
 
@@ -218,7 +218,7 @@ public class MainActivity extends Activity {
   @Override
   protected void onStart() {
     super.onStart();
-    textureView.setSurfaceTextureListener(textureStatusListener);
+    videoPreviewTextureView.setSurfaceTextureListener(textureStatusListener);
 
     // Check which of the necessary permissions we do not have yet.
     final List<String> lackingPermissions = new LinkedList<>();
@@ -368,7 +368,7 @@ public class MainActivity extends Activity {
   protected void createCameraSession(@NonNull CameraDevice camera,
       @NonNull Collection<Surface> nonPreviewSurfaces,
       final @Nullable CameraCaptureSession.CaptureCallback captureListener) {
-    final SurfaceTexture texture = textureView.getSurfaceTexture();
+    final SurfaceTexture texture = videoPreviewTextureView.getSurfaceTexture();
     if (texture == null) {
       throw new AssertionError("Preview surface texture is null");
     }
@@ -377,7 +377,7 @@ public class MainActivity extends Activity {
       final CamcorderProfile camcorderProfile = effectiveCamcorderProfile();
       texture.setDefaultBufferSize(camcorderProfile.videoFrameWidth,
           camcorderProfile.videoFrameHeight);
-      configureTransform(camcorderProfile, textureView.getWidth(), textureView.getHeight());
+      configureTransform(camcorderProfile, videoPreviewTextureView.getWidth(), videoPreviewTextureView.getHeight());
       // Non-preview surfaces are those used for video recording. When the video is not recorded,
       // the non-preview surfaces collection may be empty.
       final List<Surface> surfaces = new LinkedList(nonPreviewSurfaces);
@@ -438,7 +438,7 @@ public class MainActivity extends Activity {
     } else if (Surface.ROTATION_180 == rotation) {
       transform.postRotate(180, viewRect.centerX(), viewRect.centerY());
     }
-    textureView.setTransform(transform);
+    videoPreviewTextureView.setTransform(transform);
   }
 
   private void subscribeToLocationUpdates(LocationListener listener, long minTimeMsec) {
