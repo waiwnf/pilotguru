@@ -57,12 +57,22 @@ int main(int argc, char **argv) {
         timestamped_can_frame[pilotguru::kTimeUsec];
     const string &can_frame_string =
         timestamped_can_frame[pilotguru::kCanFrame];
-    const can_frame frame = pilotguru::parse_can_frame_or_die(can_frame_string);
+    can_frame frame;
+    const bool parse_success =
+        pilotguru::try_parse_can_frame(can_frame_string, &frame);
+    if (!parse_success) {
+      LOG(ERROR) << "Invalid CAN frame text: [" << timestamped_can_frame
+                 << "].";
+      continue;
+    }
+
     switch (frame.can_id) {
     case pilotguru::kia::STEERING_WHEEL_ANGLE_CAN_ID: {
       std::unique_ptr<pilotguru::kia::SteeringAngle> angle =
           pilotguru::kia::ParseSteeringAngle(frame);
-      CHECK(angle != nullptr);
+      if (angle == nullptr) {
+        continue;
+      }
       out_element[pilotguru::kSteeringAngleDegrees] = angle->degrees();
       steering_out_json.push_back(out_element);
       break;
@@ -70,7 +80,9 @@ int main(int argc, char **argv) {
     case pilotguru::kia::VELOCITY_CAN_ID: {
       std::unique_ptr<pilotguru::kia::Velocity> velocity =
           pilotguru::kia::ParseVelocity(frame);
-      CHECK(velocity != nullptr);
+      if (velocity == nullptr) {
+        continue;
+      }
       out_element[pilotguru::kSpeedMS] =
           static_cast<double>(velocity->average_wheel_speed()) *
           FLAGS_velocity_scale_can_units_to_m_s;

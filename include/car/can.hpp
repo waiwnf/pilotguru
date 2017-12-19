@@ -17,7 +17,7 @@ constexpr uint32_t CAN_ID_MASK_11_BIT = 0x7FF;
 int connect_new_can_soket(const std::string &interface_name,
                           const std::vector<canid_t> &accepted_ids);
 std::string can_frame_payload_to_hex_string(const can_frame &frame);
-can_frame parse_can_frame_or_die(const std::string &can_frame_string);
+bool try_parse_can_frame(const std::string &can_frame_string, can_frame *frame);
 
 can_filter make_can_filter(const std::vector<canid_t> &accepted_ids);
 }
