@@ -128,7 +128,7 @@ def FrameToModelInput(
   return frame_image_chw, frame_image_resized
 
 def OutFileName(out_dir, frame_id, data_id):
-  return os.path.join(args.out_dir, 'frame-%06d-%s.npy') % (frame_id, data_id)
+  return os.path.join(args.out_dir, 'frame-%06d-%s') % (frame_id, data_id)
 
 def LabelDataWithLookaheads(raw_labels, write_indices, lookaheads):
   assert len(raw_labels.shape) == 2
@@ -155,6 +155,16 @@ def AnnotateFramesSteering(
       '--json_value_name', _STEERING_VALUE_BY_SOURCE[steering_source],
       '--out_json', steering_frames_json_name] + 
       _SMOOTHING_SETTINGS_BY_STEERING_SOURCE[steering_source])
+
+def LoadForwardAxis(forward_axis_json_filename):
+  with open(forward_axis_json_filename) as forward_axis_file:
+      forward_axis_json = json.load(forward_axis_file)
+      forward_axis_dict = forward_axis_json['forward_axis']
+      return np.array([
+          forward_axis_dict['x'],
+          forward_axis_dict['y'],
+          forward_axis_dict['z']],
+        dtype=np.float32)
 
 # Interpret the steering data as either angular velocity from IMU or steering
 # wheel turn angle from the CAN bus and apply the appropriate multiplier to
@@ -188,6 +198,10 @@ if __name__ == '__main__':
     '--in_velocities_json', required=True,
     help='Timestamped absolute forward velocities JSON, produced by ' +
       'fit_motion.')
+  parser.add_argument(
+    '--in_forward_axis_json', required=True,
+    help='Vehicle forward motion axis direction in smartphone-local ' + 
+      'reference frame, produced by fit_motion.')
   parser.add_argument(
     '--min_forward_velocity_m_s', type=float, default=0.0,
     help='Timestamped absolute forward velocities JSON, produced by ' +
@@ -232,7 +246,11 @@ if __name__ == '__main__':
   parser.add_argument('--target_height', type=int, default=-1)
   parser.add_argument('--target_width', type=int, default=-1)
 
+  parser.add_argument('--save_png_every', type=int, default=100)
+
   args = parser.parse_args()
+
+  forward_axis = LoadForwardAxis(args.in_forward_axis_json)
 
   out_color_channels = 1 if args.convert_to_grayscale else 3
   
@@ -299,6 +317,7 @@ if __name__ == '__main__':
   # Id of previous frame for which the data was written out.
   prev_saved_frame_id = None
   prev_seen_frame_data_id = None
+  total_samples_written = 0
   for frame_data in frames_data:
     # Skip if no steering data
     if frame_data.steering_generic_value is None:
@@ -357,11 +376,12 @@ if __name__ == '__main__':
     write_indices.reverse()
 
     out_frame_id = frame_id - max_lookahead
-    # Write out numpy array for the training example input.
-    image_out_name = OutFileName(args.out_dir, out_frame_id, 'img')
-    np.save(image_out_name, raw_frames_history[write_indices, ...])
+
     # Write out the PNG picture too for checking the inputs by hand.
-    scipy.misc.imsave(image_out_name + '.png', np.squeeze(frame_hwc))
+    if total_samples_written % args.save_png_every == 0:
+      image_out_name = OutFileName(args.out_dir, out_frame_id, 'img')
+      scipy.misc.imsave(image_out_name + '.png', np.squeeze(frame_hwc))
+
     # Raw steering and velocity data.
     raw_steering_data = LabelDataWithLookaheads(
         raw_steering_history, write_indices, label_lookahead_frames)
@@ -370,6 +390,11 @@ if __name__ == '__main__':
     # Steering data normalized to the uniform (CAN, IMU) label space.
     steering_labels_data = RawSteeringDataToSteeringLabels(
         raw_steering_data, velocities_data, args.steering_source)
-    steering_labels_out_name = OutFileName(
-        args.out_dir, out_frame_id, 'steering')
-    np.save(steering_labels_out_name, steering_labels_data.astype(np.float32))
+    
+    sample_out_name = OutFileName(args.out_dir, out_frame_id, 'data')
+    np.savez_compressed(
+      sample_out_name,
+      frame_img=raw_frames_history[write_indices, ...],
+      steering=steering_labels_data.astype(np.float32),
+      forward_axis=forward_axis)
+    total_samples_written += 1
