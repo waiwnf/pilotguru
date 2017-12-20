@@ -17,7 +17,7 @@ if __name__ == '__main__':
   parser = argparse.ArgumentParser()
   parser.add_argument('--data_dirs', required=True)
   parser.add_argument('--validation_data_dirs', required=True)
-  parser.add_argument('--labels_file_suffix', default='steering')
+  parser.add_argument('--data_file_suffix', default='data.npz')
   parser.add_argument('--batch_size', type=int, required=True)
   parser.add_argument('--epochs', type=int, required=True)
   parser.add_argument('--in_channels', type=int, default=3)
@@ -49,13 +49,22 @@ if __name__ == '__main__':
       '--example_label_extra_weight_scale', type=float, default=0.0)
   args = parser.parse_args()
 
-  train_data, train_labels = io_helpers.LoadDatasetNumpyFiles(
-      args.data_dirs.split(','), label_suffix=args.labels_file_suffix)
-  val_data, val_labels = io_helpers.LoadDatasetNumpyFiles(
+  # TODO get this from the networks
+  data_element_names = ['frame_img', 'steering']
+  image_element_idx = data_element_names.index('frame_img')
+  weight_label_idx = data_element_names.index('steering')
+
+  train_data = io_helpers.LoadDatasetNumpyFiles(
+      args.data_dirs.split(','),
+      data_element_names,
+      data_suffix=args.data_file_suffix)
+  val_data = io_helpers.LoadDatasetNumpyFiles(
       args.validation_data_dirs.split(','),
-      label_suffix=args.labels_file_suffix)
+      data_element_names,
+      data_suffix=args.data_file_suffix)
   random_shift_directions = None if not args.do_pca_random_shifts else (
-      image_helpers.GetPcaRgbDirections(train_data.astype(np.float32) / 255.0))
+      image_helpers.GetPcaRgbDirections(
+          train_data[image_element_idx].astype(np.float32) / 255.0))
   augment_settings = augmentation.AugmentSettings(
       target_width=args.target_width,
       max_horizontal_shift_pixels=args.max_horizontal_shift_pixels,
@@ -69,9 +78,9 @@ if __name__ == '__main__':
   
   train_loader, val_loader = training_helpers.MakeDataLoaders(
       train_data,
-      train_labels,
       val_data,
-      val_labels,
+      image_element_idx,
+      weight_label_idx,
       args.target_width,
       augment_settings,
       args.batch_size,

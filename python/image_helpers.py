@@ -94,7 +94,8 @@ def GetPcaRgbDirections(images_chw):
   pca.fit(pca_input)
   return pca.explained_variance_[:,np.newaxis] * pca.components_
 
-def GrayscaleInterpolateInPlace(images_chw, grayscale_share):
+def GrayscaleInterpolateInPlace(item, image_element_idx, grayscale_share):
+  images_chw = item[image_element_idx]
   assert len(images_chw.shape) == 4  # Must be (examples x C x H x W) array.
   assert images_chw.shape[1] == 3  # Must be RGB.
   
@@ -103,27 +104,29 @@ def GrayscaleInterpolateInPlace(images_chw, grayscale_share):
   img_gray = np.sum(images_chw * rgb_to_gray_weights, axis=1, keepdims=True)
   images_chw *= (1.0 - grayscale_share)
   images_chw += grayscale_share * img_gray
-  return images_chw
+  return item
 
-def RandomGrayscaleInterpolateInPlace(images_chw):
-  # return GrayscaleInterpolateInPlace(images_chw, random.uniform(0.0, 1.0))
-  return GrayscaleInterpolateInPlace(images_chw, 1.0)
+def RandomGrayscaleInterpolateInPlace(image_element_idx):
+  return lambda x : GrayscaleInterpolateInPlace(x, image_element_idx, 1.0)
 
-def GrayscaleInterpolateInPlaceTransform(grayscale_share):
-  return lambda x : GrayscaleInterpolateInPlace(x, grayscale_share)
+def GrayscaleInterpolateInPlaceTransform(image_element_idx, grayscale_share):
+  return lambda x : GrayscaleInterpolateInPlace(
+      x, image_element_idx, grayscale_share)
 
-def BlurInPlace(images_chw, sigma):
+def BlurInPlace(item, image_element_idx, sigma):
+  images_chw = item[image_element_idx]
   assert len(images_chw.shape) == 4  # Must be (examples x C x H x W) array.
   for example_idx in range(images_chw.shape[0]):
     for channel_idx in range(images_chw.shape[1]):
       image_slice = images_chw[example_idx, channel_idx, ...]
       scipy.ndimage.gaussian_filter(image_slice, sigma, output=image_slice)
-  return images_chw
+  return item
 
-def BlurInPlaceTransform(sigma):
-  return lambda x : BlurInPlace(x, sigma)
+def BlurInPlaceTransform(image_element_idx, sigma):
+  return lambda x : BlurInPlace(x, image_element_idx, sigma)
 
-def RandomShiftInPlace(images_chw, scaled_directions):
+def RandomShiftInPlace(item, image_element_idx, scaled_directions):
+  images_chw = item[image_element_idx]
   assert len(images_chw.shape) == 4  # Must be (examples x C x H x W) array.
   assert len(scaled_directions.shape) == 2  # Must be (directions x C) matrix.
   assert scaled_directions.shape[1] == images_chw.shape[1]
@@ -132,11 +135,18 @@ def RandomShiftInPlace(images_chw, scaled_directions):
   shift_vector_1d = np.sum(scaled_directions * shifts_magnitude, axis=0)
   shift_vector = shift_vector_1d.reshape(1,images_chw.shape[1],1,1)
   images_chw += shift_vector
-  return images_chw
+  return item
 
-def RandomShiftInPlaceTransform(scaled_directions):
-  return lambda x : RandomShiftInPlace(x, scaled_directions)
+def RandomShiftInPlaceTransform(image_element_idx, scaled_directions):
+  return lambda x : RandomShiftInPlace(x, image_element_idx, scaled_directions)
+
+def MaybeApplyInPlaceTransformLogic(item, transform, apply_probability):
+  if random.uniform(0.0, 1.0) < apply_probability:
+    return transform(item)
+  else:
+    return item
 
 def MaybeApplyInPlaceTransform(transform, apply_probability):
-  return lambda x : transform(x) if random.uniform(0.0, 1.0) < apply_probability else x
+  return lambda x : MaybeApplyInPlaceTransformLogic(
+      x, transform, apply_probability)
 
