@@ -1,3 +1,4 @@
+import random
 import time
 from collections import namedtuple
 
@@ -62,26 +63,33 @@ def TrainLogEventToString(event):
       event[EPOCH_DURATION_SEC],
       event[EXAMPLES_PER_SEC])
 
-def TrainModel(
-    net,
+def AverageLosses(total_losses, total_examples):
+  return [
+      x / y if y > 0 else float('inf')
+      for x, y in zip(total_losses, total_examples)]
+
+def TrainModels(
+    nets,
     train_loader,
     val_loader,
     train_settings,
     out_prefix,
+    batch_use_prob=1.0,
     print_log=True,
     log_dir=''):
   if log_dir != '':
     tensorboard_logger.configure(log_dir, flush_secs=5)
 
   train_log = []
+  min_validation_losses = [float('inf') for net in nets]
   min_validation_loss = float('inf')
-  loss_settings = train_settings.loss_settings
-  data_transform = loss_settings.data_chunk_transform
-  label_transform = loss_settings.label_chunk_transform
-  for epoch in range(train_settings.epochs):
-    running_loss = 0.0
-    total_examples = 0
-    train_settings.optimizer.zero_grad()
+  data_transform = train_settings[0].loss_settings.data_chunk_transform
+  label_transform = train_settings[0].loss_settings.label_chunk_transform
+  for epoch in range(train_settings[0].epochs):
+    running_losses = [0.0 for net in nets]
+    train_examples_per_net = [0 for net in nets]
+    for net_train_settings in train_settings:
+      net_train_settings.optimizer.zero_grad()
 
     epoch_start_time = time.time()
     for (inputs_raw, labels_raw, inputs_weights) in train_loader:
@@ -89,40 +97,54 @@ def TrainModel(
       labels_var = Variable(label_transform(labels_raw)).cuda()
       weights_var = Variable(label_transform(inputs_weights)).cuda()
 
-      # forward + backward + optimize
-      outputs = net(inputs_var)
-      loss_value = loss_settings.loss(outputs, labels_var, weights_var)
-      loss_value.backward()
-      train_settings.optimizer.step()
-      train_settings.optimizer.zero_grad()
+      for net_idx, net in enumerate(nets):
+        if random.uniform(0.0, 1.0) < batch_use_prob:
+          # forward + backward + optimize
+          outputs = net(inputs_var)
+          loss_value = train_settings[net_idx].loss_settings.loss(
+              outputs, labels_var, weights_var)
+          loss_value.backward()
+          train_settings[net_idx].optimizer.step()
+          train_settings[net_idx].optimizer.zero_grad()
 
-      # Accumulate statistics
-      batch_size = inputs_var.size()[0]
-      total_examples += batch_size
-      running_loss += loss_value.data[0] * batch_size
+          # Accumulate statistics
+          batch_size = inputs_var.size()[0]
+          train_examples_per_net[net_idx] += batch_size
+          running_losses[net_idx] += loss_value.data[0] * batch_size
     epoch_end_time = time.time()
 
     epoch_duration = epoch_end_time - epoch_start_time
-    examples_per_sec = total_examples / epoch_duration
-    avg_loss = running_loss / total_examples
+    examples_per_sec = sum(train_examples_per_net) / epoch_duration
+    avg_losses = AverageLosses(running_losses, train_examples_per_net)
+    avg_loss = sum(running_losses) / sum(train_examples_per_net)
 
-    net.eval()
-    validation_total_loss = 0.0
-    validation_examples = 0
+    validation_total_losses = [0.0 for net in nets]
+    validation_examples = [0 for net in nets]
+
+    for net in nets:
+      net.eval()
+
     for (inputs_raw, labels_raw, validation_weights) in val_loader:
       inputs_var = Variable(data_transform(inputs_raw)).cuda()
       labels_var = Variable(label_transform(labels_raw)).cuda()
       weights_var = Variable(label_transform(validation_weights)).cuda()
-     
-      outputs = net(inputs_var)
-      loss_value = loss_settings.loss(outputs, labels_var, weights_var)
-
-      batch_size = inputs_var.size()[0]
-      validation_examples += batch_size
-      validation_total_loss += loss_value.data[0] * batch_size
-    net.train()
     
-    validation_avg_loss = validation_total_loss / validation_examples
+      for net_idx, net in enumerate(nets):
+        outputs = net(inputs_var)
+        loss_value = train_settings[net_idx].loss_settings.loss(
+            outputs, labels_var, weights_var)
+
+        batch_size = inputs_var.size()[0]
+        validation_examples[net_idx] += batch_size
+        validation_total_losses[net_idx] += loss_value.data[0] * batch_size
+    
+    for net in nets:
+      net.train()
+    
+    validation_avg_losses = AverageLosses(
+        validation_total_losses, validation_examples)
+    validation_avg_loss = (
+        sum(validation_total_losses) / sum(validation_examples))
 
     epoch_metrics = {
       TRAIN_LOSS: avg_loss,
@@ -135,12 +157,15 @@ def TrainModel(
     val_improved_marker = ''
     if validation_avg_loss < min_validation_loss:
       val_improved_marker = ' **'
-      save_start_time = time.time()
-      net.cpu()
-      torch.save(net.state_dict(), out_prefix + '-best.pth')
-      net.cuda()
       min_validation_loss = validation_avg_loss
-      save_duration = time.time() - save_start_time
+
+    for net_idx, net in enumerate(nets):
+      if validation_avg_losses[net_idx] < min_validation_losses[net_idx]:
+        net.cpu()
+        torch.save(
+            net.state_dict(), out_prefix + '-' + str(net_idx) + '-best.pth')
+        net.cuda()
+        min_validation_losses[net_idx] = validation_avg_losses[net_idx]
     
     # Maybe print metrics to screen.
     if print_log:
@@ -151,8 +176,9 @@ def TrainModel(
       tensorboard_logger.log_value('train_loss', avg_loss, epoch)
       tensorboard_logger.log_value('val_loss', validation_avg_loss, epoch)
   
-  net.cpu()
-  torch.save(net.state_dict(), out_prefix + '-last.pth')
-  net.cuda()
+  for net_id, net in enumerate(nets):
+    net.cpu()
+    torch.save(net.state_dict(), out_prefix + '-' + str(net_id) + '-last.pth')
+    net.cuda()
 
   return train_log

@@ -19,11 +19,14 @@ if __name__ == '__main__':
   parser.add_argument('--validation_data_dirs', required=True)
   parser.add_argument('--data_file_suffix', default='data.npz')
   parser.add_argument('--batch_size', type=int, required=True)
+  parser.add_argument('--batch_use_prob', type=float, default=1.0)
   parser.add_argument('--epochs', type=int, required=True)
   parser.add_argument('--in_channels', type=int, default=3)
   parser.add_argument('--target_height', type=int, required=True)
   parser.add_argument('--target_width', type=int, required=True)
   parser.add_argument('--net_name', default=models.NVIDIA_NET_NAME)
+  parser.add_argument('--num_nets_to_train', type=int, default=1,
+      help='How many identically structured models to train simultaneously.')
   parser.add_argument(
     '--net_options',
     default=json.dumps({
@@ -86,23 +89,29 @@ if __name__ == '__main__':
       args.batch_size,
       args.example_label_extra_weight_scale)
 
-  net = models.MakeNetwork(
-      args.net_name,
-      in_shape=[args.in_channels, args.target_height, args.target_width],
-      out_dims=args.label_dimensions,
-      dropout_prob=args.dropout_prob,
-      options=net_options)
-  net.cuda()
-  
-  train_settings = optimize.TrainSettings(
-      optimize.LossSettings(optimize.WeightedMSELoss()),
-      torch.optim.Adam(net.parameters()),
-      args.epochs)
+  nets = []
+  train_settings = []
+  for _ in range(args.num_nets_to_train):
+    net = models.MakeNetwork(
+        args.net_name,
+        in_shape=[args.in_channels, args.target_height, args.target_width],
+        out_dims=args.label_dimensions,
+        dropout_prob=args.dropout_prob,
+        options=net_options)
+    nets.append(net)
+    net.cuda()
 
-  optimize.TrainModel(
-      net,
+    net_train_settings = optimize.TrainSettings(
+        optimize.LossSettings(optimize.WeightedMSELoss()),
+        torch.optim.Adam(net.parameters()),
+        args.epochs)
+    train_settings.append(net_train_settings)
+
+  optimize.TrainModels(
+      nets,
       train_loader,
       val_loader,
       train_settings,
       args.out_prefix,
+      batch_use_prob=args.batch_use_prob,
       log_dir=args.log_dir)
