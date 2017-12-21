@@ -26,6 +26,11 @@ _STEERING_GENERIC_VALUE = 'steering_generic_value'
 _STEERING_ANGLE_DEGREES = 'steering_angle_degrees'
 _VELOCITIES = 'velocities'
 
+_CROP_TOP = 'crop_top'
+_CROP_BOTTOM = 'crop_bottom'
+_CROP_LEFT = 'crop_left'
+_CROP_RIGHT = 'crop_right'
+
 _IMU = 'imu'
 _CAN = 'can'
 
@@ -202,6 +207,7 @@ if __name__ == '__main__':
     '--in_forward_axis_json', required=True,
     help='Vehicle forward motion axis direction in smartphone-local ' + 
       'reference frame, produced by fit_motion.')
+  parser.add_argument('--crop_settings_json', required=True)
   parser.add_argument(
     '--min_forward_velocity_m_s', type=float, default=0.0,
     help='Timestamped absolute forward velocities JSON, produced by ' +
@@ -236,12 +242,6 @@ if __name__ == '__main__':
   parser.add_argument('--convert_to_grayscale', type=bool, default=False)
   parser.add_argument('--convert_to_yuv', type=bool, default=False)
   
-  # Crop settings
-  parser.add_argument('--crop_top', type=int, default=0)
-  parser.add_argument('--crop_bottom', type=int, default=0)
-  parser.add_argument('--crop_left', type=int, default=0)
-  parser.add_argument('--crop_right', type=int, default=0)
-
   # Post-crop resize settings.
   parser.add_argument('--target_height', type=int, default=-1)
   parser.add_argument('--target_width', type=int, default=-1)
@@ -251,6 +251,14 @@ if __name__ == '__main__':
   args = parser.parse_args()
 
   forward_axis = LoadForwardAxis(args.in_forward_axis_json)
+  with open(args.crop_settings_json) as crop_settings_file:
+    crop_settings_json = json.load(crop_settings_file)
+  crop_settings = crop_settings_json['crop_settings']
+  crop_top = crop_settings[_CROP_TOP] if _CROP_TOP in crop_settings else 0
+  crop_bottom = (
+      crop_settings[_CROP_BOTTOM] if _CROP_BOTTOM in crop_settings else 0)
+  crop_left = crop_settings[_CROP_LEFT] if _CROP_LEFT in crop_settings else 0
+  crop_right = crop_settings[_CROP_RIGHT] if _CROP_RIGHT in crop_settings else 0
 
   out_color_channels = 1 if args.convert_to_grayscale else 3
   
@@ -350,7 +358,7 @@ if __name__ == '__main__':
     history_index = frame_index % raw_history_size
     frame_chw, frame_hwc = FrameToModelInput(
         raw_frame,
-        args.crop_top, args.crop_bottom, args.crop_left, args.crop_right,
+        crop_top, crop_bottom, crop_left, crop_right,
         args.target_height, args.target_width, args.convert_to_grayscale,
         args.convert_to_yuv)
     raw_frames_history[history_index, ...] = frame_chw
