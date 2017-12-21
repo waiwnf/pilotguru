@@ -58,7 +58,7 @@ class InMemoryNumpyDataset(torch.utils.data.Dataset):
     return self.data[0].shape[0]
   
   def __getitem__(self, idx):
-    return tuple(element[idx, ...] for element in self.data) + (
+    return tuple(np.copy(element[idx, ...]) for element in self.data) + (
         np.array([1.0], dtype=np.float32),)
 
 class L1LabelWeightingDataset(torch.utils.data.Dataset):
