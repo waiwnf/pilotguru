@@ -21,6 +21,7 @@ if __name__ == '__main__':
   parser.add_argument('--batch_size', type=int, required=True)
   parser.add_argument('--batch_use_prob', type=float, default=1.0)
   parser.add_argument('--epochs', type=int, required=True)
+  parser.add_argument('--learning_rate', type=float, default=1e-3)
   parser.add_argument('--in_channels', type=int, default=3)
   parser.add_argument('--target_height', type=int, required=True)
   parser.add_argument('--target_width', type=int, required=True)
@@ -103,7 +104,7 @@ if __name__ == '__main__':
 
     net_train_settings = optimize.TrainSettings(
         optimize.LossSettings(optimize.WeightedMSELoss()),
-        torch.optim.Adam(net.parameters()),
+        torch.optim.Adam(net.parameters(), lr=args.learning_rate),
         args.epochs)
     train_settings.append(net_train_settings)
 
