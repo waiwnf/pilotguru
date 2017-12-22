@@ -44,7 +44,8 @@ if __name__ == '__main__':
   parser.add_argument('--log_dir', default='')
   parser.add_argument('--dropout_prob', type=float, default=0.0)
   parser.add_argument('--max_horizontal_shift_pixels', type=int, default=0)
-  parser.add_argument('--horizontal_label_shift_rate', type=float, default=0.0)
+  parser.add_argument('--horizontal_label_shift_rate', default="0.0",
+      help='Must be either a scalar, or same dimensionality as the labels.')
   parser.add_argument('--train_blur_sigma', type=float, default=2.0)
   parser.add_argument('--train_blur_prob', type=float, default=0.0)
   parser.add_argument('--do_pca_random_shifts', type=bool, default=False)
@@ -52,6 +53,10 @@ if __name__ == '__main__':
   parser.add_argument(
       '--example_label_extra_weight_scale', type=float, default=0.0)
   args = parser.parse_args()
+
+  horizontal_label_shift_rate = np.array(
+      [float(x) for x in args.horizontal_label_shift_rate.split(',')],
+      dtype=np.float32)
 
   # TODO get this from the networks
   data_element_names = ['frame_img', 'steering']
@@ -72,7 +77,7 @@ if __name__ == '__main__':
   augment_settings = augmentation.AugmentSettings(
       target_width=args.target_width,
       max_horizontal_shift_pixels=args.max_horizontal_shift_pixels,
-      horizontal_label_shift_rate=args.horizontal_label_shift_rate,
+      horizontal_label_shift_rate=horizontal_label_shift_rate,
       blur_sigma=args.train_blur_sigma,
       blur_prob=args.train_blur_prob,
       grayscale_interpolate_prob=args.grayscale_interpolate_prob,

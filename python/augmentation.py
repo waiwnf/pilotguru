@@ -75,7 +75,7 @@ AugmentSettings = namedtuple(
 AugmentSettings.__new__.__defaults__ = (
     -1,     # target_width
     0,      # max_horizontal_shift_pixels
-    0.0,    # horizontal_label_shift_rate
+    np.array([0.0], dtype=np.float32),    # horizontal_label_shift_rate
     2.0,    # blur_sigma
     0.0,    # blur_prob
     0.0,    # grayscale_interpolate_prob
