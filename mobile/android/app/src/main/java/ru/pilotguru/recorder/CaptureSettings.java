@@ -73,18 +73,21 @@ public class CaptureSettings {
     captureBuilder.set(CaptureRequest.LENS_FOCUS_DISTANCE, 0.0f);
     captureBuilder.set(CaptureRequest.CONTROL_AF_MODE, CONTROL_AF_MODE_OFF);
 
-    /************************************** WHITEBALANCE ********************************/
-
     captureBuilder.set(CaptureRequest.CONTROL_AWB_MODE, whiteBalanceMode);
 
-    /************************************** REST ********************************/
-    // http://stackoverflow.com/questions/29265126/android-camera2-capture-burst-is-too-slow
-    captureBuilder.set(CaptureRequest.EDGE_MODE, CaptureRequest.EDGE_MODE_OFF);
+    // Only apply noise reduction if it does not lead to dropped frames.
+    // TODO: explicitly deal with switching between OIS and EIS.
+    captureBuilder.set(CaptureRequest.EDGE_MODE, CaptureRequest.EDGE_MODE_FAST);
     captureBuilder.set(CaptureRequest.COLOR_CORRECTION_ABERRATION_MODE,
-        CaptureRequest.COLOR_CORRECTION_ABERRATION_MODE_OFF);
+        CaptureRequest.COLOR_CORRECTION_ABERRATION_MODE_FAST);
     captureBuilder
-        .set(CaptureRequest.NOISE_REDUCTION_MODE, CaptureRequest.NOISE_REDUCTION_MODE_OFF);
-    captureBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_CANCEL);
+        .set(CaptureRequest.NOISE_REDUCTION_MODE, CaptureRequest.NOISE_REDUCTION_MODE_FAST);
+    captureBuilder.set(
+        CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE,
+        CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE_ON);
+    captureBuilder.set(
+        CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE,
+        CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE_OFF);
 
     captureBuilder.set(CaptureRequest.JPEG_ORIENTATION, ORIENTATIONS.get(rotation));
 
