@@ -181,7 +181,7 @@ class ToyConvNet(SequentialNet):
 
 class NvidiaSingleFrameNet(SequentialNet):
 
-  def __init__(self, in_shape, out_dims, dropout_prob, options):
+  def __init__(self, in_shape, out_dims, dropout_prob, options, head_dims=10):
     super(NvidiaSingleFrameNet, self).__init__(in_shape, options)
     self.conv1, self.c1_norm, self.c1_act, self.c1_drop = self.AddConvBlock(
         24, 5, 2, dropout_prob)
@@ -203,13 +203,13 @@ class NvidiaSingleFrameNet(SequentialNet):
     self.fc3, self.fc3_norm, self.fc13_act, self.fc3_drop = self.AdFcBlock(
         50, 0)
 
-    self.fc4 = self.AddLinear(10)
+    self.fc4 = self.AddLinear(head_dims)
     self.fc4_act = self.AddActivation(RELU)
 
     self.fc5 = self.AddLinear(out_dims)
 
 class UdacityRamboNet(nn.Module):
-  def __init__(self, in_shape, out_dims, dropout_prob):
+  def __init__(self, in_shape, out_dims, dropout_prob, head_dims=10):
     super(UdacityRamboNet, self).__init__()
 
     self.comma_layers = []
@@ -237,7 +237,7 @@ class UdacityRamboNet(nn.Module):
         MakeDropout(self.comma_shapes[-1], dropout_prob),
         self.comma_layers, self.comma_shapes)
     self.comma_fc2 = self.AddLayer(
-        MakeLinear(self.comma_shapes[-1], 10),
+        MakeLinear(self.comma_shapes[-1], head_dims),
         self.comma_layers, self.comma_shapes)
     
     self.nv1_conv1, self.nv1_bn1, self.nv1_relu1, self.nv1_drop1 = (
@@ -266,7 +266,7 @@ class UdacityRamboNet(nn.Module):
     self.nv1_fc2, self.nv1_fc2_bn, self.nv1_fc2_relu = self.AddFcBlock(
         50, self.nv1_layers, self.nv1_shapes)
     self.nv1_fc3 = self.AddLayer(
-        MakeLinear(self.nv1_shapes[-1], 10),
+        MakeLinear(self.nv1_shapes[-1], head_dims),
         self.nv1_layers, self.nv1_shapes)
     
     self.nv2_conv2, self.nv2_bn2, self.nv2_relu2, self.nv2_drop2 = (
@@ -291,7 +291,7 @@ class UdacityRamboNet(nn.Module):
     self.nv2_fc2, self.nv2_fc2_bn, self.nv2_fc2_relu = self.AddFcBlock(
         50, self.nv2_layers, self.nv2_shapes)
     self.nv2_fc3 = self.AddLayer(
-        MakeLinear(self.nv2_shapes[-1], 10),
+        MakeLinear(self.nv2_shapes[-1], head_dims),
         self.nv2_layers, self.nv2_shapes)
     
     self.merged_shape = [
@@ -341,7 +341,7 @@ class UdacityRamboNet(nn.Module):
 
 class RamboCommaNet(SequentialNet):
 
-  def __init__(self, in_shape, out_dims, dropout_prob, options):
+  def __init__(self, in_shape, out_dims, dropout_prob, options, head_dims=10):
     super(RamboCommaNet, self).__init__(in_shape, options)
 
     self.conv1, self.c1_norm, self.c1_act, self.c1_drop = self.AddConvBlock(
@@ -358,7 +358,7 @@ class RamboCommaNet(SequentialNet):
     self.fc1, self.fc1_norm, self.fc1_act, self.fc1_drop = self.AdFcBlock(
         512, dropout_prob)
 
-    self.fc2 = self.AddLinear(10)
+    self.fc2 = self.AddLinear(head_dims)
     self.AddActivation(RELU)
 
     self.fc3 = self.AddLinear(out_dims)
@@ -366,7 +366,13 @@ class RamboCommaNet(SequentialNet):
 class RamboNVidiaNet(SequentialNet):
 
   def __init__(
-        self, skip_first_conv_layer, in_shape, out_dims, dropout_prob, options):
+        self,
+        skip_first_conv_layer,
+        in_shape,
+        out_dims,
+        dropout_prob,
+        options,
+        head_dims=10):
     super(RamboNVidiaNet, self).__init__(in_shape, options)
 
     if not skip_first_conv_layer:
@@ -392,14 +398,14 @@ class RamboNVidiaNet(SequentialNet):
     self.fc2, self.fc2_norm, self.fc2_act, self.fc2_drop = self.AdFcBlock(
         1164, 0)
 
-    self.fc3 = self.AddLinear(10)
+    self.fc3 = self.AddLinear(head_dims)
     self.AddActivation(RELU)
 
     self.fc4 = self.AddLinear(out_dims)
 
 class DeepNVidiaNet(SequentialNet):
 
-  def __init__(self, in_shape, out_dims, dropout_prob, options):
+  def __init__(self, in_shape, out_dims, dropout_prob, options, head_dims=10):
     super(DeepNVidiaNet, self).__init__(in_shape, options)
 
     self.conv1, self.c1_norm, self.c1_act, self.c1_drop = self.AddConvBlock(
@@ -426,7 +432,7 @@ class DeepNVidiaNet(SequentialNet):
     self.fc2, self.fc2_norm, self.fc2_act, self.fc2_drop = self.AdFcBlock(
         1164, dropout_prob)
 
-    self.fc3 = self.AddLinear(10)
+    self.fc3 = self.AddLinear(head_dims)
     self.AddActivation(self.options[FC][ACTIVATION])
 
     self.fc4 = self.AddLinear(out_dims)
@@ -438,26 +444,25 @@ RAMBO_NVIDIA_DEEP_NET_NAME = 'rambo-nvidia-deep'
 RAMBO_NVIDIA_SHALLOW_NET_NAME = 'rambo-nvidia-shallow'
 DEEP_NVIDIA_NET_NAME = 'nvidia-deep'
 
-IN_SHAPE = 'in_shape'
-OUT_DIMS = 'out_dims'
-DROPOUT_PROB = 'dropout_prob'
-OPTIONS = 'options'
-
-def MakeNetwork(net_name, in_shape, out_dims, dropout_prob, **kwargs):
+def MakeNetwork(
+  net_name, in_shape, head_dims, out_dims, dropout_prob, options=None):
   if net_name == NVIDIA_NET_NAME:
     return NvidiaSingleFrameNet(
-        in_shape, out_dims, dropout_prob, kwargs[OPTIONS])
+        in_shape, out_dims, dropout_prob, options, head_dims=head_dims)
   elif net_name == RAMBO_NET_NAME:
-    return UdacityRamboNet(in_shape, out_dims, dropout_prob)
+    return UdacityRamboNet(
+        in_shape, out_dims, dropout_prob, head_dims=head_dims)
   elif net_name == RAMBO_COMMA_NET_NAME:
-    return RamboCommaNet(in_shape, out_dims, dropout_prob, kwargs[OPTIONS])
+    return RamboCommaNet(
+        in_shape, out_dims, dropout_prob, options, head_dims=head_dims)
   elif net_name == RAMBO_NVIDIA_DEEP_NET_NAME:
     return RamboNVidiaNet(
-        False, in_shape, out_dims, dropout_prob, kwargs[OPTIONS])
+        False, in_shape, out_dims, dropout_prob, options, head_dims=head_dims)
   elif net_name == RAMBO_NVIDIA_SHALLOW_NET_NAME:
     return RamboNVidiaNet(
-        True, in_shape, out_dims, dropout_prob, kwargs[OPTIONS])
+        True, in_shape, out_dims, dropout_prob, options, head_dims=head_dims)
   elif net_name == DEEP_NVIDIA_NET_NAME:
-    return DeepNVidiaNet(in_shape, out_dims, dropout_prob, kwargs[OPTIONS])
+    return DeepNVidiaNet(
+        in_shape, out_dims, dropout_prob, options, head_dims=head_dims)
   else:
     assert False, ('Unknown network name: %s' % (net_name,))

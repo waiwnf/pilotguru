@@ -26,6 +26,9 @@ if __name__ == '__main__':
   parser.add_argument('--target_height', type=int, required=True)
   parser.add_argument('--target_width', type=int, required=True)
   parser.add_argument('--net_name', default=models.NVIDIA_NET_NAME)
+  parser.add_argument('--net_head_dims', type=int, default=10,
+      help='Dimensionality of the penultimate layer (just before the actual '
+          'predictions)')
   parser.add_argument('--num_nets_to_train', type=int, default=1,
       help='How many identically structured models to train simultaneously.')
   parser.add_argument(
@@ -101,6 +104,7 @@ if __name__ == '__main__':
     net = models.MakeNetwork(
         args.net_name,
         in_shape=[args.in_channels, args.target_height, args.target_width],
+        head_dims=args.net_head_dims,
         out_dims=args.label_dimensions,
         dropout_prob=args.dropout_prob,
         options=net_options)
