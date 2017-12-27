@@ -17,6 +17,9 @@ DROPOUT_ALPHA = 'alpha'
 
 BATCHNORM = 'batchnorm'
 
+FRAME_IMG = 'frame_img'
+STEERING = 'steering'
+
 def ConvOutSize(in_size, kernel_size, stride=1, padding=0, dilation=1):
   return math.floor(
       (in_size + 2 * padding - dilation * (kernel_size - 1) - 1) / stride + 1)
@@ -178,6 +181,13 @@ class ToyConvNet(SequentialNet):
     self.fc2 = self.AddLinear(84)
     self.AddActivation(self.options[FC][ACTIVATION])
     self.fc3 = self.AddLinear(1)
+  
+  def input_names(self):
+    return [FRAME_IMG]
+
+  def label_names(self):
+    return [STEERING]
+
 
 class NvidiaSingleFrameNet(SequentialNet):
 
@@ -207,6 +217,13 @@ class NvidiaSingleFrameNet(SequentialNet):
     self.fc4_act = self.AddActivation(RELU)
 
     self.fc5 = self.AddLinear(out_dims)
+  
+  def input_names(self):
+    return [FRAME_IMG]
+
+  def label_names(self):
+    return [STEERING]
+
 
 class UdacityRamboNet(nn.Module):
   def __init__(self, in_shape, out_dims, dropout_prob, head_dims=10):
@@ -339,6 +356,13 @@ class UdacityRamboNet(nn.Module):
     shapes_list.append(out_shape)
     return layer
 
+  def input_names(self):
+    return [FRAME_IMG]
+
+  def label_names(self):
+    return [STEERING]
+
+
 class RamboCommaNet(SequentialNet):
 
   def __init__(self, in_shape, out_dims, dropout_prob, options, head_dims=10):
@@ -362,6 +386,13 @@ class RamboCommaNet(SequentialNet):
     self.AddActivation(RELU)
 
     self.fc3 = self.AddLinear(out_dims)
+
+  def input_names(self):
+    return [FRAME_IMG]
+
+  def label_names(self):
+    return [STEERING]
+
 
 class RamboNVidiaNet(SequentialNet):
 
@@ -403,6 +434,13 @@ class RamboNVidiaNet(SequentialNet):
 
     self.fc4 = self.AddLinear(out_dims)
 
+  def input_names(self):
+    return [FRAME_IMG]
+
+  def label_names(self):
+    return [STEERING]
+
+
 class DeepNVidiaNet(SequentialNet):
 
   def __init__(self, in_shape, out_dims, dropout_prob, options, head_dims=10):
@@ -436,6 +474,13 @@ class DeepNVidiaNet(SequentialNet):
     self.AddActivation(self.options[FC][ACTIVATION])
 
     self.fc4 = self.AddLinear(out_dims)
+
+  def input_names(self):
+    return [FRAME_IMG]
+
+  def label_names(self):
+    return [STEERING]
+
 
 NVIDIA_NET_NAME = 'nvidia'
 RAMBO_NET_NAME = 'rambo'

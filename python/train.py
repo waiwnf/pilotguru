@@ -61,10 +61,42 @@ if __name__ == '__main__':
       [float(x) for x in args.horizontal_label_shift_rate.split(',')],
       dtype=np.float32)
 
-  # TODO get this from the networks
-  data_element_names = ['frame_img', 'steering']
-  image_element_idx = data_element_names.index('frame_img')
-  weight_label_idx = data_element_names.index('steering')
+  net_options = json.loads(args.net_options)
+
+  nets = []
+  train_settings = []
+  for _ in range(args.num_nets_to_train):
+    net = models.MakeNetwork(
+        args.net_name,
+        in_shape=[args.in_channels, args.target_height, args.target_width],
+        head_dims=args.net_head_dims,
+        out_dims=args.label_dimensions,
+        dropout_prob=args.dropout_prob,
+        options=net_options)
+    nets.append(net)
+    net.cuda()
+
+    net_train_settings = optimize.TrainSettings(
+        optimize.LossSettings(optimize.WeightedMSELoss()),
+        torch.optim.Adam(net.parameters(), lr=args.learning_rate),
+        args.epochs)
+    train_settings.append(net_train_settings)
+
+  # Get the inputs and label names for all the networks. We need to make sure
+  # they all match, because the data loaders are reused across all the nets.
+  input_names_per_net = [net.input_names() for net in nets]
+  input_names = input_names_per_net[0]
+  for net_input_names in input_names_per_net:
+    assert net_input_names == input_names
+  
+  label_names_per_net = [net.label_names() for net in nets]
+  label_names = label_names_per_net[0]
+  for net_label_names in label_names_per_net:
+    assert net_label_names == label_names
+
+  data_element_names = input_names + label_names
+  image_element_idx = data_element_names.index(models.FRAME_IMG)
+  weight_label_idx = data_element_names.index(models.STEERING)
 
   train_data = io_helpers.LoadDatasetNumpyFiles(
       args.data_dirs.split(','),
@@ -85,8 +117,6 @@ if __name__ == '__main__':
       blur_prob=args.train_blur_prob,
       grayscale_interpolate_prob=args.grayscale_interpolate_prob,
       random_shift_directions=random_shift_directions)
-  print(args.net_options)
-  net_options = json.loads(args.net_options)
   
   train_loader, val_loader = training_helpers.MakeDataLoaders(
       train_data,
@@ -97,25 +127,6 @@ if __name__ == '__main__':
       augment_settings,
       args.batch_size,
       args.example_label_extra_weight_scale)
-
-  nets = []
-  train_settings = []
-  for _ in range(args.num_nets_to_train):
-    net = models.MakeNetwork(
-        args.net_name,
-        in_shape=[args.in_channels, args.target_height, args.target_width],
-        head_dims=args.net_head_dims,
-        out_dims=args.label_dimensions,
-        dropout_prob=args.dropout_prob,
-        options=net_options)
-    nets.append(net)
-    net.cuda()
-
-    net_train_settings = optimize.TrainSettings(
-        optimize.LossSettings(optimize.WeightedMSELoss()),
-        torch.optim.Adam(net.parameters(), lr=args.learning_rate),
-        args.epochs)
-    train_settings.append(net_train_settings)
 
   optimize.TrainModels(
       nets,
