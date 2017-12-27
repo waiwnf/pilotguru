@@ -17,6 +17,7 @@ DROPOUT_ALPHA = 'alpha'
 
 BATCHNORM = 'batchnorm'
 
+FORWARD_AXIS = 'forward_axis'
 FRAME_IMG = 'frame_img'
 STEERING = 'steering'
 
@@ -150,10 +151,11 @@ class SequentialNet(nn.Module):
     return layer
   
   def forward(self, x):
-    result = x
+    assert len(x) == 1
+    result = x[0]
     for layer in self.layers:
       result = layer(result)
-    return result
+    return [result]
 
 
 class ToyConvNet(SequentialNet):
@@ -219,10 +221,13 @@ class NvidiaSingleFrameNet(SequentialNet):
     self.fc5 = self.AddLinear(out_dims)
   
   def input_names(self):
-    return [FRAME_IMG]
+    return [FRAME_IMG, FORWARD_AXIS]
 
   def label_names(self):
     return [STEERING]
+
+  def forward(self, x):
+    return super(NvidiaSingleFrameNet, self).forward([x[0]])
 
 
 class UdacityRamboNet(nn.Module):

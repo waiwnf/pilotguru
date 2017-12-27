@@ -399,10 +399,13 @@ if __name__ == '__main__':
     steering_labels_data = RawSteeringDataToSteeringLabels(
         raw_steering_data, velocities_data, args.steering_source)
     
+    frame_img = np.squeeze(raw_frames_history[write_indices, ...], axis=0)
+    steering = np.squeeze(steering_labels_data, axis=0)
+
     sample_out_name = OutFileName(args.out_dir, out_frame_id, 'data')
     np.savez_compressed(
       sample_out_name,
-      frame_img=raw_frames_history[write_indices, ...],
-      steering=steering_labels_data.astype(np.float32),
+      frame_img=frame_img,
+      steering=steering.astype(np.float32),
       forward_axis=forward_axis)
     total_samples_written += 1

@@ -13,27 +13,20 @@ VAL_LOSS = 'val_loss'
 EPOCH_DURATION_SEC = 'epoch_duration_sec'
 EXAMPLES_PER_SEC = 'examples_per_sec'
 
-def FlattenInnerChunk(x):
-  """Flattens the input tensor to merge first two dimensions into one.
-
-  This helper is useful for unrolling multi-frame training examples into 
-  separate single-frame model inputs.
-  """
-  in_shape = [i for i in x.size()]
-  assert len(in_shape) > 2
-  dest_shape = [in_shape[0] * in_shape[1]] + in_shape[2:]
-  return x.resize_(*dest_shape)
-
-def IdentityTransform(x):
-  return x
-
-LossSettings = namedtuple(
-    'LossSettings', ['loss', 'data_chunk_transform', 'label_chunk_transform'])
-LossSettings.__new__.__defaults__ = (
-    None, FlattenInnerChunk, FlattenInnerChunk)
-
 TrainSettings = namedtuple(
-    'TrainSettings', ['loss_settings', 'optimizer', 'epochs'])
+    'TrainSettings', ['loss', 'optimizer', 'epochs'])
+
+class SingleLabelLoss(torch.nn.Module):
+  """Unwraps labels and predictions for a common case of only one prediction."""
+
+  def __init__(self, base_loss):
+    super(SingleLabelLoss, self).__init__()
+    self.base_loss = base_loss
+  
+  def forward(self, predicted, labels, weights):
+    assert len(predicted) == 1
+    assert len(labels) == 1
+    return self.base_loss.forward(predicted[0], labels[0], weights)  
 
 class UnweightedLoss(torch.nn.Module):
   """Wraps loss functions that do not support examples weights for TrainModel().
@@ -68,6 +61,14 @@ def AverageLosses(total_losses, total_examples):
       x / y if y > 0 else float('inf')
       for x, y in zip(total_losses, total_examples)]
 
+def DataBatchToVariables(batch, num_inputs, num_labels):
+  assert len(batch) == num_inputs + num_labels + 1
+  input_vars = [Variable(x).cuda() for x in batch[:num_inputs]]
+  label_vars = [Variable(x).cuda()
+      for x in batch[num_inputs:(num_inputs + num_labels)]]
+  weights_var = Variable(batch[-1]).cuda()
+  return input_vars, label_vars, weights_var
+
 def TrainModels(
     nets,
     train_loader,
@@ -83,8 +84,8 @@ def TrainModels(
   train_log = []
   min_validation_losses = [float('inf') for net in nets]
   min_validation_loss = float('inf')
-  data_transform = train_settings[0].loss_settings.data_chunk_transform
-  label_transform = train_settings[0].loss_settings.label_chunk_transform
+  num_inputs = len(nets[0].input_names())
+  num_labels = len(nets[0].label_names())
   for epoch in range(train_settings[0].epochs):
     running_losses = [0.0 for net in nets]
     train_examples_per_net = [0 for net in nets]
@@ -92,23 +93,22 @@ def TrainModels(
       net_train_settings.optimizer.zero_grad()
 
     epoch_start_time = time.time()
-    for (inputs_raw, labels_raw, inputs_weights) in train_loader:
-      inputs_var = Variable(data_transform(inputs_raw)).cuda()
-      labels_var = Variable(label_transform(labels_raw)).cuda()
-      weights_var = Variable(label_transform(inputs_weights)).cuda()
+    for training_batch in train_loader:
+      input_vars, label_vars, weights_var = DataBatchToVariables(
+          training_batch, num_inputs, num_labels)
 
       for net_idx, net in enumerate(nets):
         if random.uniform(0.0, 1.0) < batch_use_prob:
           # forward + backward + optimize
-          outputs = net(inputs_var)
-          loss_value = train_settings[net_idx].loss_settings.loss(
-              outputs, labels_var, weights_var)
+          outputs = net(input_vars)
+          loss_value = train_settings[net_idx].loss(
+              outputs, label_vars, weights_var)
           loss_value.backward()
           train_settings[net_idx].optimizer.step()
           train_settings[net_idx].optimizer.zero_grad()
 
           # Accumulate statistics
-          batch_size = inputs_var.size()[0]
+          batch_size = input_vars[0].size()[0]
           train_examples_per_net[net_idx] += batch_size
           running_losses[net_idx] += loss_value.data[0] * batch_size
     epoch_end_time = time.time()
@@ -124,17 +124,16 @@ def TrainModels(
     for net in nets:
       net.eval()
 
-    for (inputs_raw, labels_raw, validation_weights) in val_loader:
-      inputs_var = Variable(data_transform(inputs_raw)).cuda()
-      labels_var = Variable(label_transform(labels_raw)).cuda()
-      weights_var = Variable(label_transform(validation_weights)).cuda()
-    
-      for net_idx, net in enumerate(nets):
-        outputs = net(inputs_var)
-        loss_value = train_settings[net_idx].loss_settings.loss(
-            outputs, labels_var, weights_var)
+    for val_batch in val_loader:
+      input_vars, label_vars, weights_var = DataBatchToVariables(
+          val_batch, num_inputs, num_labels)
 
-        batch_size = inputs_var.size()[0]
+      for net_idx, net in enumerate(nets):
+        outputs = net(input_vars)
+        loss_value = train_settings[net_idx].loss(
+            outputs, label_vars, weights_var)
+
+        batch_size = input_vars[0].size()[0]
         validation_examples[net_idx] += batch_size
         validation_total_losses[net_idx] += loss_value.data[0] * batch_size
     

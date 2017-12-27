@@ -77,7 +77,7 @@ if __name__ == '__main__':
     net.cuda()
 
     net_train_settings = optimize.TrainSettings(
-        optimize.LossSettings(optimize.WeightedMSELoss()),
+        optimize.SingleLabelLoss(optimize.WeightedMSELoss()),
         torch.optim.Adam(net.parameters(), lr=args.learning_rate),
         args.epochs)
     train_settings.append(net_train_settings)

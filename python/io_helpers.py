@@ -124,10 +124,10 @@ class ImageFrameDataset(torch.utils.data.Dataset):
     # Optionally crop to target_crop_width.
     img = item[self.image_element_idx]
     if self.target_crop_width is not None:
-      assert img.shape[3] >= self.target_crop_width
-      left_boundary = int((img.shape[3] - self.target_crop_width) / 2)
+      assert img.shape[-1] >= self.target_crop_width
+      left_boundary = int((img.shape[-1] - self.target_crop_width) / 2)
       right_boundary = left_boundary + self.target_crop_width
-      img = img[:,:,:,left_boundary:right_boundary]
+      img = img[...,left_boundary:right_boundary]
 
     return item[:self.image_element_idx] + (img,) + (
         item[(self.image_element_idx+1):])

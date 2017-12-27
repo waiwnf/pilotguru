@@ -31,12 +31,12 @@ def SteeringTrainingRandomShift(
         according to the off-center crop shift. The resulting label is
         source_label + shift_rate * shift_pixels / max_horizontal_shift.
   """
-  
-  images = item[image_element_idx]  # batch x C x H x W
+
+  images = item[image_element_idx]  # (maybe batch) x C x H x W
   labels = item[steering_element_idx]
 
   # Margin to the edge of the source image for a centered crop.
-  crop_margin = int((images.shape[3] - target_width) / 2)
+  crop_margin = int((images.shape[-1] - target_width) / 2)
   assert crop_margin >= 0
 
   # Randomly choose the fraction of max_horizontal_shift to shift by.
@@ -45,7 +45,7 @@ def SteeringTrainingRandomShift(
       horizontal_shift_fraction * max_horizontal_shift)
   left_boundary = crop_margin + horizontal_shift_pixels
   right_boundary = left_boundary + target_width
-  images = images[:,:,:,left_boundary:right_boundary]
+  images = images[...,left_boundary:right_boundary]
 
   # Adjust the labels to account for the off-center crop shift.
   labels += horizontal_shift_fraction * horizontal_label_shift_rate
