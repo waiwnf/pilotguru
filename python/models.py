@@ -21,6 +21,8 @@ FORWARD_AXIS = 'forward_axis'
 FRAME_IMG = 'frame_img'
 STEERING = 'steering'
 
+FORWARD_AXIS_DIMS = 3
+
 def ConvOutSize(in_size, kernel_size, stride=1, padding=0, dilation=1):
   return math.floor(
       (in_size + 2 * padding - dilation * (kernel_size - 1) - 1) / stride + 1)
@@ -157,12 +159,38 @@ class SequentialNet(nn.Module):
       result = layer(result)
     return [result]
 
+class SequentialNetNamedData(SequentialNet):
+  def __init__(self, in_shape, options, input_names, label_names):
+    super(SequentialNetNamedData, self).__init__(in_shape, options)
+    self.input_names = input_names
+    self.label_names = label_names
+  
+  def InputNames(self):
+    return self.input_names
 
-class ToyConvNet(SequentialNet):
+  def LabelNames(self):
+    return self.label_names
+
+class ImageWithAxisNet(SequentialNetNamedData):
+  """Descendants MUST define self.fc_final."""
+
+  def __init__(self, in_shape, options):
+    super(ImageWithAxisNet, self).__init__(
+      in_shape, options, [FRAME_IMG, FORWARD_AXIS], [STEERING])
+    self.in_img_idx = self.InputNames().index(FRAME_IMG)
+    self.in_forward_axis_idx = self.InputNames().index(FORWARD_AXIS)
+  
+  def forward(self, x):
+    img = x[self.in_img_idx]
+    image_features_list = super(ImageWithAxisNet, self).forward([img])
+    axis = x[self.in_forward_axis_idx]
+    return [self.fc_final(torch.cat([image_features_list[0], axis], dim=1))]  
+
+class ToyConvNet(SequentialNetNamedData):
   """Simple 3-conv + 3-fc model, mostly for debugging purposes."""
 
   def __init__(self, in_shape, options):
-    super(ToyConvNet, self).__init__(in_shape, options)
+    super(ToyConvNet, self).__init__(in_shape, options, [FRAME_IMG], [STEERING])
 
     self.conv1, self.c1_norm, self.c1_act, self.c1_drop = self.AddConvBlock(
         6, 5, 1, 0)
@@ -183,15 +211,9 @@ class ToyConvNet(SequentialNet):
     self.fc2 = self.AddLinear(84)
     self.AddActivation(self.options[FC][ACTIVATION])
     self.fc3 = self.AddLinear(1)
-  
-  def input_names(self):
-    return [FRAME_IMG]
-
-  def label_names(self):
-    return [STEERING]
 
 
-class NvidiaSingleFrameNet(SequentialNet):
+class NvidiaSingleFrameNet(ImageWithAxisNet):
 
   def __init__(self, in_shape, out_dims, dropout_prob, options, head_dims=10):
     super(NvidiaSingleFrameNet, self).__init__(in_shape, options)
@@ -214,20 +236,10 @@ class NvidiaSingleFrameNet(SequentialNet):
         100, dropout_prob)
     self.fc3, self.fc3_norm, self.fc13_act, self.fc3_drop = self.AdFcBlock(
         50, 0)
+    self.fc4, self.fc4_norm, self.fc14_act, self.fc4_drop = self.AdFcBlock(
+        head_dims, 0)
 
-    self.fc4 = self.AddLinear(head_dims)
-    self.fc4_act = self.AddActivation(RELU)
-
-    self.fc5 = self.AddLinear(out_dims)
-  
-  def input_names(self):
-    return [FRAME_IMG, FORWARD_AXIS]
-
-  def label_names(self):
-    return [STEERING]
-
-  def forward(self, x):
-    return super(NvidiaSingleFrameNet, self).forward([x[0]])
+    self.fc_final = nn.Linear(head_dims + FORWARD_AXIS_DIMS, out_dims)
 
 
 class UdacityRamboNet(nn.Module):
@@ -368,7 +380,7 @@ class UdacityRamboNet(nn.Module):
     return [STEERING]
 
 
-class RamboCommaNet(SequentialNet):
+class RamboCommaNet(ImageWithAxisNet):
 
   def __init__(self, in_shape, out_dims, dropout_prob, options, head_dims=10):
     super(RamboCommaNet, self).__init__(in_shape, options)
@@ -390,16 +402,10 @@ class RamboCommaNet(SequentialNet):
     self.fc2 = self.AddLinear(head_dims)
     self.AddActivation(RELU)
 
-    self.fc3 = self.AddLinear(out_dims)
-
-  def input_names(self):
-    return [FRAME_IMG]
-
-  def label_names(self):
-    return [STEERING]
+    self.fc_final = nn.Linear(head_dims + FORWARD_AXIS_DIMS, out_dims)
 
 
-class RamboNVidiaNet(SequentialNet):
+class RamboNVidiaNet(ImageWithAxisNet):
 
   def __init__(
         self,
@@ -437,16 +443,10 @@ class RamboNVidiaNet(SequentialNet):
     self.fc3 = self.AddLinear(head_dims)
     self.AddActivation(RELU)
 
-    self.fc4 = self.AddLinear(out_dims)
-
-  def input_names(self):
-    return [FRAME_IMG]
-
-  def label_names(self):
-    return [STEERING]
+    self.fc_final = nn.Linear(head_dims + FORWARD_AXIS_DIMS, out_dims)
 
 
-class DeepNVidiaNet(SequentialNet):
+class DeepNVidiaNet(ImageWithAxisNet):
 
   def __init__(self, in_shape, out_dims, dropout_prob, options, head_dims=10):
     super(DeepNVidiaNet, self).__init__(in_shape, options)
@@ -478,13 +478,7 @@ class DeepNVidiaNet(SequentialNet):
     self.fc3 = self.AddLinear(head_dims)
     self.AddActivation(self.options[FC][ACTIVATION])
 
-    self.fc4 = self.AddLinear(out_dims)
-
-  def input_names(self):
-    return [FRAME_IMG]
-
-  def label_names(self):
-    return [STEERING]
+    self.fc_final = nn.Linear(head_dims + FORWARD_AXIS_DIMS, out_dims)
 
 
 NVIDIA_NET_NAME = 'nvidia'

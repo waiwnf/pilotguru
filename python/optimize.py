@@ -84,8 +84,8 @@ def TrainModels(
   train_log = []
   min_validation_losses = [float('inf') for net in nets]
   min_validation_loss = float('inf')
-  num_inputs = len(nets[0].input_names())
-  num_labels = len(nets[0].label_names())
+  num_inputs = len(nets[0].InputNames())
+  num_labels = len(nets[0].LabelNames())
   for epoch in range(train_settings[0].epochs):
     running_losses = [0.0 for net in nets]
     train_examples_per_net = [0 for net in nets]

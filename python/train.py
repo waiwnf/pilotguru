@@ -84,12 +84,12 @@ if __name__ == '__main__':
 
   # Get the inputs and label names for all the networks. We need to make sure
   # they all match, because the data loaders are reused across all the nets.
-  input_names_per_net = [net.input_names() for net in nets]
+  input_names_per_net = [net.InputNames() for net in nets]
   input_names = input_names_per_net[0]
   for net_input_names in input_names_per_net:
     assert net_input_names == input_names
   
-  label_names_per_net = [net.label_names() for net in nets]
+  label_names_per_net = [net.LabelNames() for net in nets]
   label_names = label_names_per_net[0]
   for net_label_names in label_names_per_net:
     assert net_label_names == label_names
