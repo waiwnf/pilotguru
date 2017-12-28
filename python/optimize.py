@@ -13,8 +13,8 @@ VAL_LOSS = 'val_loss'
 EPOCH_DURATION_SEC = 'epoch_duration_sec'
 EXAMPLES_PER_SEC = 'examples_per_sec'
 
-TrainSettings = namedtuple(
-    'TrainSettings', ['loss', 'optimizer', 'epochs'])
+TrainSettings = namedtuple('TrainSettings', ['loss', 'epochs'])
+Learner = namedtuple('Learner', ['net', 'optimizer'])
 
 class SingleLabelLoss(torch.nn.Module):
   """Unwraps labels and predictions for a common case of only one prediction."""
@@ -70,7 +70,7 @@ def DataBatchToVariables(batch, num_inputs, num_labels):
   return input_vars, label_vars, weights_var
 
 def TrainModels(
-    nets,
+    learners,
     train_loader,
     val_loader,
     train_settings,
@@ -82,30 +82,29 @@ def TrainModels(
     tensorboard_logger.configure(log_dir, flush_secs=5)
 
   train_log = []
-  min_validation_losses = [float('inf') for net in nets]
+  min_validation_losses = [float('inf') for _ in learners]
   min_validation_loss = float('inf')
-  num_inputs = len(nets[0].InputNames())
-  num_labels = len(nets[0].LabelNames())
-  for epoch in range(train_settings[0].epochs):
-    running_losses = [0.0 for net in nets]
-    train_examples_per_net = [0 for net in nets]
-    for net_train_settings in train_settings:
-      net_train_settings.optimizer.zero_grad()
+  num_inputs = len(learners[0].net.InputNames())
+  num_labels = len(learners[0].net.LabelNames())
+  for epoch in range(train_settings.epochs):
+    running_losses = [0.0 for _ in learners]
+    train_examples_per_net = [0 for _ in learners]
+    for learner in learners:
+      learner.optimizer.zero_grad()
 
     epoch_start_time = time.time()
     for training_batch in train_loader:
       input_vars, label_vars, weights_var = DataBatchToVariables(
           training_batch, num_inputs, num_labels)
 
-      for net_idx, net in enumerate(nets):
+      for net_idx, learner in enumerate(learners):
         if random.uniform(0.0, 1.0) < batch_use_prob:
           # forward + backward + optimize
-          outputs = net(input_vars)
-          loss_value = train_settings[net_idx].loss(
-              outputs, label_vars, weights_var)
+          outputs = learner.net(input_vars)
+          loss_value = train_settings.loss(outputs, label_vars, weights_var)
           loss_value.backward()
-          train_settings[net_idx].optimizer.step()
-          train_settings[net_idx].optimizer.zero_grad()
+          learner.optimizer.step()
+          learner.optimizer.zero_grad()
 
           # Accumulate statistics
           batch_size = input_vars[0].size()[0]
@@ -118,27 +117,26 @@ def TrainModels(
     avg_losses = AverageLosses(running_losses, train_examples_per_net)
     avg_loss = sum(running_losses) / sum(train_examples_per_net)
 
-    validation_total_losses = [0.0 for net in nets]
-    validation_examples = [0 for net in nets]
+    validation_total_losses = [0.0 for _ in learners]
+    validation_examples = [0 for _ in learners]
 
-    for net in nets:
-      net.eval()
+    for learner in learners:
+      learner.net.eval()
 
     for val_batch in val_loader:
       input_vars, label_vars, weights_var = DataBatchToVariables(
           val_batch, num_inputs, num_labels)
 
-      for net_idx, net in enumerate(nets):
-        outputs = net(input_vars)
-        loss_value = train_settings[net_idx].loss(
-            outputs, label_vars, weights_var)
+      for net_idx, learner in enumerate(learners):
+        outputs = learner.net(input_vars)
+        loss_value = train_settings.loss(outputs, label_vars, weights_var)
 
         batch_size = input_vars[0].size()[0]
         validation_examples[net_idx] += batch_size
         validation_total_losses[net_idx] += loss_value.data[0] * batch_size
     
-    for net in nets:
-      net.train()
+    for learner in learners:
+      learner.net.train()
     
     validation_avg_losses = AverageLosses(
         validation_total_losses, validation_examples)
@@ -158,12 +156,13 @@ def TrainModels(
       val_improved_marker = ' **'
       min_validation_loss = validation_avg_loss
 
-    for net_idx, net in enumerate(nets):
+    for net_idx, learner in enumerate(learners):
       if validation_avg_losses[net_idx] < min_validation_losses[net_idx]:
-        net.cpu()
+        learner.net.cpu()
         torch.save(
-            net.state_dict(), out_prefix + '-' + str(net_idx) + '-best.pth')
-        net.cuda()
+            learner.net.state_dict(),
+            out_prefix + '-' + str(net_idx) + '-best.pth')
+        learner.net.cuda()
         min_validation_losses[net_idx] = validation_avg_losses[net_idx]
     
     # Maybe print metrics to screen.
@@ -175,9 +174,10 @@ def TrainModels(
       tensorboard_logger.log_value('train_loss', avg_loss, epoch)
       tensorboard_logger.log_value('val_loss', validation_avg_loss, epoch)
   
-  for net_id, net in enumerate(nets):
-    net.cpu()
-    torch.save(net.state_dict(), out_prefix + '-' + str(net_id) + '-last.pth')
-    net.cuda()
+  for net_idx, learner in enumerate(learners):
+    learner.net.cpu()
+    torch.save(
+        learner.net.state_dict(), out_prefix + '-' + str(net_idx) + '-last.pth')
+    learner.net.cuda()
 
   return train_log

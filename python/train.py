@@ -63,8 +63,7 @@ if __name__ == '__main__':
 
   net_options = json.loads(args.net_options)
 
-  nets = []
-  train_settings = []
+  learners = []
   for _ in range(args.num_nets_to_train):
     net = models.MakeNetwork(
         args.net_name,
@@ -73,23 +72,22 @@ if __name__ == '__main__':
         out_dims=args.label_dimensions,
         dropout_prob=args.dropout_prob,
         options=net_options)
-    nets.append(net)
     net.cuda()
+    optimizer = torch.optim.Adam(net.parameters(), lr=args.learning_rate)
+    learners.append(optimize.Learner(net, optimizer))
 
-    net_train_settings = optimize.TrainSettings(
-        optimize.SingleLabelLoss(optimize.WeightedMSELoss()),
-        torch.optim.Adam(net.parameters(), lr=args.learning_rate),
-        args.epochs)
-    train_settings.append(net_train_settings)
+  train_settings = optimize.TrainSettings(
+      optimize.SingleLabelLoss(optimize.WeightedMSELoss()),
+      args.epochs)
 
   # Get the inputs and label names for all the networks. We need to make sure
   # they all match, because the data loaders are reused across all the nets.
-  input_names_per_net = [net.InputNames() for net in nets]
+  input_names_per_net = [learner.net.InputNames() for learner in learners]
   input_names = input_names_per_net[0]
   for net_input_names in input_names_per_net:
     assert net_input_names == input_names
   
-  label_names_per_net = [net.LabelNames() for net in nets]
+  label_names_per_net = [learner.net.LabelNames() for learner in learners]
   label_names = label_names_per_net[0]
   for net_label_names in label_names_per_net:
     assert net_label_names == label_names
@@ -129,7 +127,7 @@ if __name__ == '__main__':
       args.example_label_extra_weight_scale)
 
   optimize.TrainModels(
-      nets,
+      learners,
       train_loader,
       val_loader,
       train_settings,
