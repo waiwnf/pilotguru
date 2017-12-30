@@ -25,7 +25,7 @@ import java.util.Set;
 import static android.hardware.camera2.CameraCharacteristics.CONTROL_AWB_AVAILABLE_MODES;
 import static android.hardware.camera2.CameraMetadata.CONTROL_AWB_MODE_AUTO;
 
-import static ru.pilotguru.recorder.SettingsConstants.PREF_FIXED_ISO;
+import static ru.pilotguru.recorder.SettingsConstants.PREF_FIX_ISO;
 import static ru.pilotguru.recorder.SettingsConstants.PREF_ISO;
 import static ru.pilotguru.recorder.SettingsConstants.PREF_WHITE_BALANCE;
 
@@ -55,7 +55,7 @@ public class SettingsFragment extends PreferenceFragment implements
       e.printStackTrace();
     }
 
-    final CheckBoxPreference prefFixedIso = (CheckBoxPreference) findPreference(PREF_FIXED_ISO);
+    final CheckBoxPreference prefFixedIso = (CheckBoxPreference) findPreference(PREF_FIX_ISO);
     prefFixedIso.setOnPreferenceChangeListener(new Preference.OnPreferenceChangeListener() {
       @Override
       public boolean onPreferenceChange(Preference preference, Object newValue) {
@@ -77,7 +77,7 @@ public class SettingsFragment extends PreferenceFragment implements
 
   public void populateIsoList(Object val) {
     final ListPreference prefIso = (ListPreference) findPreference(PREF_ISO);
-    CheckBoxPreference pref_fix_iso = (CheckBoxPreference) findPreference(PREF_FIXED_ISO);
+    CheckBoxPreference pref_fix_iso = (CheckBoxPreference) findPreference(PREF_FIX_ISO);
 
     try {
       //FIXME: find a way to check if manual_sensor is in capabilities instead of catching this

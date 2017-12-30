@@ -10,10 +10,14 @@ import android.util.Log;
 import android.util.SparseIntArray;
 import android.view.Surface;
 
+import static android.hardware.camera2.CameraMetadata.CONTROL_AF_MODE_CONTINUOUS_VIDEO;
 import static android.hardware.camera2.CameraMetadata.CONTROL_AF_MODE_OFF;
 import static android.hardware.camera2.CameraMetadata.CONTROL_AWB_MODE_AUTO;
-import static ru.pilotguru.recorder.SettingsConstants.PREF_FIXED_ISO;
+import static ru.pilotguru.recorder.SettingsConstants.PREF_AUTOFOCUS;
+import static ru.pilotguru.recorder.SettingsConstants.PREF_EIS;
+import static ru.pilotguru.recorder.SettingsConstants.PREF_FIX_ISO;
 import static ru.pilotguru.recorder.SettingsConstants.PREF_ISO;
+import static ru.pilotguru.recorder.SettingsConstants.PREF_OIS;
 import static ru.pilotguru.recorder.SettingsConstants.PREF_WHITE_BALANCE;
 
 public class CaptureSettings {
@@ -27,12 +31,18 @@ public class CaptureSettings {
   }
 
   private final boolean isFixedIso;
+  private final boolean isAutofocusEnabled;
+  private final boolean isEisEnabled;
+  private final boolean isOisEnabled;
   private final int whiteBalanceMode;
   private final int isoSensitivity;
   private final int qualityProfile;
 
   CaptureSettings(SharedPreferences prefs) {
-    isFixedIso = prefs.getBoolean(PREF_FIXED_ISO, false);
+    isFixedIso = prefs.getBoolean(PREF_FIX_ISO, false);
+    isAutofocusEnabled = prefs.getBoolean(PREF_AUTOFOCUS, false);
+    isEisEnabled = prefs.getBoolean(PREF_EIS, false);
+    isOisEnabled = prefs.getBoolean(PREF_OIS, false);
 
     whiteBalanceMode = Integer
         .parseInt(prefs.getString(PREF_WHITE_BALANCE, Integer.toString(CONTROL_AWB_MODE_AUTO)));
@@ -70,8 +80,12 @@ public class CaptureSettings {
 
 
     // Set focus distance to infinity.
-    captureBuilder.set(CaptureRequest.LENS_FOCUS_DISTANCE, 0.0f);
-    captureBuilder.set(CaptureRequest.CONTROL_AF_MODE, CONTROL_AF_MODE_OFF);
+    if (isAutofocusEnabled) {
+      captureBuilder.set(CaptureRequest.CONTROL_AF_MODE, CONTROL_AF_MODE_CONTINUOUS_VIDEO);
+    } else {
+      captureBuilder.set(CaptureRequest.LENS_FOCUS_DISTANCE, 0.0f);
+      captureBuilder.set(CaptureRequest.CONTROL_AF_MODE, CONTROL_AF_MODE_OFF);
+    }
 
     captureBuilder.set(CaptureRequest.CONTROL_AWB_MODE, whiteBalanceMode);
 
@@ -84,10 +98,14 @@ public class CaptureSettings {
         .set(CaptureRequest.NOISE_REDUCTION_MODE, CaptureRequest.NOISE_REDUCTION_MODE_FAST);
     captureBuilder.set(
         CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE,
-        CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE_ON);
+        isEisEnabled ?
+            CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE_ON :
+            CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE_OFF);
     captureBuilder.set(
         CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE,
-        CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE_OFF);
+        isOisEnabled ?
+            CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE_ON :
+            CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE_OFF);
 
     captureBuilder.set(CaptureRequest.JPEG_ORIENTATION, ORIENTATIONS.get(rotation));
 

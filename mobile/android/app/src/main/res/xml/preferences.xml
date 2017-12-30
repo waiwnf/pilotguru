@@ -15,6 +15,21 @@
         android:defaultValue="@string/settings_res_default_value"
         android:summary="%s"/>
 
+    <CheckBoxPreference
+        android:key="pref_autofocus"
+        android:title="Autofocus"
+        android:defaultValue="false" />
+
+    <CheckBoxPreference
+        android:key="pref_eis"
+        android:title="Digital stabilization"
+        android:defaultValue="false" />
+
+    <CheckBoxPreference
+        android:key="pref_ois"
+        android:title="Optical stabilization"
+        android:defaultValue="false" />
+
     <ListPreference
         android:key="pref_wb"
         android:summary="%s"
