@@ -83,9 +83,15 @@ def MakeDataLoaders(
   
   return train_loader, val_loader
   
-def MakeTrainer(train_data, val_data, all_settings, num_nets_to_train, epochs):
+def MakeTrainer(
+    train_data,
+    val_data,
+    all_settings,
+    num_nets_to_train,
+    epochs,
+    preload_weight_names=None):
   learners = []
-  for _ in range(num_nets_to_train):
+  for net_idx in range(num_nets_to_train):
     net = models.MakeNetwork(
         all_settings[NET_NAME],
         in_shape=[all_settings[IN_CHANNELS], all_settings[TARGET_HEIGHT], all_settings[TARGET_WIDTH]],
@@ -95,6 +101,10 @@ def MakeTrainer(train_data, val_data, all_settings, num_nets_to_train, epochs):
         options=all_settings[NET_OPTIONS])
     assert net.InputNames() == all_settings[INPUT_NAMES]
     assert net.LabelNames() == all_settings[LABEL_NAMES]
+
+    if preload_weight_names is not None:
+      assert len(preload_weight_names) == num_nets_to_train
+      net.load_state_dict(torch.load(preload_weight_names[net_idx]))
 
     net.cuda()
     optimizer = torch.optim.Adam(net.parameters(), lr=all_settings[LEARNING_RATE])

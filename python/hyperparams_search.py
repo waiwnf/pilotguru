@@ -22,23 +22,39 @@ TrainingFoldSettings = collections.namedtuple(
         'epochs',
         'base_out_dir',
         'base_log_dir',
+        'base_preload_dir',
         'num_nets_to_train',
         'batch_use_prob'
     ])
 
 
 def RunTraining(fold_settings):
+  preload_names = None
+  # TODO factor out last model naming.
+  if fold_settings.base_preload_dir is not None:
+    preload_names = [
+        os.path.join(
+          fold_settings.base_preload_dir,
+          fold_settings.training_settings_json[training_helpers.SETTINGS_ID],
+          'model-' + str(i) + '-last.pth')
+        for i in range(fold_settings.num_nets_to_train)]
+
   learners, train_loader, val_loader, train_settings = (
       training_helpers.MakeTrainer(
           train_data,
           val_data,
           fold_settings.training_settings_json,
           fold_settings.num_nets_to_train,
-          fold_settings.epochs))
+          fold_settings.epochs,
+          preload_weight_names=preload_names))
 
   out_dir = os.path.join(
     fold_settings.base_out_dir,
     fold_settings.training_settings_json[training_helpers.SETTINGS_ID])
+  if not os.path.isdir(out_dir):
+    os.mkdir(out_dir)
+  out_prefix = os.path.join(out_dir, 'model')
+
   log_dir = os.path.join(
     fold_settings.base_log_dir,
     fold_settings.training_settings_json[training_helpers.SETTINGS_ID])
@@ -48,7 +64,7 @@ def RunTraining(fold_settings):
       train_loader,
       val_loader,
       train_settings,
-      out_dir,
+      out_prefix,
       batch_use_prob=fold_settings.batch_use_prob,
       print_log=False,
       log_dir=log_dir)
@@ -62,6 +78,7 @@ if __name__ == '__main__':
   parser.add_argument('--data_file_suffix', default='data.npz')
   parser.add_argument('--train_settings_json_glob', required=True)
   parser.add_argument('--epochs', type=int, required=True)
+  parser.add_argument('--preload_dir', default=None)
   parser.add_argument('--out_dir', required=True)
   parser.add_argument('--log_dir', required=True)
   parser.add_argument('--parallelism', type=int, default=1)
@@ -78,12 +95,13 @@ if __name__ == '__main__':
 
   per_fold_settings = [
     TrainingFoldSettings(
-        train_settings,
-        args.epochs,
-        args.out_dir,
-        args.log_dir,
-        args.num_nets_to_train,
-        args.batch_use_prob)
+        training_settings_json=train_settings,
+        epochs=args.epochs,
+        base_out_dir=args.out_dir,
+        base_log_dir=args.log_dir,
+        base_preload_dir=args.preload_dir,
+        num_nets_to_train=args.num_nets_to_train,
+        batch_use_prob=args.batch_use_prob)
     for train_settings in train_settings_jsons]
 
   # TODO check that all this matches across settings.
