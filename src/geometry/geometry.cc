@@ -11,7 +11,8 @@ Eigen::Quaterniond RotationMotionToQuaternion(double rate_x_rad_s,
       sqrt(rate_x_rad_s * rate_x_rad_s + rate_y_rad_s * rate_y_rad_s +
            rate_z_rad_s * rate_z_rad_s);
   const double half_theta = rate_overall_rad_s * duration_sec * 0.5;
-  const double sin_half_theta_normalized = sin(half_theta) / rate_overall_rad_s;
+  const double sin_half_theta_normalized =
+      sin(half_theta) / (rate_overall_rad_s + 1e-30);
 
   const double dw = cos(half_theta);
   const double dx = rate_x_rad_s * sin_half_theta_normalized;
