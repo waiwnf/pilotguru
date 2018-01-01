@@ -59,7 +59,15 @@ RUN apt-get -y install qtcreator qtbase5-dev
 
 RUN apt-get -y install python3-pip
 RUN pip3 install http://download.pytorch.org/whl/cu90/torch-0.3.0.post4-cp35-cp35m-linux_x86_64.whl 
-RUN pip3 install av torchvision jupyter scipy sklearn tensorflow-gpu tensorboard_logger matplotlib gpustat
+
+# CPU-only tensorflow since we only actually use tensorboard, and
+# tensorflow does not support CUDA9 yet.
+RUN pip3 install av torchvision jupyter scipy sklearn tensorflow tensorboard_logger matplotlib gpustat
+
+# html5lib versioning is somehow messed up and tensorboard fails to
+# start. This somehow installs the versions such that everything works.
+# No idea why or how.
+RUN pip3 install --upgrade bleach
 
 RUN mkdir /opt/install && \
     cd /opt/install && \
