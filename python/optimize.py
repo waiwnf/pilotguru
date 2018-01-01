@@ -78,8 +78,9 @@ def TrainModels(
     batch_use_prob=1.0,
     print_log=True,
     log_dir=''):
+  logger = None
   if log_dir != '':
-    tensorboard_logger.configure(log_dir, flush_secs=5)
+    logger = tensorboard_logger.Logger(log_dir, flush_secs=5)
 
   train_log = []
   min_validation_losses = [float('inf') for _ in learners]
@@ -171,8 +172,8 @@ def TrainModels(
           (epoch, TrainLogEventToString(epoch_metrics), val_improved_marker))
     # Maybe log metrics to tensorboard.
     if log_dir != '':
-      tensorboard_logger.log_value('train_loss', avg_loss, epoch)
-      tensorboard_logger.log_value('val_loss', validation_avg_loss, epoch)
+      logger.log_value('train_loss', avg_loss, epoch)
+      logger.log_value('val_loss', validation_avg_loss, epoch)
   
   for net_idx, learner in enumerate(learners):
     learner.net.cpu()
