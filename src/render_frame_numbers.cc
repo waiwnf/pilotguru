@@ -20,6 +20,7 @@ DEFINE_int64(max_out_frames, -1, "If positive, the maximum number of frames to "
                                  "render for the output video. If the input "
                                  "trajectory has more frames, the remaining "
                                  "ones will be ignored.");
+DEFINE_int32(output_every_n_frames, 1, "");
 
 int main(int argc, char **argv) {
   // Verify that the version of the library that we linked against is
@@ -27,6 +28,8 @@ int main(int argc, char **argv) {
   google::InitGoogleLogging(argv[0]);
   google::ParseCommandLineFlags(&argc, &argv, true);
   google::InstallFailureSignalHandler();
+
+  CHECK_GT(FLAGS_output_every_n_frames, 0);
 
   av_register_all();
 
@@ -47,15 +50,16 @@ int main(int argc, char **argv) {
       continue;
     }
 
-    std::stringstream frame_idx_text;
-    frame_idx_text << frame_idx;
-    cv::putText(frame.image, frame_idx_text.str(), cv::Point(10, 100),
-                cv::FONT_HERSHEY_SIMPLEX, 3.0 /* text_scale */,
-                cv::Scalar(255, 0, 0) /* color */, 3 /* line thicknes */);
+    if (frame_idx % FLAGS_output_every_n_frames == 0) {
+      std::stringstream frame_idx_text;
+      frame_idx_text << frame_idx;
+      cv::putText(frame.image, frame_idx_text.str(), cv::Point(10, 100),
+                  cv::FONT_HERSHEY_SIMPLEX, 3.0 /* text_scale */,
+                  cv::Scalar(255, 0, 0) /* color */, 3 /* line thicknes */);
 
-    sink.consume(frame.image);
-
-    ++total_rendered_frames;
+      sink.consume(frame.image);
+      ++total_rendered_frames;
+    }
   }
 
   return EXIT_SUCCESS;
