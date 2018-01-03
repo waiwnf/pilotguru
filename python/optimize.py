@@ -154,8 +154,12 @@ def TrainModels(
 
     val_improved_marker = ''
     if validation_avg_loss < min_validation_loss:
-      val_improved_marker = ' **'
+      val_improved_marker = ' ***'
       min_validation_loss = validation_avg_loss
+    elif (validation_avg_loss * 0.9) < min_validation_loss:
+      # Highlight epochs with validation loss almost as good as the current
+      # best loss.
+      val_improved_marker = ' *'
 
     for net_idx, learner in enumerate(learners):
       if validation_avg_losses[net_idx] < min_validation_losses[net_idx]:
