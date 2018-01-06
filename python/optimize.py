@@ -1,3 +1,5 @@
+import io_helpers
+
 import random
 import time
 from collections import namedtuple
@@ -61,12 +63,12 @@ def AverageLosses(total_losses, total_examples):
       x / y if y > 0 else float('inf')
       for x, y in zip(total_losses, total_examples)]
 
-def DataBatchToVariables(batch, num_inputs, num_labels):
+def DataBatchToVariables(batch, num_inputs, num_labels, cuda_device_id):
   assert len(batch) == num_inputs + num_labels + 1
-  input_vars = [Variable(x).cuda() for x in batch[:num_inputs]]
-  label_vars = [Variable(x).cuda()
+  input_vars = [Variable(x).cuda(cuda_device_id) for x in batch[:num_inputs]]
+  label_vars = [Variable(x).cuda(cuda_device_id)
       for x in batch[num_inputs:(num_inputs + num_labels)]]
-  weights_var = Variable(batch[-1]).cuda()
+  weights_var = Variable(batch[-1]).cuda(cuda_device_id)
   return input_vars, label_vars, weights_var
 
 def TrainModels(
@@ -74,7 +76,8 @@ def TrainModels(
     train_loader,
     val_loader,
     train_settings,
-    out_prefix,
+    out_dir,
+    cuda_device_id=0,
     batch_use_prob=1.0,
     print_log=True,
     log_dir=''):
@@ -96,7 +99,7 @@ def TrainModels(
     epoch_start_time = time.time()
     for training_batch in train_loader:
       input_vars, label_vars, weights_var = DataBatchToVariables(
-          training_batch, num_inputs, num_labels)
+          training_batch, num_inputs, num_labels, cuda_device_id)
 
       for net_idx, learner in enumerate(learners):
         if random.uniform(0.0, 1.0) < batch_use_prob:
@@ -126,7 +129,7 @@ def TrainModels(
 
     for val_batch in val_loader:
       input_vars, label_vars, weights_var = DataBatchToVariables(
-          val_batch, num_inputs, num_labels)
+          val_batch, num_inputs, num_labels, cuda_device_id)
 
       for net_idx, learner in enumerate(learners):
         outputs = learner.net(input_vars)
@@ -166,8 +169,8 @@ def TrainModels(
         learner.net.cpu()
         torch.save(
             learner.net.state_dict(),
-            out_prefix + '-' + str(net_idx) + '-best.pth')
-        learner.net.cuda()
+            io_helpers.ModelFileName(out_dir, net_idx, io_helpers.BEST))
+        learner.net.cuda(cuda_device_id)
         min_validation_losses[net_idx] = validation_avg_losses[net_idx]
     
     # Maybe print metrics to screen.
@@ -182,7 +185,8 @@ def TrainModels(
   for net_idx, learner in enumerate(learners):
     learner.net.cpu()
     torch.save(
-        learner.net.state_dict(), out_prefix + '-' + str(net_idx) + '-last.pth')
-    learner.net.cuda()
+        learner.net.state_dict(),
+        io_helpers.ModelFileName(out_dir, net_idx, io_helpers.LAST))
+    learner.net.cuda(cuda_device_id)
 
   return train_log

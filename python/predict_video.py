@@ -22,6 +22,7 @@ if __name__ == '__main__':
   parser.add_argument(
     '--out_steering_json', required=True,
     help='JSON file name to write results to.')
+  parser.add_argument('--cuda_device_id', type=int, default=0)
 
   # Crop settings
   parser.add_argument('--crop_top', type=int, default=0)
@@ -43,7 +44,7 @@ if __name__ == '__main__':
       dropout_prob=0.0)
   net.load_state_dict(torch.load(args.in_model_weights))
   net.eval()
-  net.cuda()
+  net.cuda(args.cuda_device_id)
 
   result_data = []
   frames_generator = image_helpers.VideoFrameGenerator(args.in_video)
@@ -57,7 +58,7 @@ if __name__ == '__main__':
     frame_float = frame_chw.astype(np.float32) / 255.0
     # Add a dummy dimension to make it a "batch" of size 1.
     frame_tensor = Variable(
-        torch.from_numpy(frame_float[np.newaxis,...])).cuda()
+        torch.from_numpy(frame_float[np.newaxis,...])).cuda(args.cuda_device_id)
     result_tensor = net(frame_tensor).cpu()
     result_value = result_tensor.data.numpy()[0,args.net_out_dimension_to_use].item()
     result_data.append({'frame_id': frame_index, 'angular_velocity': result_value})

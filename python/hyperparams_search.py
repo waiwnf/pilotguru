@@ -30,14 +30,12 @@ TrainingFoldSettings = collections.namedtuple(
 
 def RunTraining(fold_settings):
   preload_names = None
-  # TODO factor out last model naming.
   if fold_settings.base_preload_dir is not None:
-    preload_names = [
-        os.path.join(
-          fold_settings.base_preload_dir,
-          fold_settings.training_settings_json[training_helpers.SETTINGS_ID],
-          'model-' + str(i) + '-last.pth')
-        for i in range(fold_settings.num_nets_to_train)]
+    full_preload_dir = os.path.join(
+        fold_settings.base_preload_dir,
+        fold_settings.training_settings_json[training_helpers.SETTINGS_ID])
+    preload_names = io_helpers.PreloadModelNames(
+        full_preload_dir, fold_settings.num_nets_to_train)
 
   learners, train_loader, val_loader, train_settings = (
       training_helpers.MakeTrainer(

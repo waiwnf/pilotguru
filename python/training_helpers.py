@@ -89,6 +89,7 @@ def MakeTrainer(
     all_settings,
     num_nets_to_train,
     epochs,
+    cuda_device_id=0,
     preload_weight_names=None):
   learners = []
   for net_idx in range(num_nets_to_train):
@@ -106,7 +107,7 @@ def MakeTrainer(
       assert len(preload_weight_names) == num_nets_to_train
       net.load_state_dict(torch.load(preload_weight_names[net_idx]))
 
-    net.cuda()
+    net.cuda(cuda_device_id)
     optimizer = torch.optim.Adam(net.parameters(), lr=all_settings[LEARNING_RATE])
     learners.append(optimize.Learner(net, optimizer))
 

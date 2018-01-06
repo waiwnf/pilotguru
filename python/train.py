@@ -1,4 +1,5 @@
 import argparse
+import os
 import sys
 
 import io_helpers
@@ -40,8 +41,9 @@ if __name__ == '__main__':
             models.ACTIVATION: models.RELU,
             models.DROPOUT: models.DROPOUT_VANILLA}}))
   parser.add_argument('--label_dimensions', type=int, default=1)
-  parser.add_argument('--out_prefix', required=True)
+  parser.add_argument('--out_dir', required=True)
   parser.add_argument('--log_dir', default='')
+  parser.add_argument('--base_preload_dir', default=None)
   parser.add_argument('--dropout_prob', type=float, default=0.0)
   parser.add_argument('--max_horizontal_shift_pixels', type=int, default=0)
   parser.add_argument('--horizontal_label_shift_rate', default="0.0",
@@ -54,7 +56,12 @@ if __name__ == '__main__':
       '--example_label_extra_weight_scale', type=float, default=0.0)
   parser.add_argument('--dry_run', type=bool, default=False)
   parser.add_argument('--settings_id', default='')
+
+  parser.add_argument('--cuda_device_id', type=int, default=0)
+
   args = parser.parse_args()
+
+  print(args.net_options)
 
   all_settings = {
     training_helpers.SETTINGS_ID: args.settings_id,
@@ -84,6 +91,9 @@ if __name__ == '__main__':
     print(json.dumps(all_settings, indent=2, sort_keys=True))
     sys.exit(0)
 
+  preload_names = io_helpers.PreloadModelNames(
+      args.base_preload_dir, args.num_nets_to_train)
+
   data_element_names = all_settings[training_helpers.INPUT_NAMES] + all_settings[training_helpers.LABEL_NAMES]
   train_data = io_helpers.LoadDatasetNumpyFiles(
       args.data_dirs.split(','),
@@ -95,13 +105,20 @@ if __name__ == '__main__':
       data_suffix=args.data_file_suffix)
 
   learners, train_loader, val_loader, train_settings = training_helpers.MakeTrainer(
-      train_data, val_data, all_settings, args.num_nets_to_train, args.epochs)
+      train_data,
+      val_data,
+      all_settings,
+      args.num_nets_to_train,
+      args.epochs,
+      cuda_device_id=args.cuda_device_id,
+      preload_weight_names=preload_names)
 
   optimize.TrainModels(
       learners,
       train_loader,
       val_loader,
       train_settings,
-      args.out_prefix,
+      args.out_dir,
+      cuda_device_id=args.cuda_device_id,
       batch_use_prob=args.batch_use_prob,
       log_dir=args.log_dir)

@@ -7,6 +7,21 @@ import torch.utils.data
 
 DATA_SUFFIX = 'data.npz'
 
+# Constants for naming saved model checkpoints.
+MODEL = 'model'
+LAST = 'last'
+BEST = 'best'
+
+def ModelFileName(out_dir, model_int_id, model_tag):
+  return os.path.join(
+      out_dir, '%s-%d-%s.pth' % (MODEL, model_int_id, model_tag))
+
+def PreloadModelNames(models_dir, num_models):
+  if models_dir is None:
+    return None
+  else:
+    return [ModelFileName(models_dir, i, LAST) for i in range(num_models)]
+
 def SortedDataFiles(data_dirs, data_suffix):
   data_files = []
   for data_dir in data_dirs:
