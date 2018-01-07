@@ -28,6 +28,10 @@ GRAYSCALE_INTERPOLATE_PROB = 'grayscale_interpolate_prob'
 BATCH_SIZE = 'batch_size'
 EXAMPLE_LABEL_EXTRA_WEIGHT_SCALE = 'example_lable_extra_weight_scale'
 DO_PCA_RANDOM_SHIFTS = 'do_pca_random_shifts'
+OPTIMIZER = 'optimizer'
+
+ADAM = 'adam'
+SGD = 'sgd'
 
 def MakeDataLoader(
     data,
@@ -83,6 +87,15 @@ def MakeDataLoaders(
   
   return train_loader, val_loader
   
+def MakeOptimizer(net, optimizer_name, lr):
+  if optimizer_name == ADAM:
+    return torch.optim.Adam(net.parameters(), lr=lr)
+  elif optimizer_name == SGD:
+    return torch.optim.SGD(net.parameters(), lr=lr, momentum=0.9)
+  else:
+    assert False  # Unknown optimizer name
+    return None
+
 def MakeTrainer(
     train_data,
     val_data,
@@ -95,7 +108,10 @@ def MakeTrainer(
   for net_idx in range(num_nets_to_train):
     net = models.MakeNetwork(
         all_settings[NET_NAME],
-        in_shape=[all_settings[IN_CHANNELS], all_settings[TARGET_HEIGHT], all_settings[TARGET_WIDTH]],
+        in_shape=[
+            all_settings[IN_CHANNELS],
+            all_settings[TARGET_HEIGHT],
+            all_settings[TARGET_WIDTH]],
         head_dims=all_settings[NET_HEAD_DIMS],
         out_dims=all_settings[LABEL_DIMENSIONS],
         dropout_prob=all_settings[DROPOUT_PROB],
@@ -108,7 +124,9 @@ def MakeTrainer(
       net.load_state_dict(torch.load(preload_weight_names[net_idx]))
 
     net.cuda(cuda_device_id)
-    optimizer = torch.optim.Adam(net.parameters(), lr=all_settings[LEARNING_RATE])
+    
+    optimizer = MakeOptimizer(
+        net, all_settings[OPTIMIZER], all_settings[LEARNING_RATE])
     learners.append(optimize.Learner(net, optimizer))
 
   train_settings = optimize.TrainSettings(

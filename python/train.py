@@ -16,6 +16,7 @@ if __name__ == '__main__':
   parser.add_argument('--batch_size', type=int, required=True)
   parser.add_argument('--batch_use_prob', type=float, default=1.0)
   parser.add_argument('--epochs', type=int, required=True)
+  parser.add_argument('--optimizer', default=training_helpers.SGD)
   parser.add_argument('--learning_rate', type=float, default=1e-3)
   parser.add_argument('--in_channels', type=int, default=3)
   parser.add_argument('--target_height', type=int, required=True)
@@ -55,8 +56,7 @@ if __name__ == '__main__':
   parser.add_argument(
       '--example_label_extra_weight_scale', type=float, default=0.0)
   parser.add_argument('--dry_run', type=bool, default=False)
-  parser.add_argument('--settings_id', default='')
-
+  parser.add_argument('--settings_id', default='')  
   parser.add_argument('--cuda_device_id', type=int, default=0)
 
   args = parser.parse_args()
@@ -75,6 +75,7 @@ if __name__ == '__main__':
     training_helpers.LABEL_DIMENSIONS: args.label_dimensions,
     training_helpers.DROPOUT_PROB: args.dropout_prob,
     training_helpers.NET_OPTIONS: json.loads(args.net_options),
+    training_helpers.OPTIMIZER: args.optimizer,
     training_helpers.LEARNING_RATE: args.learning_rate,
     training_helpers.MAX_HORIZONTAL_SHIFT_PIXELS: args.max_horizontal_shift_pixels,
     training_helpers.HORIZONTAL_LABEL_SHIFT_RATE: [
@@ -94,7 +95,9 @@ if __name__ == '__main__':
   preload_names = io_helpers.PreloadModelNames(
       args.base_preload_dir, args.num_nets_to_train)
 
-  data_element_names = all_settings[training_helpers.INPUT_NAMES] + all_settings[training_helpers.LABEL_NAMES]
+  data_element_names = (
+      all_settings[training_helpers.INPUT_NAMES] +
+      all_settings[training_helpers.LABEL_NAMES])
   train_data = io_helpers.LoadDatasetNumpyFiles(
       args.data_dirs.split(','),
       data_element_names,
