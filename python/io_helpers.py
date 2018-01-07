@@ -1,4 +1,5 @@
 import glob
+import json
 import os
 import random
 
@@ -11,6 +12,16 @@ DATA_SUFFIX = 'data.npz'
 MODEL = 'model'
 LAST = 'last'
 BEST = 'best'
+
+def LoadForwardAxis(forward_axis_json_filename):
+  with open(forward_axis_json_filename) as forward_axis_file:
+      forward_axis_json = json.load(forward_axis_file)
+      forward_axis_dict = forward_axis_json['forward_axis']
+      return np.array([
+          forward_axis_dict['x'],
+          forward_axis_dict['y'],
+          forward_axis_dict['z']],
+        dtype=np.float32)
 
 def ModelFileName(out_dir, model_int_id, model_tag):
   return os.path.join(

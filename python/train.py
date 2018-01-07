@@ -61,8 +61,6 @@ if __name__ == '__main__':
 
   args = parser.parse_args()
 
-  print(args.net_options)
-
   all_settings = {
     training_helpers.SETTINGS_ID: args.settings_id,
     training_helpers.NET_NAME: args.net_name,

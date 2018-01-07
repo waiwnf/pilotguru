@@ -17,6 +17,7 @@ import scipy.misc
 import numpy as np
 
 import image_helpers
+import io_helpers
 
 _FRAME_ID = 'frame_id'
 _ANGULAR_VELOCITY = 'angular_velocity'
@@ -161,16 +162,6 @@ def AnnotateFramesSteering(
       '--out_json', steering_frames_json_name] + 
       _SMOOTHING_SETTINGS_BY_STEERING_SOURCE[steering_source])
 
-def LoadForwardAxis(forward_axis_json_filename):
-  with open(forward_axis_json_filename) as forward_axis_file:
-      forward_axis_json = json.load(forward_axis_file)
-      forward_axis_dict = forward_axis_json['forward_axis']
-      return np.array([
-          forward_axis_dict['x'],
-          forward_axis_dict['y'],
-          forward_axis_dict['z']],
-        dtype=np.float32)
-
 # Interpret the steering data as either angular velocity from IMU or steering
 # wheel turn angle from the CAN bus and apply the appropriate multiplier to
 # bring the data to the uniform scale.
@@ -250,7 +241,7 @@ if __name__ == '__main__':
 
   args = parser.parse_args()
 
-  forward_axis = LoadForwardAxis(args.in_forward_axis_json)
+  forward_axis = io_helpers.LoadForwardAxis(args.in_forward_axis_json)
   with open(args.crop_settings_json) as crop_settings_file:
     crop_settings_json = json.load(crop_settings_file)
   crop_settings = crop_settings_json['crop_settings']
