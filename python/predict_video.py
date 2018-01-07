@@ -11,6 +11,22 @@ import numpy as np
 import torch
 from torch.autograd import Variable
 
+def UpdateFutureTrajectoryPrediction(previous_prediction, current_update, lr):
+  assert len(current_update.shape) == 2
+  assert current_update.shape[0] == 1
+  assert lr > 0
+  assert lr <= 1
+
+  if previous_prediction is None:
+    return np.copy(current_update)
+
+  assert previous_prediction.shape == current_update.shape
+  result = np.copy(previous_prediction)
+  result[0,:-1] = (
+    lr * current_update[0,:-1] + (1.0 - lr) * previous_prediction[0,1:])
+  result[0, -1] = current_update[0,-1]
+  return result
+
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()
   parser.add_argument(
@@ -32,6 +48,8 @@ if __name__ == '__main__':
   parser.add_argument('--crop_bottom', type=int, default=0)
   parser.add_argument('--crop_left', type=int, default=0)
   parser.add_argument('--crop_right', type=int, default=0)
+
+  parser.add_argument('--trajectory_frame_update_rate', type=float, default=1.0)
 
   args = parser.parse_args()
 
@@ -59,6 +77,7 @@ if __name__ == '__main__':
 
   result_data = []
   frames_generator = image_helpers.VideoFrameGenerator(args.in_video)
+  trajectory_prediction = None
   for raw_frame, frame_index in frames_generator:
     frame_cropped = image_helpers.CropHWC(
         raw_frame,
@@ -75,7 +94,11 @@ if __name__ == '__main__':
     frame_tensor = Variable(
         torch.from_numpy(frame_float[np.newaxis,...])).cuda(args.cuda_device_id)
     result_tensor = net([frame_tensor, forward_axis_tensor])[0].cpu()
-    result_value = result_tensor.data.numpy()[0,0].item()
+    trajectory_prediction = UpdateFutureTrajectoryPrediction(
+        trajectory_prediction,
+        result_tensor.data.numpy(),
+        args.trajectory_frame_update_rate)
+    result_value = trajectory_prediction[0,0].item()
     result_data.append(
         {'frame_id': frame_index, 'angular_velocity': result_value})
   
