@@ -27,8 +27,18 @@ TrainingFoldSettings = collections.namedtuple(
         'batch_use_prob'
     ])
 
-
 def RunTraining(fold_settings):
+  # Select the least used cuda device.
+  cuda_device_assign_lock.acquire()
+  # ctypes arrays do not support the standard list methods, so make a local
+  # copy for convenience.
+  cuda_device_use_count_copy = [x for x in cuda_device_use_count]
+  cuda_device_count_idx = cuda_device_use_count_copy.index(
+      min(cuda_device_use_count_copy))
+  cuda_device_id = cuda_device_ids[cuda_device_count_idx]
+  cuda_device_use_count[cuda_device_count_idx] += 1
+  cuda_device_assign_lock.release()
+
   preload_names = None
   if fold_settings.base_preload_dir is not None:
     full_preload_dir = os.path.join(
@@ -44,6 +54,7 @@ def RunTraining(fold_settings):
           fold_settings.training_settings_json,
           fold_settings.num_nets_to_train,
           fold_settings.epochs,
+          cuda_device_id=cuda_device_id,
           preload_weight_names=preload_names))
 
   out_dir = os.path.join(
@@ -51,7 +62,6 @@ def RunTraining(fold_settings):
     fold_settings.training_settings_json[training_helpers.SETTINGS_ID])
   if not os.path.isdir(out_dir):
     os.mkdir(out_dir)
-  out_prefix = os.path.join(out_dir, 'model')
 
   log_dir = os.path.join(
     fold_settings.base_log_dir,
@@ -62,12 +72,25 @@ def RunTraining(fold_settings):
       train_loader,
       val_loader,
       train_settings,
-      out_prefix,
+      out_dir,
+      cuda_device_id=cuda_device_id,
       batch_use_prob=fold_settings.batch_use_prob,
       print_log=False,
       log_dir=log_dir)
   print(fold_settings.training_settings_json[training_helpers.SETTINGS_ID])
 
+  # Release CUDA device.
+  cuda_device_assign_lock.acquire()
+  cuda_device_use_count[cuda_device_count_idx] -= 1
+  cuda_device_assign_lock.release()
+
+def setup(ids, use_count, cuda_lock):
+    global cuda_device_ids
+    global cuda_device_use_count
+    global cuda_device_assign_lock
+    cuda_device_ids = ids
+    cuda_device_use_count = use_count
+    cuda_device_assign_lock = cuda_lock
 
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()
@@ -83,6 +106,7 @@ if __name__ == '__main__':
   parser.add_argument('--num_nets_to_train', type=int, default=1,
       help='How many identically structured models to train simultaneously.')
   parser.add_argument('--batch_use_prob', type=float, default=1.0)
+  parser.add_argument('--cuda_device_ids', default='0')
  
   args = parser.parse_args()
   train_settings_json_names = glob.glob(args.train_settings_json_glob)
@@ -90,6 +114,12 @@ if __name__ == '__main__':
   for train_settings_json_name in train_settings_json_names:
     with open(train_settings_json_name) as f:
       train_settings_jsons.append(json.load(f))
+
+  cuda_device_ids = torch.multiprocessing.Array(
+      'i', [int(i) for i in args.cuda_device_ids.split(',')])
+  cuda_device_use_count = torch.multiprocessing.Array(
+      'i', len(cuda_device_ids))
+  cuda_device_assign_lock = torch.multiprocessing.Lock()
 
   per_fold_settings = [
     TrainingFoldSettings(
@@ -103,7 +133,10 @@ if __name__ == '__main__':
     for train_settings in train_settings_jsons]
 
   # TODO check that all this matches across settings.
-  data_element_names = per_fold_settings[0].training_settings_json[training_helpers.INPUT_NAMES] + per_fold_settings[0].training_settings_json[training_helpers.LABEL_NAMES]
+  first_settings_json = per_fold_settings[0].training_settings_json
+  data_element_names = (
+      first_settings_json[training_helpers.INPUT_NAMES] + 
+      first_settings_json[training_helpers.LABEL_NAMES])
   train_data = io_helpers.LoadDatasetNumpyFiles(
       args.data_dirs.split(','),
       data_element_names,
@@ -113,6 +146,8 @@ if __name__ == '__main__':
       data_element_names,
       data_suffix=args.data_file_suffix)
 
-
-  with torch.multiprocessing.Pool(args.parallelism) as p:
+  with torch.multiprocessing.Pool(
+      args.parallelism,
+      setup,
+      [cuda_device_ids, cuda_device_use_count, cuda_device_assign_lock]) as p:
     p.map(RunTraining, per_fold_settings)
