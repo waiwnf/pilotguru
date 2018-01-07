@@ -16,7 +16,7 @@ EPOCH_DURATION_SEC = 'epoch_duration_sec'
 EXAMPLES_PER_SEC = 'examples_per_sec'
 
 TrainSettings = namedtuple('TrainSettings', ['loss', 'epochs'])
-Learner = namedtuple('Learner', ['net', 'optimizer'])
+Learner = namedtuple('Learner', ['net', 'optimizer', 'lr_scheduler'])
 
 class SingleLabelLoss(torch.nn.Module):
   """Unwraps labels and predictions for a common case of only one prediction."""
@@ -165,6 +165,8 @@ def TrainModels(
       val_improved_marker = ' *'
 
     for net_idx, learner in enumerate(learners):
+      if learner.lr_scheduler is not None:
+        learner.lr_scheduler.step(validation_avg_losses[net_idx])
       if validation_avg_losses[net_idx] < min_validation_losses[net_idx]:
         learner.net.cpu()
         torch.save(

@@ -18,6 +18,7 @@ if __name__ == '__main__':
   parser.add_argument('--epochs', type=int, required=True)
   parser.add_argument('--optimizer', default=training_helpers.SGD)
   parser.add_argument('--learning_rate', type=float, default=1e-3)
+  parser.add_argument('--plateau_patience_epochs', type=int, default=0)
   parser.add_argument('--in_channels', type=int, default=3)
   parser.add_argument('--target_height', type=int, required=True)
   parser.add_argument('--target_width', type=int, required=True)
@@ -75,6 +76,7 @@ if __name__ == '__main__':
     training_helpers.NET_OPTIONS: json.loads(args.net_options),
     training_helpers.OPTIMIZER: args.optimizer,
     training_helpers.LEARNING_RATE: args.learning_rate,
+    training_helpers.PLATEAU_PATIENCE_EPOCHS: args.plateau_patience_epochs,
     training_helpers.MAX_HORIZONTAL_SHIFT_PIXELS: args.max_horizontal_shift_pixels,
     training_helpers.HORIZONTAL_LABEL_SHIFT_RATE: [
         float(x) for x in args.horizontal_label_shift_rate.split(',')],

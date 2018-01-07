@@ -29,6 +29,7 @@ BATCH_SIZE = 'batch_size'
 EXAMPLE_LABEL_EXTRA_WEIGHT_SCALE = 'example_lable_extra_weight_scale'
 DO_PCA_RANDOM_SHIFTS = 'do_pca_random_shifts'
 OPTIMIZER = 'optimizer'
+PLATEAU_PATIENCE_EPOCHS = 'plateau_patience_epochs'
 
 ADAM = 'adam'
 SGD = 'sgd'
@@ -127,7 +128,11 @@ def MakeTrainer(
     
     optimizer = MakeOptimizer(
         net, all_settings[OPTIMIZER], all_settings[LEARNING_RATE])
-    learners.append(optimize.Learner(net, optimizer))
+    lr_scheduler = None
+    if all_settings[PLATEAU_PATIENCE_EPOCHS] > 0:
+      lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+          optimizer, factor=0.5, patience=all_settings[PLATEAU_PATIENCE_EPOCHS])
+    learners.append(optimize.Learner(net, optimizer, lr_scheduler))
 
   train_settings = optimize.TrainSettings(
       optimize.SingleLabelLoss(optimize.WeightedMSELoss()),
