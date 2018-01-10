@@ -35,7 +35,8 @@ if __name__ == '__main__':
   parser.add_argument('--forward_axis_json', required=True)
   parser.add_argument('--net_settings_json', required=True)
   parser.add_argument(
-    '--in_model_weights', required=True, help='Pytorch model weights file')
+    '--in_model_weights', required=True,
+    help='Pytorch model weights files (comma-separated list).')
   parser.add_argument(
     '--out_steering_json', required=True,
     help='JSON file name to write results to.')
@@ -61,19 +62,22 @@ if __name__ == '__main__':
       torch.from_numpy(forward_axis[np.newaxis, ...])).cuda(args.cuda_device_id)
 
   # Init model and load weights.
-  net = models.MakeNetwork(
-      net_settings[training_helpers.NET_NAME],
-      in_shape=[
-          net_settings[training_helpers.IN_CHANNELS],
-          net_settings[training_helpers.TARGET_HEIGHT],
-          net_settings[training_helpers.TARGET_WIDTH]],
-      head_dims=net_settings[training_helpers.NET_HEAD_DIMS],
-      out_dims=net_settings[training_helpers.LABEL_DIMENSIONS],
-      dropout_prob=net_settings[training_helpers.DROPOUT_PROB],
-      options=net_settings[training_helpers.NET_OPTIONS])
-  net.load_state_dict(torch.load(args.in_model_weights))
-  net.cuda(args.cuda_device_id)
-  net.eval()
+  nets = []
+  for weights_filename in args.in_model_weights.split(','):
+    net = models.MakeNetwork(
+        net_settings[training_helpers.NET_NAME],
+        in_shape=[
+            net_settings[training_helpers.IN_CHANNELS],
+            net_settings[training_helpers.TARGET_HEIGHT],
+            net_settings[training_helpers.TARGET_WIDTH]],
+        head_dims=net_settings[training_helpers.NET_HEAD_DIMS],
+        out_dims=net_settings[training_helpers.LABEL_DIMENSIONS],
+        dropout_prob=net_settings[training_helpers.DROPOUT_PROB],
+        options=net_settings[training_helpers.NET_OPTIONS])
+    net.load_state_dict(torch.load(weights_filename))
+    net.cuda(args.cuda_device_id)
+    net.eval()
+    nets.append(net)
 
   result_data = []
   frames_generator = image_helpers.VideoFrameGenerator(args.in_video)
@@ -93,14 +97,17 @@ if __name__ == '__main__':
     # Add a dummy dimension to make it a "batch" of size 1.
     frame_tensor = Variable(
         torch.from_numpy(frame_float[np.newaxis,...])).cuda(args.cuda_device_id)
-    result_tensor = net([frame_tensor, forward_axis_tensor])[0].cpu()
+    result_components = np.array([
+        net([frame_tensor, forward_axis_tensor])[0].cpu().data.numpy()
+        for net in nets])
+    result_averaged = np.mean(result_components, axis=0, keepdims=False)
     trajectory_prediction = UpdateFutureTrajectoryPrediction(
         trajectory_prediction,
-        result_tensor.data.numpy(),
+        result_averaged,
         args.trajectory_frame_update_rate)
     result_value = trajectory_prediction[0,0].item()
     result_data.append(
-        {'frame_id': frame_index, 'angular_velocity': result_value})
+        {'frame_id': frame_index, 'steering': result_value})
   
   with open(args.out_steering_json, 'w') as out_json:
     # TODO reuse constants
