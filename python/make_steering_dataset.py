@@ -14,6 +14,7 @@ import os
 import subprocess
 
 import scipy.misc
+import skvideo.io
 import numpy as np
 
 import image_helpers
@@ -311,12 +312,13 @@ if __name__ == '__main__':
       args.steering_source)
 
   # Open the video file for reading the frames.
-  frames_generator = image_helpers.VideoFrameGenerator(args.in_video)
+  frames_generator = skvideo.io.vreader(args.in_video)
 
   # Id of previous frame for which the data was written out.
   prev_saved_frame_id = None
   prev_seen_frame_data_id = None
   total_samples_written = 0
+  frame_index = 0
   for frame_data in frames_data:
     # Skip if no steering data
     if frame_data.steering_generic_value is None:
@@ -342,9 +344,11 @@ if __name__ == '__main__':
     prev_seen_frame_data_id = frame_id
 
     # Skip video frames until we get to the requested frame id.
-    raw_frame, frame_index = next(frames_generator)
+    raw_frame = next(frames_generator)
+    frame_index += 1
     while frame_index < frame_id:
-      raw_frame, frame_index = next(frames_generator)
+      raw_frame = next(frames_generator)
+      frame_index += 1
     assert frame_index == frame_id
     history_index = frame_index % raw_history_size
     frame_chw, frame_hwc = FrameToModelInput(

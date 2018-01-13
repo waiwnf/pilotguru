@@ -7,7 +7,7 @@ import models
 import training_helpers
 
 import numpy as np
-
+import skvideo.io
 import torch
 from torch.autograd import Variable
 
@@ -80,9 +80,9 @@ if __name__ == '__main__':
     nets.append(net)
 
   result_data = []
-  frames_generator = image_helpers.VideoFrameGenerator(args.in_video)
+  frames_generator = skvideo.io.vreader(args.in_video)
   trajectory_prediction = None
-  for raw_frame, frame_index in frames_generator:
+  for frame_index, raw_frame in enumerate(frames_generator):
     frame_cropped = image_helpers.CropHWC(
         raw_frame,
         args.crop_top, args.crop_bottom, args.crop_left, args.crop_right)

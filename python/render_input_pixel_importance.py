@@ -6,10 +6,8 @@ import io_helpers
 import models
 import training_helpers
 
-import skvideo.io
-
 import numpy as np
-
+import skvideo.io
 import torch
 from torch.autograd import Variable
 
@@ -104,8 +102,8 @@ if __name__ == '__main__':
         net_settings[training_helpers.TARGET_WIDTH],
         3], dtype=np.uint8)
 
-  frames_generator = image_helpers.VideoFrameGenerator(args.in_video)
-  for raw_frame, frame_index in frames_generator:
+  frames_generator = skvideo.io.vreader(args.in_video)
+  for frame_index, raw_frame in enumerate(frames_generator):
     if frame_index < args.frames_to_skip:
       continue
 
