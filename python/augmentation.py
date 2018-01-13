@@ -37,7 +37,7 @@ def SteeringTrainingRandomShift(
 
   # Margin to the edge of the source image for a centered crop.
   crop_margin = int((images.shape[-1] - target_width) / 2)
-  assert crop_margin >= 0
+  assert crop_margin >= max_horizontal_shift
 
   # Randomly choose the fraction of max_horizontal_shift to shift by.
   horizontal_shift_fraction = random.uniform(-1.0, 1.0)
