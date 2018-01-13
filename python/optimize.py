@@ -25,31 +25,26 @@ class SingleLabelLoss(torch.nn.Module):
     super(SingleLabelLoss, self).__init__()
     self.base_loss = base_loss
   
-  def forward(self, predicted, labels, weights):
+  def forward(self, predicted, labels):
     assert len(predicted) == 1
     assert len(labels) == 1
-    return self.base_loss.forward(predicted[0], labels[0], weights)  
+    return self.base_loss.forward(predicted[0], labels[0])  
 
-class UnweightedLoss(torch.nn.Module):
-  """Wraps loss functions that do not support examples weights for TrainModel().
-  """
-
-  def __init__(self, base_loss):
-    super(UnweightedLoss, self).__init__()
-    self.base_loss = base_loss
-  
-  def forward(self, predicted, labels, weights):
-    return self.base_loss.forward(predicted, labels)
-
-class WeightedMSELoss(torch.nn.Module):
-  """MSE loss with per-example weights."""
-
+class MSELoss(torch.nn.Module):
   def __init__(self):
-    super(WeightedMSELoss, self).__init__()
+    super(MSELoss, self).__init__()
   
-  def forward(self, predicted, labels, weights):
-    diff_squares = torch.pow(torch.add(predicted, torch.neg(labels)), 2.0)
-    return torch.mean(torch.mul(diff_squares, weights.expand_as(labels)))
+  def forward(self, predicted, labels):
+    result = torch.mean(torch.pow(torch.add(predicted, torch.neg(labels)), 2.0))
+    return result
+
+class L1Loss(torch.nn.Module):
+  def __init__(self):
+    super(L1Loss, self).__init__()
+  
+  def forward(self, predicted, labels):
+    result = torch.mean(torch.abs(torch.add(predicted, torch.neg(labels))))
+    return result
 
 def TrainLogEventToString(event):
   return 'loss %g;  val loss: %g;  %0.2f sec/epoch; %0.2f examples/sec' % (
@@ -64,12 +59,11 @@ def AverageLosses(total_losses, total_examples):
       for x, y in zip(total_losses, total_examples)]
 
 def DataBatchToVariables(batch, num_inputs, num_labels, cuda_device_id):
-  assert len(batch) == num_inputs + num_labels + 1
+  assert len(batch) == num_inputs + num_labels
   input_vars = [Variable(x).cuda(cuda_device_id) for x in batch[:num_inputs]]
   label_vars = [Variable(x).cuda(cuda_device_id)
       for x in batch[num_inputs:(num_inputs + num_labels)]]
-  weights_var = Variable(batch[-1]).cuda(cuda_device_id)
-  return input_vars, label_vars, weights_var
+  return input_vars, label_vars
 
 def TrainModels(
     learners,
@@ -98,14 +92,14 @@ def TrainModels(
 
     epoch_start_time = time.time()
     for training_batch in train_loader:
-      input_vars, label_vars, weights_var = DataBatchToVariables(
+      input_vars, label_vars = DataBatchToVariables(
           training_batch, num_inputs, num_labels, cuda_device_id)
 
       for net_idx, learner in enumerate(learners):
         if random.uniform(0.0, 1.0) < batch_use_prob:
           # forward + backward + optimize
           outputs = learner.net(input_vars)
-          loss_value = train_settings.loss(outputs, label_vars, weights_var)
+          loss_value = train_settings.loss(outputs, label_vars)
           loss_value.backward()
           learner.optimizer.step()
           learner.optimizer.zero_grad()
@@ -128,12 +122,12 @@ def TrainModels(
       learner.net.eval()
 
     for val_batch in val_loader:
-      input_vars, label_vars, weights_var = DataBatchToVariables(
+      input_vars, label_vars = DataBatchToVariables(
           val_batch, num_inputs, num_labels, cuda_device_id)
 
       for net_idx, learner in enumerate(learners):
         outputs = learner.net(input_vars)
-        loss_value = train_settings.loss(outputs, label_vars, weights_var)
+        loss_value = train_settings.loss(outputs, label_vars)
 
         batch_size = input_vars[0].size()[0]
         validation_examples[net_idx] += batch_size

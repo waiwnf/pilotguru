@@ -71,8 +71,7 @@ class NumpyFileDataset(torch.utils.data.Dataset):
   
   def __getitem__(self, idx):
     data_file_loaded = np.load(self.data_files[idx])
-    return tuple(data_file_loaded[x] for x in self.element_names) + (
-        np.array([1.0], dtype=np.float32),)
+    return tuple(data_file_loaded[x] for x in self.element_names)
 
 class InMemoryNumpyDataset(torch.utils.data.Dataset):
   def __init__(self, data):
@@ -84,31 +83,7 @@ class InMemoryNumpyDataset(torch.utils.data.Dataset):
     return self.data[0].shape[0]
   
   def __getitem__(self, idx):
-    return tuple(np.copy(element[idx, ...]) for element in self.data) + (
-        np.array([1.0], dtype=np.float32),)
-
-class L1LabelWeightingDataset(torch.utils.data.Dataset):
-  """Upweights the examples from the source dataset by (1 + |label|).
-
-  This is useful for steering angle prediction task to give higher weights to
-  the naturally more rare examples recorded in turns (vs. driving straight).
-  """
-
-  def __init__(self, source_dataset, label_idx, label_scale = 0.0):
-    super(L1LabelWeightingDataset, self).__init__()
-    self.source_dataset = source_dataset
-    self.label_idx = label_idx
-    assert label_scale >= 0
-    self.label_scale = label_scale
-  
-  def __len__(self):
-    return self.source_dataset.__len__()
-  
-  def __getitem__(self, idx):
-    item = self.source_dataset.__getitem__(idx)
-    label = item[self.label_idx]
-    weight = (self.label_scale * np.mean(np.abs(label), keepdims=True) + 1.0)
-    return item[:-1] + (weight,)
+    return tuple(np.copy(element[idx, ...]) for element in self.data)
 
 class ImageFrameDataset(torch.utils.data.Dataset):
   """Dataset for data files with images (byte per channel).

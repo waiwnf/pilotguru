@@ -37,17 +37,13 @@ SGD = 'sgd'
 def MakeDataLoader(
     data,
     image_element_idx,
-    weighting_label_idx,
     target_width,
-    example_label_extra_weight_scale,
     augmenters,
     batch_size,
     shuffle):
   plain_dataset = io_helpers.InMemoryNumpyDataset(data)
-  weighted_dataset = io_helpers.L1LabelWeightingDataset(
-      plain_dataset, weighting_label_idx, example_label_extra_weight_scale)
   image_dataset = io_helpers.ImageFrameDataset(
-      weighted_dataset,
+      plain_dataset,
       image_element_idx,
       augmenters,
       target_width)
@@ -58,20 +54,17 @@ def MakeDataLoaders(
     train_data,
     val_data,
     image_element_idx,
-    weighting_label_idx,
+    steering_element_idx,
     target_width,
     augment_settings,
-    batch_size,
-    example_label_extra_weight_scale=0.0):
+    batch_size):
   augmenters = augmentation.MakeAugmenters(
-      augment_settings, image_element_idx, weighting_label_idx, train_data)
+      augment_settings, image_element_idx, steering_element_idx, train_data)
   
   train_loader = MakeDataLoader(
       train_data,
       image_element_idx,
-      weighting_label_idx,
       target_width,
-      example_label_extra_weight_scale,
       augmenters,
       batch_size,
       True)
@@ -79,9 +72,7 @@ def MakeDataLoaders(
   val_loader = MakeDataLoader(
       val_data,
       image_element_idx,
-      weighting_label_idx,
       target_width,
-      example_label_extra_weight_scale,
       [],  # augmenters
       batch_size,
       False)
@@ -135,12 +126,12 @@ def MakeTrainer(
     learners.append(optimize.Learner(net, optimizer, lr_scheduler))
 
   train_settings = optimize.TrainSettings(
-      optimize.SingleLabelLoss(optimize.WeightedMSELoss()),
+      optimize.SingleLabelLoss(optimize.MSELoss()),
       epochs)
   
   data_element_names = all_settings[INPUT_NAMES] + all_settings[LABEL_NAMES]
   image_element_idx = data_element_names.index(models.FRAME_IMG)
-  weight_label_idx = data_element_names.index(models.STEERING)
+  steering_element_idx = data_element_names.index(models.STEERING)
 
   random_shift_directions = None
   if all_settings[DO_PCA_RANDOM_SHIFTS]:
@@ -163,10 +154,9 @@ def MakeTrainer(
       train_data,
       val_data,
       image_element_idx,
-      weight_label_idx,
+      steering_element_idx,
       all_settings[TARGET_WIDTH],
       augment_settings,
-      all_settings[BATCH_SIZE],
-      all_settings[EXAMPLE_LABEL_EXTRA_WEIGHT_SCALE])
+      all_settings[BATCH_SIZE])
   
   return learners, train_loader, val_loader, train_settings
