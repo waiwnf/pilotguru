@@ -43,11 +43,12 @@ public class SensorDataSaver extends CameraCaptureSession.CaptureCallback implem
   public static String LOCATIONS = "locations";
   public static String FRAMES = "frames";
   public static String CAN_FRAMES = "can_frames";
+  public static String PRESSURES = "pressures";
 
   public static String TIME_USEC = "time_usec";
 
   private JsonWriter rotationsWriter = null, accelerationsWriter = null, locationsWriter = null,
-      framesWriter = null, elm327Writer = null;
+      framesWriter = null, elm327Writer = null, pressuresWriter = null;
   private List<String> jsonFiles = new LinkedList<>();
 
   private boolean isRecording = false;
@@ -56,6 +57,7 @@ public class SensorDataSaver extends CameraCaptureSession.CaptureCallback implem
   private final Lock accelerometerLock = recordingStatusLock.readLock();
   private final Lock locationLock = recordingStatusLock.readLock();
   private final Lock frameCaptureLock = recordingStatusLock.readLock();
+  private final Lock pressuresLock = recordingStatusLock.readLock();
   private final Lock elm327Lock = recordingStatusLock.readLock();
   private final Lock recordingStatusChangeLock = recordingStatusLock.writeLock();
 
@@ -129,6 +131,7 @@ public class SensorDataSaver extends CameraCaptureSession.CaptureCallback implem
       accelerationsWriter = initJsonListWriter(recordingDir, ACCELERATIONS);
       locationsWriter = initJsonListWriter(recordingDir, LOCATIONS);
       framesWriter = initJsonListWriter(recordingDir, FRAMES);
+      pressuresWriter = initJsonListWriter(recordingDir, PRESSURES);
       elm327Writer = initJsonListWriter(recordingDir, CAN_FRAMES);
     } finally {
       recordingStatusChangeLock.unlock();
@@ -177,6 +180,7 @@ public class SensorDataSaver extends CameraCaptureSession.CaptureCallback implem
     finishJsonListWriter(rotationsWriter, ROTATIONS);
     finishJsonListWriter(accelerationsWriter, ACCELERATIONS);
     finishJsonListWriter(locationsWriter, LOCATIONS);
+    finishJsonListWriter(pressuresWriter, PRESSURES);
     finishJsonListWriter(framesWriter, FRAMES);
     finishJsonListWriter(elm327Writer, CAN_FRAMES);
     MediaScannerConnection.scanFile(context, jsonFiles.toArray(new String[0]), null, null);
@@ -194,14 +198,15 @@ public class SensorDataSaver extends CameraCaptureSession.CaptureCallback implem
 
   // SensorEventListener: gyro and accelerations.
 
-  private void writeXYZSensor(Lock lock, SensorEvent event, JsonWriter writer, String sensorName) {
+  private void writeNamedSensorValues(
+      Lock lock, SensorEvent event, String[] valueNames, JsonWriter writer, String sensorName) {
     try {
       lock.lock();
       if (isRecording) {
         writer.beginObject();
-        writer.name("x").value(event.values[0]);
-        writer.name("y").value(event.values[1]);
-        writer.name("z").value(event.values[2]);
+        for (int i=0; i<valueNames.length; ++i) {
+          writer.name(valueNames[i]).value(event.values[i]);
+        }
         writer.name(TIME_USEC).value(TimeUnit.NANOSECONDS.toMicros(event.timestamp));
         writer.endObject();
       }
@@ -213,12 +218,20 @@ public class SensorDataSaver extends CameraCaptureSession.CaptureCallback implem
   }
 
   public void onSensorChanged(SensorEvent event) {
+    final String valuesXyz[] = {"x", "y", "z"};
+    final String valuesPressureHpa[] = {"hpa"};
+
     switch (event.sensor.getType()) {
       case Sensor.TYPE_GYROSCOPE:
-        writeXYZSensor(gyroLock, event, rotationsWriter, ROTATIONS);
+        writeNamedSensorValues(gyroLock, event, valuesXyz, rotationsWriter, ROTATIONS);
         break;
       case Sensor.TYPE_ACCELEROMETER:
-        writeXYZSensor(accelerometerLock, event, accelerationsWriter, ACCELERATIONS);
+        writeNamedSensorValues(
+            accelerometerLock, event, valuesXyz, accelerationsWriter, ACCELERATIONS);
+        break;
+      case Sensor.TYPE_PRESSURE:
+        writeNamedSensorValues(
+            pressuresLock, event, valuesPressureHpa, pressuresWriter, PRESSURES);
         break;
       default:
         break;

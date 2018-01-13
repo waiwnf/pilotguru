@@ -4,6 +4,7 @@ import android.Manifest;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Matrix;
 import android.graphics.RectF;
@@ -51,6 +52,8 @@ import ru.pilotguru.recorder.elm327.ELM327LastPacketTimestampUpdater;
 import ru.pilotguru.recorder.elm327.ELM327Receiver;
 import ru.pilotguru.recorder.elm327.ELM327Settings;
 import ru.pilotguru.recorder.elm327.ELM327StatusTextUpdater;
+
+import static ru.pilotguru.recorder.SettingsConstants.PREF_LOG_PRESSURES;
 
 public class MainActivity extends Activity {
   private static final int REQUEST_ALL_PERMISSIONS = 200;
@@ -292,8 +295,8 @@ public class MainActivity extends Activity {
       return;
     }
 
-    final ELM327Settings elm327Settings =
-        new ELM327Settings(PreferenceManager.getDefaultSharedPreferences(this));
+    final SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
+    final ELM327Settings elm327Settings = new ELM327Settings(prefs);
     final String elm327DeviceAddress = elm327Settings.getElm327DeviceName();
     // If a receiver connected to a different device is already open, stop it and close.
     if (elm327Receiver != null && !elm327Receiver.deviceAddress().equals(elm327DeviceAddress)) {
@@ -329,6 +332,12 @@ public class MainActivity extends Activity {
         TimeUnit.SECONDS.toNanos(1),
         elm327LastPacketTimestamp,
         (TextView) findViewById(R.id.textview_elm327)), SensorManager.SENSOR_DELAY_NORMAL);
+
+    final boolean isLogPressures = prefs.getBoolean(PREF_LOG_PRESSURES, false);
+    if (isLogPressures) {
+      subscribeToPressureUpdates(recorder.getSensorDataSaver(), SensorManager.SENSOR_DELAY_FASTEST);
+    }
+
     maybeConnectCamera();
   }
 
@@ -451,5 +460,10 @@ public class MainActivity extends Activity {
     final SensorManager sm = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
     sm.registerListener(listener, sm.getDefaultSensor(Sensor.TYPE_GYROSCOPE), delay);
     sm.registerListener(listener, sm.getDefaultSensor(Sensor.TYPE_ACCELEROMETER), delay);
+  }
+
+  private void subscribeToPressureUpdates(SensorEventListener listener, int delay) {
+    final SensorManager sm = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
+    sm.registerListener(listener, sm.getDefaultSensor(Sensor.TYPE_PRESSURE), delay);
   }
 }
