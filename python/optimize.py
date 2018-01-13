@@ -30,21 +30,17 @@ class SingleLabelLoss(torch.nn.Module):
     assert len(labels) == 1
     return self.base_loss.forward(predicted[0], labels[0])  
 
-class MSELoss(torch.nn.Module):
-  def __init__(self):
-    super(MSELoss, self).__init__()
+class PowerLoss(torch.nn.Module):
+  def __init__(self, p):
+    super(PowerLoss, self).__init__()
+    self.p = p
   
   def forward(self, predicted, labels):
-    result = torch.mean(torch.pow(torch.add(predicted, torch.neg(labels)), 2.0))
-    return result
-
-class L1Loss(torch.nn.Module):
-  def __init__(self):
-    super(L1Loss, self).__init__()
-  
-  def forward(self, predicted, labels):
-    result = torch.mean(torch.abs(torch.add(predicted, torch.neg(labels))))
-    return result
+    diff = torch.add(predicted, torch.neg(labels))
+    loss_per_example = torch.pow(torch.abs(diff), self.p)
+    for d in range(len(loss_per_example.shape) - 1, 0, -1):
+      loss_per_example = torch.mean(loss_per_example, dim=d)
+    return loss_per_example
 
 def TrainLogEventToString(event):
   return 'loss %g;  val loss: %g;  %0.2f sec/epoch; %0.2f examples/sec' % (
@@ -60,8 +56,8 @@ def AverageLosses(total_losses, total_examples):
 
 def DataBatchToVariables(batch, num_inputs, num_labels, cuda_device_id):
   assert len(batch) == num_inputs + num_labels
-  input_vars = [Variable(x).cuda(cuda_device_id) for x in batch[:num_inputs]]
-  label_vars = [Variable(x).cuda(cuda_device_id)
+  input_vars = [Variable(x, requires_grad=False).cuda(cuda_device_id) for x in batch[:num_inputs]]
+  label_vars = [Variable(x, requires_grad=False).cuda(cuda_device_id)
       for x in batch[num_inputs:(num_inputs + num_labels)]]
   return input_vars, label_vars
 
@@ -99,10 +95,14 @@ def TrainModels(
         if random.uniform(0.0, 1.0) < batch_use_prob:
           # forward + backward + optimize
           outputs = learner.net(input_vars)
-          loss_value = train_settings.loss(outputs, label_vars)
+          loss_value_per_example = train_settings.loss(outputs, label_vars)
+          # TODO take weights into account here.
+          loss_value = torch.mean(loss_value_per_example)
           loss_value.backward()
           learner.optimizer.step()
           learner.optimizer.zero_grad()
+
+          # TODO update weights using loss_value_per_example
 
           # Accumulate statistics
           batch_size = input_vars[0].size()[0]
@@ -127,7 +127,8 @@ def TrainModels(
 
       for net_idx, learner in enumerate(learners):
         outputs = learner.net(input_vars)
-        loss_value = train_settings.loss(outputs, label_vars)
+        loss_value_per_example = train_settings.loss(outputs, label_vars)
+        loss_value = torch.mean(loss_value_per_example)
 
         batch_size = input_vars[0].size()[0]
         validation_examples[net_idx] += batch_size

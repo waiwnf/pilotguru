@@ -19,6 +19,7 @@ LABEL_DIMENSIONS = 'label_dimensions'
 DROPOUT_PROB = 'dropout_prob'
 NET_OPTIONS = 'net_options'
 LEARNING_RATE = 'learning_rate'
+LOSS_NORM_POW = 'loss_norm_pow'
 MAX_HORIZONTAL_SHIFT_PIXELS = 'max_horizontal_shift_pixels'
 HORIZONTAL_LABEL_SHIFT_RATE = 'horizontal_label_shift_rate'
 TRAIN_BLUR_SIGMA = 'train_blur_sigma'
@@ -126,7 +127,7 @@ def MakeTrainer(
     learners.append(optimize.Learner(net, optimizer, lr_scheduler))
 
   train_settings = optimize.TrainSettings(
-      optimize.SingleLabelLoss(optimize.MSELoss()),
+      optimize.SingleLabelLoss(optimize.PowerLoss(all_settings[LOSS_NORM_POW])),
       epochs)
   
   data_element_names = all_settings[INPUT_NAMES] + all_settings[LABEL_NAMES]
