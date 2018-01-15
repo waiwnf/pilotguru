@@ -1,4 +1,7 @@
+from scipy.misc import imresize
+import types
 import math
+import numpy as np
 
 import torch
 import torch.nn as nn
@@ -54,9 +57,9 @@ def MakeActivation(in_shape, activation_type):
   out_shape = in_shape
   layer = None
   if activation_type == RELU:
-    layer = lambda x : nn.functional.relu(x)
+    layer = nn.ReLU()
   elif activation_type == SELU:
-    layer = lambda x : nn.functional.selu(x)
+    layer = nn.SELU()
   else:
     assert False, 'Unknown activation type: %s' % (activation_type,)
   return layer, out_shape
@@ -156,8 +159,70 @@ class SequentialNet(nn.Module):
     assert len(x) == 1
     result = x[0]
     for layer in self.layers:
+      print(layer)
       result = layer(result)
     return [result]
+
+  def forward_visualization(self, x):
+
+    out = x
+    activation_list = []
+    necessary_layer_list = []
+    convolution_list = []
+    before_flatten_list = []
+
+    def resize_(x, shape):
+        return torch.autograd.variable.Variable(torch.from_numpy(imresize(x.data.numpy(), shape).astype(np.float32)))
+
+    for layer in self.layers:
+        out = layer(out)
+        if (isinstance(layer, nn.ReLU)):
+            out_mean = out.mean(dim = 1)
+            activation_list.append(out_mean)
+        if (isinstance(layer, nn.Conv2d)):
+            convolution_list.append(layer)
+        if (isinstance(layer, types.FunctionType)):
+            break
+
+        before_flatten_list.append(layer)
+
+    num_activation = len(activation_list)
+    num_convolution = len(convolution_list)
+    convolution_list = list(reversed(convolution_list))
+    activation_list = list(reversed(activation_list))
+    activation_counter = 0
+    backprop_act = None
+    prev_act = None
+    out = None
+    deconv = None
+
+    assert num_activation == num_convolution
+
+    for layer in reversed(before_flatten_list):
+
+        if isinstance(layer, nn.ReLU):
+            conv = convolution_list[activation_counter]
+            kernel_size, stride, padding = conv.kernel_size, conv.stride, conv.padding
+            deconv = nn.modules.ConvTranspose2d(1, 1, kernel_size, stride = stride, padding = padding)
+            deconv.weight = torch.nn.Parameter(torch.FloatTensor(torch.ones(1,1,*kernel_size)))
+            deconv.bias = torch.nn.Parameter(torch.FloatTensor([0]))
+            if type(backprop_act) != torch.autograd.variable.Variable:
+                out = deconv(activation_list[activation_counter].unsqueeze(0)).squeeze(0)
+                prev_act = activation_list[activation_counter + 1]
+                backprop_act = out * prev_act
+            else:
+                out = deconv(backprop_act.unsqueeze(0)).squeeze(0)
+                if activation_counter == len(activation_list) - 1:
+                    return out.data.numpy()[0]
+                prev_act = activation_list[activation_counter + 1]
+                if prev_act.size() != out.size():
+                    out = resize_(out.squeeze(0), shape = prev_act.squeeze(0).data.numpy().shape).unsqueeze(0)
+                backprop_act = out * prev_act
+                
+            activation_counter += 1
+                
+        out = None
+    return backprop_act
 
 class SequentialNetNamedData(SequentialNet):
   def __init__(self, in_shape, options, input_names, label_names):
