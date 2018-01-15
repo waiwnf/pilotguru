@@ -65,6 +65,10 @@ public class MainActivity extends Activity {
   // UI - video preview panel.
   private TextureView videoPreviewTextureView;
 
+  private TextView textViewCoords, textViewIMU, textViewElm327, textViewFps, textViewCamera;
+  private PreviewCoordinatesTextUpdater coordinatesTextUpdater;
+  private PreviewImuTextUpdater imuTextUpdater;
+
   // UI - buttons.
   private ImageButton takePictureButton, settingsButton;
 
@@ -76,6 +80,7 @@ public class MainActivity extends Activity {
   private final LastPacketTimestamp elm327LastPacketTimestamp = new LastPacketTimestamp();
   private final ELM327LastPacketTimestampUpdater elm327LastPacketTimestampUpdater =
       new ELM327LastPacketTimestampUpdater(elm327LastPacketTimestamp);
+  private ELM327StatusTextUpdater elm327StatusTextUpdater;
 
   private CameraDevice cameraDevice;
   private CameraCaptureSession cameraCaptureSession;
@@ -170,8 +175,8 @@ public class MainActivity extends Activity {
           cameraCaptureSession.close();
           final int displayRotationEnum = getWindowManager().getDefaultDisplay().getRotation();
           final Surface videoRecorderSurface = recorder.start(effectiveCamcorderProfile(),
-              (TextView) findViewById(R.id.textview_fps),
-              (TextView) findViewById(R.id.textview_camera),
+              textViewFps,
+              textViewCamera,
               displayRotationEnum,
               getCameraCharacteristics());
           createCameraSession(cameraDevice,
@@ -216,6 +221,21 @@ public class MainActivity extends Activity {
     if (settingsButton == null) {
       throw new AssertionError("Settings button not found in resources.");
     }
+
+    textViewCoords = (TextView) findViewById(R.id.textview_coords);
+    coordinatesTextUpdater = new PreviewCoordinatesTextUpdater(textViewCoords);
+
+    textViewIMU = (TextView) findViewById(R.id.textview_imu);
+    imuTextUpdater = new PreviewImuTextUpdater(TimeUnit.MILLISECONDS.toNanos(500), textViewIMU);
+
+    textViewElm327 = (TextView) findViewById(R.id.textview_elm327);
+    elm327StatusTextUpdater = new ELM327StatusTextUpdater(TimeUnit.MILLISECONDS.toNanos(500),
+        TimeUnit.SECONDS.toNanos(1),
+        elm327LastPacketTimestamp,
+        textViewElm327);
+
+    textViewFps = (TextView) findViewById(R.id.textview_fps);
+    textViewCamera= (TextView) findViewById(R.id.textview_camera);
   }
 
   @Override
@@ -253,6 +273,7 @@ public class MainActivity extends Activity {
   @Override
   protected void onStop() {
     maybeStopRecording();
+    disconnectSensors();
     if (cameraDevice != null) {
       closeCamera();
     }
@@ -322,16 +343,9 @@ public class MainActivity extends Activity {
 
     subscribeToLocationUpdates(recorder.getSensorDataSaver(), 20 /* minTimeMsec */);
     subscribeToImuUpdates(recorder.getSensorDataSaver(), SensorManager.SENSOR_DELAY_FASTEST);
-    subscribeToLocationUpdates(new PreviewCoordinatesTextUpdater((TextView) findViewById(R.id.textview_coords)),
-        500 /* minTimeMsec */);
-    subscribeToImuUpdates(
-        new PreviewImuTextUpdater(TimeUnit.MILLISECONDS.toNanos(500),
-            (TextView) findViewById(R.id.textview_imu)),
-        SensorManager.SENSOR_DELAY_NORMAL);
-    subscribeToImuUpdates(new ELM327StatusTextUpdater(TimeUnit.MILLISECONDS.toNanos(500),
-        TimeUnit.SECONDS.toNanos(1),
-        elm327LastPacketTimestamp,
-        (TextView) findViewById(R.id.textview_elm327)), SensorManager.SENSOR_DELAY_NORMAL);
+    subscribeToLocationUpdates(coordinatesTextUpdater, 500 /* minTimeMsec */);
+    subscribeToImuUpdates(imuTextUpdater, SensorManager.SENSOR_DELAY_NORMAL);
+    subscribeToImuUpdates(elm327StatusTextUpdater, SensorManager.SENSOR_DELAY_NORMAL);
 
     final boolean isLogPressures = prefs.getBoolean(PREF_LOG_PRESSURES, false);
     if (isLogPressures) {
@@ -339,6 +353,17 @@ public class MainActivity extends Activity {
     }
 
     maybeConnectCamera();
+  }
+
+  private synchronized void disconnectSensors() {
+    final SensorManager sm = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
+    sm.unregisterListener(recorder.getSensorDataSaver());
+    sm.unregisterListener(imuTextUpdater);
+    sm.unregisterListener(elm327StatusTextUpdater);
+
+    final LocationManager locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
+    locationManager.removeUpdates(coordinatesTextUpdater);
+    locationManager.removeUpdates(recorder.getSensorDataSaver());
   }
 
   private synchronized void maybeConnectCamera() {
