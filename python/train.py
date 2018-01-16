@@ -30,6 +30,7 @@ if __name__ == '__main__':
   parser.add_argument('--net_head_dims', type=int, default=10,
       help='Dimensionality of the penultimate layer (just before the actual '
           'predictions)')
+  parser.add_argument('--net_calibration_bias_dims', type=int, default=3)
   parser.add_argument('--num_nets_to_train', type=int, default=1,
       help='How many identically structured models to train simultaneously.')
   parser.add_argument(
@@ -72,6 +73,7 @@ if __name__ == '__main__':
     training_helpers.TARGET_HEIGHT: args.target_height,
     training_helpers.TARGET_WIDTH: args.target_width,
     training_helpers.NET_HEAD_DIMS: args.net_head_dims,
+    training_helpers.NET_CALIBRATION_BIAS_DIMS: args.net_calibration_bias_dims,
     training_helpers.LABEL_DIMENSIONS: args.label_dimensions,
     training_helpers.DROPOUT_PROB: args.dropout_prob,
     training_helpers.NET_OPTIONS: json.loads(args.net_options),

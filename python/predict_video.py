@@ -71,6 +71,7 @@ if __name__ == '__main__':
             net_settings[training_helpers.TARGET_HEIGHT],
             net_settings[training_helpers.TARGET_WIDTH]],
         head_dims=net_settings[training_helpers.NET_HEAD_DIMS],
+        calibration_bias_dims=net_settings[NET_CALIBRATION_BIAS_DIMS],
         out_dims=net_settings[training_helpers.LABEL_DIMENSIONS],
         dropout_prob=net_settings[training_helpers.DROPOUT_PROB],
         options=net_settings[training_helpers.NET_OPTIONS])

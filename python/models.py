@@ -21,8 +21,6 @@ FORWARD_AXIS = 'forward_axis'
 FRAME_IMG = 'frame_img'
 STEERING = 'steering'
 
-FORWARD_AXIS_DIMS = 3
-
 def ConvOutSize(in_size, kernel_size, stride=1, padding=0, dilation=1):
   return math.floor(
       (in_size + 2 * padding - dilation * (kernel_size - 1) - 1) / stride + 1)
@@ -215,7 +213,14 @@ class ToyConvNet(SequentialNetNamedData):
 
 class NvidiaSingleFrameNet(ImageWithAxisNet):
 
-  def __init__(self, in_shape, out_dims, dropout_prob, options, head_dims=10):
+  def __init__(
+      self,
+      in_shape,
+      out_dims,
+      dropout_prob,
+      options,
+      head_dims=10,
+      calibration_bias_dims=3):
     super(NvidiaSingleFrameNet, self).__init__(in_shape, options)
     self.conv1, self.c1_norm, self.c1_act, self.c1_drop = self.AddConvBlock(
         24, 5, 2, dropout_prob)
@@ -239,7 +244,8 @@ class NvidiaSingleFrameNet(ImageWithAxisNet):
     self.fc4, self.fc4_norm, self.fc14_act, self.fc4_drop = self.AdFcBlock(
         head_dims, 0)
 
-    self.fc_final = nn.Linear(head_dims + FORWARD_AXIS_DIMS, out_dims)
+    self.fc_final = nn.Linear(head_dims + calibration_bias_dims, out_dims)
+    self.fc_final.weight.data[:,head_dims:] = 0
 
 
 class UdacityRamboNet(nn.Module):
@@ -382,7 +388,14 @@ class UdacityRamboNet(nn.Module):
 
 class RamboCommaNet(ImageWithAxisNet):
 
-  def __init__(self, in_shape, out_dims, dropout_prob, options, head_dims=10):
+  def __init__(
+      self,
+      in_shape,
+      out_dims,
+      dropout_prob,
+      options,
+      head_dims=10,
+      calibration_bias_dims=3):
     super(RamboCommaNet, self).__init__(in_shape, options)
 
     self.conv1, self.c1_norm, self.c1_act, self.c1_drop = self.AddConvBlock(
@@ -402,7 +415,8 @@ class RamboCommaNet(ImageWithAxisNet):
     self.fc2 = self.AddLinear(head_dims)
     self.AddActivation(RELU)
 
-    self.fc_final = nn.Linear(head_dims + FORWARD_AXIS_DIMS, out_dims)
+    self.fc_final = nn.Linear(head_dims + calibration_bias_dims, out_dims)
+    self.fc_final.weight.data[:,head_dims:] = 0
 
 
 class RamboNVidiaNet(ImageWithAxisNet):
@@ -414,7 +428,8 @@ class RamboNVidiaNet(ImageWithAxisNet):
         out_dims,
         dropout_prob,
         options,
-        head_dims=10):
+        head_dims=10,
+        calibration_bias_dims=3):
     super(RamboNVidiaNet, self).__init__(in_shape, options)
 
     if not skip_first_conv_layer:
@@ -443,12 +458,20 @@ class RamboNVidiaNet(ImageWithAxisNet):
     self.fc3 = self.AddLinear(head_dims)
     self.AddActivation(RELU)
 
-    self.fc_final = nn.Linear(head_dims + FORWARD_AXIS_DIMS, out_dims)
+    self.fc_final = nn.Linear(head_dims + calibration_bias_dims, out_dims)
+    self.fc_final.weight.data[:,head_dims:] = 0
 
 
 class DeepNVidiaNet(ImageWithAxisNet):
 
-  def __init__(self, in_shape, out_dims, dropout_prob, options, head_dims=10):
+  def __init__(
+      self,
+      in_shape,
+      out_dims,
+      dropout_prob,
+      options,
+      head_dims=10,
+      calibration_bias_dims=3):
     super(DeepNVidiaNet, self).__init__(in_shape, options)
 
     self.conv1, self.c1_norm, self.c1_act, self.c1_drop = self.AddConvBlock(
@@ -478,7 +501,8 @@ class DeepNVidiaNet(ImageWithAxisNet):
     self.fc3 = self.AddLinear(head_dims)
     self.AddActivation(self.options[FC][ACTIVATION])
 
-    self.fc_final = nn.Linear(head_dims + FORWARD_AXIS_DIMS, out_dims)
+    self.fc_final = nn.Linear(head_dims + calibration_bias_dims, out_dims)
+    self.fc_final.weight.data[:,head_dims:] = 0
 
 
 NVIDIA_NET_NAME = 'nvidia'
@@ -489,24 +513,61 @@ RAMBO_NVIDIA_SHALLOW_NET_NAME = 'rambo-nvidia-shallow'
 DEEP_NVIDIA_NET_NAME = 'nvidia-deep'
 
 def MakeNetwork(
-  net_name, in_shape, head_dims, out_dims, dropout_prob, options=None):
+    net_name,
+    in_shape,
+    head_dims,
+    calibration_bias_dims,
+    out_dims,
+    dropout_prob,
+    options=None):
   if net_name == NVIDIA_NET_NAME:
     return NvidiaSingleFrameNet(
-        in_shape, out_dims, dropout_prob, options, head_dims=head_dims)
+        in_shape,
+        out_dims,
+        dropout_prob,
+        options,
+        head_dims=head_dims,
+        calibration_bias_dims=calibration_bias_dims)
   elif net_name == RAMBO_NET_NAME:
     return UdacityRamboNet(
-        in_shape, out_dims, dropout_prob, head_dims=head_dims)
+        in_shape,
+        out_dims,
+        dropout_prob,
+        head_dims=head_dims,
+        calibration_bias_dims=calibration_bias_dims)
   elif net_name == RAMBO_COMMA_NET_NAME:
     return RamboCommaNet(
-        in_shape, out_dims, dropout_prob, options, head_dims=head_dims)
+        in_shape,
+        out_dims,
+        dropout_prob,
+        options,
+        head_dims=head_dims,
+        calibration_bias_dims=calibration_bias_dims)
   elif net_name == RAMBO_NVIDIA_DEEP_NET_NAME:
     return RamboNVidiaNet(
-        False, in_shape, out_dims, dropout_prob, options, head_dims=head_dims)
+        False,
+        in_shape,
+        out_dims,
+        dropout_prob,
+        options,
+        head_dims=head_dims,
+        calibration_bias_dims=calibration_bias_dims)
   elif net_name == RAMBO_NVIDIA_SHALLOW_NET_NAME:
     return RamboNVidiaNet(
-        True, in_shape, out_dims, dropout_prob, options, head_dims=head_dims)
+        True,
+        in_shape,
+        out_dims,
+        dropout_prob,
+        options,
+        head_dims=head_dims,
+        calibration_bias_dims=calibration_bias_dims)
   elif net_name == DEEP_NVIDIA_NET_NAME:
     return DeepNVidiaNet(
-        in_shape, out_dims, dropout_prob, options, head_dims=head_dims)
+        in_shape,
+        out_dims,
+        dropout_prob,
+        options,
+        head_dims=head_dims,
+        calibration_bias_dims=calibration_bias_dims)
   else:
     assert False, ('Unknown network name: %s' % (net_name,))

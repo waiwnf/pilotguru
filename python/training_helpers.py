@@ -15,6 +15,7 @@ IN_CHANNELS = 'in_channels'
 TARGET_HEIGHT = 'target_height'
 TARGET_WIDTH = 'target_width'
 NET_HEAD_DIMS = 'net_head_dims'
+NET_CALIBRATION_BIAS_DIMS = 'net_calibration_bias_dims'
 LABEL_DIMENSIONS = 'label_dimensions'
 DROPOUT_PROB = 'dropout_prob'
 NET_OPTIONS = 'net_options'
@@ -106,6 +107,7 @@ def MakeTrainer(
             all_settings[TARGET_HEIGHT],
             all_settings[TARGET_WIDTH]],
         head_dims=all_settings[NET_HEAD_DIMS],
+        calibration_bias_dims=all_settings[NET_CALIBRATION_BIAS_DIMS],
         out_dims=all_settings[LABEL_DIMENSIONS],
         dropout_prob=all_settings[DROPOUT_PROB],
         options=all_settings[NET_OPTIONS])
