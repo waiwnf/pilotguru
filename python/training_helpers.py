@@ -8,16 +8,12 @@ import numpy as np
 import torch.utils.data
 
 SETTINGS_ID = 'settings_id'
-NET_NAME = 'net_name'
 INPUT_NAMES = 'input_names'
 LABEL_NAMES = 'label_names'
 IN_CHANNELS = 'in_channels'
 TARGET_HEIGHT = 'target_height'
 TARGET_WIDTH = 'target_width'
-NET_HEAD_DIMS = 'net_head_dims'
 NET_CALIBRATION_BIAS_DIMS = 'net_calibration_bias_dims'
-LABEL_DIMENSIONS = 'label_dimensions'
-DROPOUT_PROB = 'dropout_prob'
 NET_OPTIONS = 'net_options'
 LEARNING_RATE = 'learning_rate'
 LOSS_NORM_POW = 'loss_norm_pow'
@@ -101,16 +97,11 @@ def MakeTrainer(
   learners = []
   for net_idx in range(num_nets_to_train):
     net = models.MakeNetwork(
-        all_settings[NET_NAME],
         in_shape=[
             all_settings[IN_CHANNELS],
             all_settings[TARGET_HEIGHT],
             all_settings[TARGET_WIDTH]],
-        head_dims=all_settings[NET_HEAD_DIMS],
-        calibration_bias_dims=all_settings[NET_CALIBRATION_BIAS_DIMS],
-        out_dims=all_settings[LABEL_DIMENSIONS],
-        dropout_prob=all_settings[DROPOUT_PROB],
-        options=all_settings[NET_OPTIONS])
+        options=all_settings)
     assert net.InputNames() == all_settings[INPUT_NAMES]
     assert net.LabelNames() == all_settings[LABEL_NAMES]
 
