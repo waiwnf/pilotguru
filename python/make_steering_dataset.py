@@ -19,6 +19,7 @@ import numpy as np
 
 import image_helpers
 import io_helpers
+import models
 
 _FRAME_ID = 'frame_id'
 _ANGULAR_VELOCITY = 'angular_velocity'
@@ -148,6 +149,19 @@ def LabelDataWithLookaheads(raw_labels, write_indices, lookaheads):
             for lookahead in lookaheads], 0]
   return result
 
+def MaybeLoadRecordingIdOneHot(
+    in_recording_id_json_name, recording_id_one_hot_dims):
+  recording_id_onehot = None
+  if in_recording_id_json_name is not None:
+    with open(in_recording_id_json_name) as f:
+      in_recording_id_json = json.load(f)
+    recording_id = in_recording_id_json[models.RECORDING_ID]
+    assert recording_id < recording_id_one_hot_dims
+    recording_id_onehot = np.zeros(
+        [recording_id_one_hot_dims], dtype=np.float32)
+    recording_id_onehot[recording_id] = 1.0
+  return recording_id_onehot
+
 def AnnotateFramesSteering(
     annotate_frames_bin,
     frames_json,
@@ -199,6 +213,8 @@ if __name__ == '__main__':
     '--in_forward_axis_json', required=True,
     help='Vehicle forward motion axis direction in smartphone-local ' + 
       'reference frame, produced by fit_motion.')
+  parser.add_argument('--in_recording_id_json', default=None)
+  parser.add_argument('--recording_id_one_hot_dims', type=int, default=100)
   parser.add_argument('--crop_settings_json', required=True)
   parser.add_argument(
     '--min_forward_velocity_m_s', type=float, default=0.0,
@@ -243,6 +259,9 @@ if __name__ == '__main__':
   args = parser.parse_args()
 
   forward_axis = io_helpers.LoadForwardAxis(args.in_forward_axis_json)
+  recording_id_onehot = MaybeLoadRecordingIdOneHot(
+      args.in_recording_id_json, args.recording_id_one_hot_dims)
+
   with open(args.crop_settings_json) as crop_settings_file:
     crop_settings_json = json.load(crop_settings_file)
   crop_settings = crop_settings_json['crop_settings']
@@ -398,9 +417,13 @@ if __name__ == '__main__':
     steering = np.squeeze(steering_labels_data, axis=0)
 
     sample_out_name = OutFileName(args.out_dir, out_frame_id, 'data')
-    np.savez_compressed(
-      sample_out_name,
-      frame_img=frame_img,
-      steering=steering.astype(np.float32),
-      forward_axis=forward_axis)
+    out_data = {
+      models.FRAME_IMG: frame_img,
+      models.STEERING: steering.astype(np.float32),
+      models.FORWARD_AXIS: forward_axis
+    }
+    if recording_id_onehot is not None:
+      out_data[models.RECORDING_ID] = recording_id_onehot
+    
+    np.savez_compressed(sample_out_name, **out_data)
     total_samples_written += 1

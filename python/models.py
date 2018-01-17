@@ -21,6 +21,7 @@ BATCHNORM = 'batchnorm'
 FORWARD_AXIS = 'forward_axis'
 FRAME_IMG = 'frame_img'
 STEERING = 'steering'
+RECORDING_ID = 'recording_id'
 
 NET_NAME = 'net_name'
 
