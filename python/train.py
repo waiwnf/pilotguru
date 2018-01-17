@@ -30,7 +30,13 @@ if __name__ == '__main__':
   parser.add_argument('--net_head_dims', type=int, default=10,
       help='Dimensionality of the penultimate layer (just before the actual '
           'predictions)')
-  parser.add_argument('--net_calibration_bias_dims', type=int, default=3)
+  parser.add_argument(
+      '--linear_bias_options',
+      default=json.dumps([
+          {
+              training_helpers.INPUT_NAME: models.FORWARD_AXIS,
+              training_helpers.INPUT_DIMS: 3
+          }]))
   parser.add_argument('--num_nets_to_train', type=int, default=1,
       help='How many identically structured models to train simultaneously.')
   parser.add_argument(
@@ -76,6 +82,7 @@ if __name__ == '__main__':
     models.LABEL_DIMENSIONS: args.label_dimensions,
     models.DROPOUT_PROB: args.dropout_prob,
     models.LAYER_BLOCKS_OPTIONS: json.loads(args.net_options),
+    training_helpers.LINEAR_BIAS_OPTIONS: json.loads(args.linear_bias_options),
     training_helpers.OPTIMIZER: args.optimizer,
     training_helpers.LEARNING_RATE: args.learning_rate,
     training_helpers.LOSS_NORM_POW: args.loss_norm_pow,

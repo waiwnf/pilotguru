@@ -28,6 +28,10 @@ EXAMPLE_LABEL_EXTRA_WEIGHT_SCALE = 'example_lable_extra_weight_scale'
 DO_PCA_RANDOM_SHIFTS = 'do_pca_random_shifts'
 OPTIMIZER = 'optimizer'
 PLATEAU_PATIENCE_EPOCHS = 'plateau_patience_epochs'
+LINEAR_BIAS_OPTIONS = 'linear_bias_options'
+
+INPUT_DIMS = 'input_dims'
+INPUT_NAME = 'input_name'
 
 ADAM = 'adam'
 SGD = 'sgd'
@@ -96,12 +100,18 @@ def MakeTrainer(
     preload_weight_names=None):
   learners = []
   for net_idx in range(num_nets_to_train):
+    bias_modules = [
+        models.LinearBias(
+            m[INPUT_DIMS], all_settings[models.LABEL_DIMENSIONS], m[INPUT_NAME])
+        for m in all_settings[LINEAR_BIAS_OPTIONS]]
+
     net = models.MakeNetwork(
         in_shape=[
             all_settings[IN_CHANNELS],
             all_settings[TARGET_HEIGHT],
             all_settings[TARGET_WIDTH]],
-        options=all_settings)
+        options=all_settings,
+        post_transform_modules=bias_modules)
     assert net.InputNames() == all_settings[INPUT_NAMES]
     assert net.LabelNames() == all_settings[LABEL_NAMES]
 

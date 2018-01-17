@@ -548,25 +548,24 @@ RAMBO_NVIDIA_DEEP_NET_NAME = 'rambo-nvidia-deep'
 RAMBO_NVIDIA_SHALLOW_NET_NAME = 'rambo-nvidia-shallow'
 DEEP_NVIDIA_NET_NAME = 'nvidia-deep'
 
-def MakeNetwork(in_shape, options):
-  forward_bias = LinearBias(3, options[LABEL_DIMENSIONS], FORWARD_AXIS)
+def MakeNetwork(in_shape, options, post_transform_modules):
   net_name = options[NET_NAME]
   if net_name == NVIDIA_NET_NAME:
     return NvidiaSingleFrameNet(
-        in_shape, options, post_transform_modules=[forward_bias])
+        in_shape, options, post_transform_modules=post_transform_modules)
   elif net_name == RAMBO_NET_NAME:
     return UdacityRamboNet(in_shape, options)
   elif net_name == RAMBO_COMMA_NET_NAME:
     return RamboCommaNet(
-        in_shape, options, post_transform_modules=[forward_bias])
+        in_shape, options, post_transform_modules=post_transform_modules)
   elif net_name == RAMBO_NVIDIA_DEEP_NET_NAME:
     return RamboNVidiaNet(
-        False, in_shape, options, post_transform_modules=[forward_bias])
+        False, in_shape, options, post_transform_modules=post_transform_modules)
   elif net_name == RAMBO_NVIDIA_SHALLOW_NET_NAME:
     return RamboNVidiaNet(
-        True, in_shape, options, post_transform_modules=[forward_bias])
+        True, in_shape, options, post_transform_modules=post_transform_modules)
   elif net_name == DEEP_NVIDIA_NET_NAME:
     return DeepNVidiaNet(
-        in_shape, options, post_transform_modules=[forward_bias])
+        in_shape, options, post_transform_modules=post_transform_modules)
   else:
     assert False, ('Unknown network name: %s' % (net_name,))
