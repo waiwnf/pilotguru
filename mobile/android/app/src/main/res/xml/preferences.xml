@@ -74,6 +74,10 @@
         android:selectAllOnFocus="true"
         android:singleLine="true"
         android:title="CAN ID mask"/>
+    <CheckBoxPreference
+        android:key="pref_log_pressures"
+        android:title="Log barometer readings"
+        android:defaultValue="false" />
     <Preference
         android:key="probe"
         android:title="Probe Camera2 Features">

@@ -12,4 +12,6 @@ public class SettingsConstants {
   public static final String PREF_ELM327_DEVICES = "pref_elm327_devices";
   public static final String PREF_CAN_ID_FILTER = "pref_can_id_filter";
   public static final String PREF_CAN_ID_MASK = "pref_can_id_mask";
+
+  public static final String PREF_LOG_PRESSURES = "pref_log_pressures";
 }

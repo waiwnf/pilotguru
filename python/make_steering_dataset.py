@@ -14,9 +14,11 @@ import os
 import subprocess
 
 import scipy.misc
+import skvideo.io
 import numpy as np
 
 import image_helpers
+import io_helpers
 
 _FRAME_ID = 'frame_id'
 _ANGULAR_VELOCITY = 'angular_velocity'
@@ -161,16 +163,6 @@ def AnnotateFramesSteering(
       '--out_json', steering_frames_json_name] + 
       _SMOOTHING_SETTINGS_BY_STEERING_SOURCE[steering_source])
 
-def LoadForwardAxis(forward_axis_json_filename):
-  with open(forward_axis_json_filename) as forward_axis_file:
-      forward_axis_json = json.load(forward_axis_file)
-      forward_axis_dict = forward_axis_json['forward_axis']
-      return np.array([
-          forward_axis_dict['x'],
-          forward_axis_dict['y'],
-          forward_axis_dict['z']],
-        dtype=np.float32)
-
 # Interpret the steering data as either angular velocity from IMU or steering
 # wheel turn angle from the CAN bus and apply the appropriate multiplier to
 # bring the data to the uniform scale.
@@ -250,7 +242,7 @@ if __name__ == '__main__':
 
   args = parser.parse_args()
 
-  forward_axis = LoadForwardAxis(args.in_forward_axis_json)
+  forward_axis = io_helpers.LoadForwardAxis(args.in_forward_axis_json)
   with open(args.crop_settings_json) as crop_settings_file:
     crop_settings_json = json.load(crop_settings_file)
   crop_settings = crop_settings_json['crop_settings']
@@ -320,12 +312,13 @@ if __name__ == '__main__':
       args.steering_source)
 
   # Open the video file for reading the frames.
-  frames_generator = image_helpers.VideoFrameGenerator(args.in_video)
+  frames_generator = skvideo.io.vreader(args.in_video)
 
   # Id of previous frame for which the data was written out.
   prev_saved_frame_id = None
   prev_seen_frame_data_id = None
   total_samples_written = 0
+  frame_index = 0
   for frame_data in frames_data:
     # Skip if no steering data
     if frame_data.steering_generic_value is None:
@@ -351,9 +344,11 @@ if __name__ == '__main__':
     prev_seen_frame_data_id = frame_id
 
     # Skip video frames until we get to the requested frame id.
-    raw_frame, frame_index = next(frames_generator)
+    raw_frame = next(frames_generator)
+    frame_index += 1
     while frame_index < frame_id:
-      raw_frame, frame_index = next(frames_generator)
+      raw_frame = next(frames_generator)
+      frame_index += 1
     assert frame_index == frame_id
     history_index = frame_index % raw_history_size
     frame_chw, frame_hwc = FrameToModelInput(
