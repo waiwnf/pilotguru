@@ -62,7 +62,7 @@ RUN pip3 install http://download.pytorch.org/whl/cu90/torch-0.3.0.post4-cp35-cp3
 
 # CPU-only tensorflow since we only actually use tensorboard, and
 # tensorflow does not support CUDA9 yet.
-RUN pip3 install torchvision jupyter scipy sklearn sk-video tensorflow tensorboard_logger matplotlib gpustat
+RUN pip3 install av torchvision jupyter scipy sklearn sk-video tensorflow tensorboard_logger matplotlib gpustat
 
 # html5lib versioning is somehow messed up and tensorboard fails to
 # start. This somehow installs the versions such that everything works.

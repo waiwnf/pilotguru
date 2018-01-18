@@ -1,5 +1,10 @@
 import random
 
+import re		
+import subprocess		
+		
+import av
+
 import numpy as np
 import scipy.misc
 import scipy.ndimage
@@ -51,6 +56,35 @@ def MaybeResizeHWC(img, height, width):
     effective_height = height if height > 0 else img.shape[0]
     effective_width = width if width > 0 else img.shape[1]
     return scipy.misc.imresize(img, (effective_height, effective_width))
+
+def RawVideoFrameGenerator(filename):		
+  container = av.open(filename)		
+  for packet in container.demux():		
+    for frame in packet.decode():		
+      if isinstance(frame, av.video.frame.VideoFrame):		
+        yield frame		
+		
+def VideoOrientationDegrees(filename):		
+  '''Infers video rotation by parsing  avprobe output.'''		
+  avprobe_outcome = subprocess.run(		
+      ['avprobe', filename], stderr=subprocess.PIPE)		
+  for line in avprobe_outcome.stderr.decode('utf-8').split('\n'):		
+    match_result = re.match('^\s*rotate\s*:\s*([0-9]+)\s*$', line)		
+    if match_result is not None:		
+      return int(match_result.group(1))		
+  return 0  # No rotation information is in the file, hence zero rotation.		
+		
+def Video90RotationTimes(rotation_degrees):		
+  '''Converts rotation in degrees to number of 90-degree rotations.'''		
+  assert rotation_degrees % 90 == 0		
+  return (rotation_degrees % 360) / 90		
+		
+def VideoFrameGenerator(filename):		
+  rotation_times = Video90RotationTimes(VideoOrientationDegrees(filename))		
+  raw_frames_generator = RawVideoFrameGenerator(filename)		
+  for raw_frame in raw_frames_generator:		
+    frame_image_raw = np.asarray(raw_frame.to_image())		
+    yield (np.rot90(frame_image_raw, k=rotation_times), raw_frame.index)
 
 def GetPcaRgbDirections(images_chw):
   # Train data is of size [examples x (frames per example) x C x H x W].
@@ -116,4 +150,3 @@ def MaybeApplyInPlaceTransformLogic(item, transform, apply_probability):
 def MaybeApplyInPlaceTransform(transform, apply_probability):
   return lambda x : MaybeApplyInPlaceTransformLogic(
       x, transform, apply_probability)
-
