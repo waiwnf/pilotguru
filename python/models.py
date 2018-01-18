@@ -170,7 +170,7 @@ class SequentialNet(nn.Module):
 class LinearBias(nn.Module):
   def __init__(self, in_dims, out_dims, in_name):
     super(LinearBias, self).__init__()
-    self.w = nn.Linear(in_dims, out_dims)
+    self.w = nn.Linear(in_dims, out_dims, bias=False)
     self.w.weight.data[...] = 0
     self.in_name = in_name
   
@@ -180,7 +180,7 @@ class LinearBias(nn.Module):
   def forward(self, x):
     pre_bias_value = x[0]
     bias_in = x[1]
-    return torch.add(pre_bias_value, self.w(bias_in))
+    return [torch.add(pre_bias_value, self.w(bias_in))]
 
 class ImageNetWithPostTransforms(SequentialNet):
   """Runs the image through a regular convnet, then applies optional transforms.
@@ -201,12 +201,12 @@ class ImageNetWithPostTransforms(SequentialNet):
   
   def forward(self, x):
     img = x[self.in_img_idx]
-    result = super(ImageNetWithPostTransforms, self).forward([img])[0]
+    result = super(ImageNetWithPostTransforms, self).forward([img])
     for module_idx, post_transform_module in enumerate(
-          self.post_transform_modules):
+        self.post_transform_modules):
       post_transform_in = [x[i] for i in self.in_post_transform_idx[module_idx]]
-      result = post_transform_module.forward([result] + post_transform_in)[0]
-    return [result]
+      result = post_transform_module.forward(result + post_transform_in)
+    return result
 
   def InputNames(self):
     return self.input_names
@@ -270,9 +270,9 @@ class NvidiaSingleFrameNet(ImageNetWithPostTransforms):
     self.fc1, self.fc1_norm, self.fc1_act, self.fc1_drop = self.AdFcBlock(
         1164, dropout_prob)
     self.fc2, self.fc2_norm, self.fc2_act, self.fc2_drop = self.AdFcBlock(
-        100, dropout_prob)
+        max(100, options[NET_HEAD_DIMS]), 0)
     self.fc3, self.fc3_norm, self.fc13_act, self.fc3_drop = self.AdFcBlock(
-        50, 0)
+        max(50, options[NET_HEAD_DIMS]), 0)
     self.fc4, self.fc4_norm, self.fc14_act, self.fc4_drop = self.AdFcBlock(
         options[NET_HEAD_DIMS], 0)
 
@@ -488,9 +488,9 @@ class RamboNVidiaNet(ImageNetWithPostTransforms):
     self.AddFlatten()
 
     self.fc1, self.fc1_norm, self.fc1_act, self.fc1_drop = self.AdFcBlock(
-        100, dropout_prob)
+        1164, dropout_prob)
     self.fc2, self.fc2_norm, self.fc2_act, self.fc2_drop = self.AdFcBlock(
-        1164, 0)
+        max(100, options[NET_HEAD_DIMS]), 0)
 
     self.fc3 = self.AddLinear(options[NET_HEAD_DIMS])
     self.AddActivation(RELU)
@@ -532,9 +532,9 @@ class DeepNVidiaNet(ImageNetWithPostTransforms):
     self.AddFlatten()
 
     self.fc1, self.fc1_norm, self.fc1_act, self.fc1_drop = self.AdFcBlock(
-        100, dropout_prob)
-    self.fc2, self.fc2_norm, self.fc2_act, self.fc2_drop = self.AdFcBlock(
         1164, dropout_prob)
+    self.fc2, self.fc2_norm, self.fc2_act, self.fc2_drop = self.AdFcBlock(
+        max(100, options[NET_HEAD_DIMS]), dropout_prob)
 
     self.fc3 = self.AddLinear(options[NET_HEAD_DIMS])
     self.AddActivation(self.layer_blocks_options[FC][ACTIVATION])
