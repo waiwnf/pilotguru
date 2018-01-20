@@ -33,7 +33,6 @@ def SteeringTrainingRandomShift(
   """
 
   images = item[image_element_idx]  # (maybe batch) x C x H x W
-  labels = item[steering_element_idx]
 
   # Margin to the edge of the source image for a centered crop.
   crop_margin = int((images.shape[-1] - target_width) / 2)
@@ -45,12 +44,24 @@ def SteeringTrainingRandomShift(
       horizontal_shift_fraction * max_horizontal_shift)
   left_boundary = crop_margin + horizontal_shift_pixels
   right_boundary = left_boundary + target_width
-  images = images[...,left_boundary:right_boundary]
+
+  result_substitutions = {}
+  result_substitutions[image_element_idx] = (
+      images[...,left_boundary:right_boundary])
 
   # Adjust the labels to account for the off-center crop shift.
-  labels += horizontal_shift_fraction * horizontal_label_shift_rate
+  result_substitutions[steering_element_idx] = (
+      item[steering_element_idx] +
+      horizontal_shift_fraction * horizontal_label_shift_rate)
 
-  return item
+  # Make a new tuple with the image and label substituted with augmented
+  # modifications.
+  result = tuple(
+      elem if elem_idx not in result_substitutions 
+          else result_substitutions[elem_idx]
+      for elem_idx, elem in enumerate(item))
+
+  return result
 
 def SteeringTrainingRandomShiftTransform(
     image_element_idx,
