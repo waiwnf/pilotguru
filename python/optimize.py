@@ -89,7 +89,7 @@ def TrainModels(
     epoch_start_time = time.time()
     for training_batch in train_loader:
       input_vars, label_vars = DataBatchToVariables(
-          training_batch, num_inputs, num_labels, cuda_device_id)
+          training_batch[:-1], num_inputs, num_labels, cuda_device_id)
 
       for net_idx, learner in enumerate(learners):
         if random.uniform(0.0, 1.0) < batch_use_prob:
@@ -123,7 +123,7 @@ def TrainModels(
 
     for val_batch in val_loader:
       input_vars, label_vars = DataBatchToVariables(
-          val_batch, num_inputs, num_labels, cuda_device_id)
+          val_batch[:-1], num_inputs, num_labels, cuda_device_id)
 
       for net_idx, learner in enumerate(learners):
         outputs = learner.net(input_vars)

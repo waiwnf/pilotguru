@@ -71,7 +71,8 @@ class NumpyFileDataset(torch.utils.data.Dataset):
   
   def __getitem__(self, idx):
     data_file_loaded = np.load(self.data_files[idx])
-    return tuple(data_file_loaded[x] for x in self.element_names)
+    return tuple(data_file_loaded[x] for x in self.element_names) + (
+        np.array([idx], dtype=np.int64),)
 
 class InMemoryNumpyDataset(torch.utils.data.Dataset):
   def __init__(self, data):
@@ -83,7 +84,8 @@ class InMemoryNumpyDataset(torch.utils.data.Dataset):
     return self.data[0].shape[0]
   
   def __getitem__(self, idx):
-    return tuple(np.copy(element[idx, ...]) for element in self.data)
+    return tuple(np.copy(element[idx, ...]) for element in self.data) + (
+        np.array([idx], dtype=np.int64),)
 
 class ImageFrameDataset(torch.utils.data.Dataset):
   """Dataset for data files with images (byte per channel).
