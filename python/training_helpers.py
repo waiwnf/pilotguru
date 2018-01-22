@@ -2,6 +2,7 @@ import augmentation
 import io_helpers
 import models
 import optimize
+import sample_weighting
 
 import numpy as np
 
@@ -99,6 +100,11 @@ def MakeTrainer(
     cuda_device_id=0,
     preload_weight_names=None):
   learners = []
+
+  data_element_names = all_settings[INPUT_NAMES] + all_settings[LABEL_NAMES]
+  image_element_idx = data_element_names.index(models.FRAME_IMG)
+  steering_element_idx = data_element_names.index(models.STEERING)
+
   for net_idx in range(num_nets_to_train):
     bias_modules = [
         models.LinearBias(
@@ -127,15 +133,16 @@ def MakeTrainer(
     if all_settings[PLATEAU_PATIENCE_EPOCHS] > 0:
       lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
           optimizer, factor=0.5, patience=all_settings[PLATEAU_PATIENCE_EPOCHS])
-    learners.append(optimize.Learner(net, optimizer, lr_scheduler))
+    sample_weighter = sample_weighting.LabelL1Weighter(
+        all_settings[EXAMPLE_LABEL_EXTRA_WEIGHT_SCALE],
+        np.mean(
+            np.abs(train_data[steering_element_idx]), axis=1, keepdims=False))
+    learners.append(
+        optimize.Learner(net, optimizer, lr_scheduler, sample_weighter))
 
   train_settings = optimize.TrainSettings(
       optimize.SingleLabelLoss(optimize.PowerLoss(all_settings[LOSS_NORM_POW])),
       epochs)
-  
-  data_element_names = all_settings[INPUT_NAMES] + all_settings[LABEL_NAMES]
-  image_element_idx = data_element_names.index(models.FRAME_IMG)
-  steering_element_idx = data_element_names.index(models.STEERING)
 
   random_shift_directions = None
   if all_settings[DO_PCA_RANDOM_SHIFTS]:

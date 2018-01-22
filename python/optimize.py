@@ -4,6 +4,8 @@ import random
 import time
 from collections import namedtuple
 
+import numpy as np
+
 import tensorboard_logger
 import torch
 import torch.nn
@@ -16,7 +18,9 @@ EPOCH_DURATION_SEC = 'epoch_duration_sec'
 EXAMPLES_PER_SEC = 'examples_per_sec'
 
 TrainSettings = namedtuple('TrainSettings', ['loss', 'epochs'])
-Learner = namedtuple('Learner', ['net', 'optimizer', 'lr_scheduler'])
+Learner = namedtuple(
+    'Learner',
+    ['net', 'optimizer', 'lr_scheduler', 'weighter'])
 
 class SingleLabelLoss(torch.nn.Module):
   """Unwraps labels and predictions for a common case of only one prediction."""
@@ -56,10 +60,19 @@ def AverageLosses(total_losses, total_examples):
 
 def DataBatchToVariables(batch, num_inputs, num_labels, cuda_device_id):
   assert len(batch) == num_inputs + num_labels
-  input_vars = [Variable(x, requires_grad=False).cuda(cuda_device_id) for x in batch[:num_inputs]]
+  input_vars = [
+      Variable(x, requires_grad=False).cuda(cuda_device_id)
+      for x in batch[:num_inputs]]
   label_vars = [Variable(x, requires_grad=False).cuda(cuda_device_id)
       for x in batch[num_inputs:(num_inputs + num_labels)]]
   return input_vars, label_vars
+
+def MakeWeightsVariable(weighter, indices, cuda_device_id):
+  example_weights_numpy = weighter.GetWeights(indices)
+  example_weights_cuda = Variable(
+      torch.from_numpy(example_weights_numpy), requires_grad=False).cuda(
+          cuda_device_id)
+  return example_weights_cuda
 
 def TrainModels(
     learners,
@@ -90,19 +103,28 @@ def TrainModels(
     for training_batch in train_loader:
       input_vars, label_vars = DataBatchToVariables(
           training_batch[:-1], num_inputs, num_labels, cuda_device_id)
+      example_indices = torch.squeeze(training_batch[-1], dim=1)
 
       for net_idx, learner in enumerate(learners):
         if random.uniform(0.0, 1.0) < batch_use_prob:
+          # Read the weights.
+          example_weights = MakeWeightsVariable(
+              learner.weighter, example_indices, cuda_device_id)
+
           # forward + backward + optimize
           outputs = learner.net(input_vars)
           loss_value_per_example = train_settings.loss(outputs, label_vars)
-          # TODO take weights into account here.
-          loss_value = torch.mean(loss_value_per_example)
+          
+          # TODO track unweighted losses separately.
+          loss_value = torch.mean(
+              torch.mul(loss_value_per_example, example_weights))
           loss_value.backward()
           learner.optimizer.step()
           learner.optimizer.zero_grad()
 
           # TODO update weights using loss_value_per_example
+          learner.weighter.RegisterLosses(
+              example_indices, np.asarray(loss_value_per_example))
 
           # Accumulate statistics
           batch_size = input_vars[0].size()[0]
@@ -119,6 +141,7 @@ def TrainModels(
     validation_examples = [0 for _ in learners]
 
     for learner in learners:
+      learner.weighter.Step()
       learner.net.eval()
 
     for val_batch in val_loader:

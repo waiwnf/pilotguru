@@ -94,7 +94,8 @@ if __name__ == '__main__':
     training_helpers.TRAIN_BLUR_PROB: args.train_blur_prob,
     training_helpers.GRAYSCALE_INTERPOLATE_PROB: args.grayscale_interpolate_prob,
     training_helpers.BATCH_SIZE: args.batch_size,
-    training_helpers.EXAMPLE_LABEL_EXTRA_WEIGHT_SCALE: args.example_label_extra_weight_scale,
+    training_helpers.EXAMPLE_LABEL_EXTRA_WEIGHT_SCALE:
+        args.example_label_extra_weight_scale,
     training_helpers.DO_PCA_RANDOM_SHIFTS: args.do_pca_random_shifts
   }
 
