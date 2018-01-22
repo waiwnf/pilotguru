@@ -109,11 +109,11 @@ if __name__ == '__main__':
   parser.add_argument('--cuda_device_ids', default='0')
  
   args = parser.parse_args()
-  train_settings_json_names = glob.glob(args.train_settings_json_glob)
   train_settings_jsons = []
-  for train_settings_json_name in train_settings_json_names:
-    with open(train_settings_json_name) as f:
-      train_settings_jsons.append(json.load(f))
+  for train_settings_json_glob in args.train_settings_json_glob.split(','):
+    for train_settings_json_name in glob.glob(args.train_settings_json_glob):
+      with open(train_settings_json_name) as f:
+        train_settings_jsons.append(json.load(f))
 
   cuda_device_ids = torch.multiprocessing.Array(
       'i', [int(i) for i in args.cuda_device_ids.split(',')])
