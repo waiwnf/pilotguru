@@ -56,13 +56,14 @@ RUN apt-get -y install \
 
 RUN apt-get -y install autoconf libtool psmisc net-tools
 RUN apt-get -y install qtcreator qtbase5-dev
+RUN apt-get -y install python3-zmq libzmq3-dev
 
 RUN apt-get -y install python3-pip
 RUN pip3 install http://download.pytorch.org/whl/cu90/torch-0.3.0.post4-cp35-cp35m-linux_x86_64.whl 
 
 # CPU-only tensorflow since we only actually use tensorboard, and
 # tensorflow does not support CUDA9 yet.
-RUN pip3 install av torchvision jupyter scipy sklearn sk-video tensorflow tensorboard_logger matplotlib gpustat
+RUN pip3 install av torchvision jupyter opencv-python scipy sklearn sk-video tensorflow tensorboard_logger matplotlib gpustat
 
 # html5lib versioning is somehow messed up and tensorboard fails to
 # start. This somehow installs the versions such that everything works.
