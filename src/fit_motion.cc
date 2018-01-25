@@ -58,18 +58,6 @@ DEFINE_string(locations_json, "", "JSON file with GPS locations and derived "
                                   "absolute velocities. Comes from PilotGuru "
                                   "Recorder raw data.");
 
-// Flags to select which stages to run. Each can be done independently of
-// others.
-DEFINE_bool(compute_velocities_from_imu, false,
-            "Whether to compute vehicle forward velocity by autocalibrating "
-            "IMU parameters against the GPS velocity data.");
-DEFINE_bool(compute_steering_raw_rotations, false,
-            "Whether to infer steering angular velocities directly from raw 3D "
-            "rotations data.");
-DEFINE_bool(compute_steering_using_forward_axis, false,
-            "Whether to infer steering angular velocities directly from raw 3D "
-            "rotations data.");
-
 // Outputs
 
 DEFINE_string(velocities_out_json, "",
@@ -77,7 +65,7 @@ DEFINE_string(velocities_out_json, "",
               "velocities derived from accelerometer "
               "data calibrated using GPS coarse-grained "
               "velocities.");
-DEFINE_string(steering_out_json_raw, "",
+DEFINE_string(steering_out_json, "",
               "JSON file to write rotations in the inferred horizontal plane, "
               "derived from raw 3D rotations data from the IMU. Results "
               "intended to closely match the 3D rotation component due to "
@@ -87,13 +75,6 @@ DEFINE_string(forward_axis_out_json, "", "JSON file to write the direction of "
                                          "the vehicle forward axis to. Forward "
                                          "axis direction is in the phone-local "
                                          "reference frame.");
-DEFINE_string(steering_out_json_forward_axis_complementary, "",
-              "JSON file to write rotations in the inferred horizontal plane, "
-              "derived from 3D rotations data from the IMU with rotations "
-              "component around the inferred forward axis subtracted out. "
-              "Results intended to closely match the 3D rotation component due "
-              "to vehicle steering. Horizontal plane is detected via main "
-              "principal axis of the 3D rotations.");
 
 // Inference parameters.
 
@@ -117,6 +98,10 @@ DEFINE_double(forward_axis_inference_min_velocity_m_s, 5.0,
               "account when computing the forward axis direction. Higher "
               "velocities are more likely to correspond to purely forward "
               "motion (no turning) and have relatively little noise.");
+DEFINE_double(forward_axis_inference_min_rotation_rad, 0.2,
+              "Minimum overall rotation within the sliding window for that "
+              "sliding window to be taken into account for forward axis "
+              "direction inference.");
 
 namespace {
 template <typename T>
@@ -153,13 +138,7 @@ ReadGpsVelocities(const string &filename) {
 // rotations in the horizontal plane (corresponding to steering).
 std::vector<double> ComputeAndSaveSteeringAngles(
     const std::vector<pilotguru::TimestampedRotationVelocity> &rotations_3d,
-    int64_t rotation_integration_interval_usec,
-    const std::string &out_json_name) {
-  const cv::Mat pca_axes = pilotguru::GetPrincipalRotationAxes(
-      rotations_3d, rotation_integration_interval_usec);
-  const cv::Vec3d vertical_axis(pca_axes.at<double>(0, 0),
-                                pca_axes.at<double>(0, 1),
-                                pca_axes.at<double>(0, 2));
+    const cv::Vec3d &vertical_axis, const std::string &out_json_name) {
   const std::vector<double> steering_angles =
       GetAngularVelocitiesAroundAxisDirect(rotations_3d, vertical_axis);
   CHECK_EQ(steering_angles.size(), rotations_3d.size());
@@ -178,10 +157,11 @@ void ComputeAndSaveForwardVelocitiesFromImu(
     const std::vector<pilotguru::TimestampedVelocity> &gps_velocities,
     const std::vector<pilotguru::TimestampedRotationVelocity> &rotations,
     const std::vector<pilotguru::TimestampedAcceleration> &accelerations,
-    int64_t locations_batch_size, int64_t locations_shift_step,
-    int64_t max_iters, double post_smoothing_sigma_sec,
-    const std::string &velocities_out_json,
-    Eigen::Vector3d *forward_axis_result,
+    const Eigen::Vector3d &vertical_axis, int64_t locations_batch_size,
+    int64_t locations_shift_step, int64_t max_iters,
+    double post_smoothing_sigma_sec, const std::string &velocities_out_json,
+    double forward_axis_inference_min_velocity_m_s,
+    double forward_axis_inference_min_rotation_rad,
     const std::string &forward_axis_out_json) {
   // Optimizer parameters are the same for all iterations.
   LBFGSpp::LBFGSParam<double> velocity_calibration_params;
@@ -242,16 +222,25 @@ void ComputeAndSaveForwardVelocitiesFromImu(
 
     // Sum up all the velocity measurements, rotated to device-local reference
     // frame, to get an estimate of forward travel direction.
+    double min_rotation_cos = 1.0;
     for (const auto &point : integrated_trajectory) {
-      if (point.second.velocity.norm() >=
-          FLAGS_forward_axis_inference_min_velocity_m_s) {
-        // Conjugate corresponds to inverse rotation for a normalized
-        // quaternion.
-        const Eigen::Quaterniond orientation_inverse =
-            point.second.orientation.conjugate();
-        const Eigen::Vector3d velocity_local_frame =
-            orientation_inverse._transformVector(point.second.velocity);
-        total_velocity_local.add(velocity_local_frame);
+      min_rotation_cos =
+          std::min(min_rotation_cos, std::abs(point.second.orientation.w()));
+    }
+
+    if (std::acos(min_rotation_cos) >=
+        forward_axis_inference_min_rotation_rad) {
+      for (const auto &point : integrated_trajectory) {
+        if (point.second.velocity.norm() >=
+            forward_axis_inference_min_velocity_m_s) {
+          // Conjugate corresponds to inverse rotation for a normalized
+          // quaternion.
+          const Eigen::Quaterniond orientation_inverse =
+              point.second.orientation.conjugate();
+          const Eigen::Vector3d velocity_local_frame =
+              orientation_inverse._transformVector(point.second.velocity);
+          total_velocity_local.add(velocity_local_frame);
+        }
       }
     }
   }
@@ -283,20 +272,24 @@ void ComputeAndSaveForwardVelocitiesFromImu(
       averaged_integrated_velocities, timestamps_sec, timestamps_sec,
       post_smoothing_sigma_sec);
 
-  pilotguru::JsonWriteTimestampedRealData(
-      timestamps_usec, smoothed_velocities, velocities_out_json,
-      pilotguru::kVelocities, pilotguru::kSpeedMS);
+  if (!velocities_out_json.empty()) {
+    pilotguru::JsonWriteTimestampedRealData(
+        timestamps_usec, smoothed_velocities, velocities_out_json,
+        pilotguru::kVelocities, pilotguru::kSpeedMS);
+  }
 
-  CHECK_NOTNULL(forward_axis_result);
-  *forward_axis_result = total_velocity_local.sum();
-  (*forward_axis_result) /= (forward_axis_result->norm() + 1.0);
+  Eigen::Vector3d forward_axis = total_velocity_local.sum();
+  forward_axis -= (vertical_axis * vertical_axis.dot(forward_axis));
+  forward_axis /= (forward_axis.norm() + 1e-5);
 
-  nlohmann::json forward_axis_json_root;
-  auto &forward_axis_json = forward_axis_json_root[pilotguru::kForwardAxis];
-  forward_axis_json[pilotguru::kX] = (*forward_axis_result)(0);
-  forward_axis_json[pilotguru::kY] = (*forward_axis_result)(1);
-  forward_axis_json[pilotguru::kZ] = (*forward_axis_result)(2);
-  pilotguru::WriteJsonFile(forward_axis_json_root, forward_axis_out_json);
+  if (!forward_axis_out_json.empty()) {
+    nlohmann::json forward_axis_json_root;
+    auto &forward_axis_json = forward_axis_json_root[pilotguru::kForwardAxis];
+    forward_axis_json[pilotguru::kX] = forward_axis(0);
+    forward_axis_json[pilotguru::kY] = forward_axis(1);
+    forward_axis_json[pilotguru::kZ] = forward_axis(2);
+    pilotguru::WriteJsonFile(forward_axis_json_root, forward_axis_out_json);
+  }
 }
 }
 
@@ -328,39 +321,30 @@ int main(int argc, char **argv) {
       ReadTimestamp3DData<pilotguru::TimestampedAcceleration>(
           FLAGS_accelerations_json, pilotguru::kAccelerations);
 
-  if (FLAGS_compute_steering_raw_rotations) {
-    CHECK(!FLAGS_steering_out_json_raw.empty());
-    ComputeAndSaveSteeringAngles(
-        rotations, FLAGS_principal_rotation_axis_integration_interval_usec,
-        FLAGS_steering_out_json_raw);
+  const cv::Mat pca_axes = pilotguru::GetPrincipalRotationAxes(
+      rotations, FLAGS_principal_rotation_axis_integration_interval_usec);
+  const cv::Vec3d vertical_axis(pca_axes.at<double>(0, 0),
+                                pca_axes.at<double>(0, 1),
+                                pca_axes.at<double>(0, 2));
+  const Eigen::Vector3d vertical_axis_eigen(pca_axes.at<double>(0, 0),
+                                            pca_axes.at<double>(0, 1),
+                                            pca_axes.at<double>(0, 2));
+
+  if (!FLAGS_steering_out_json.empty()) {
+    ComputeAndSaveSteeringAngles(rotations, vertical_axis,
+                                 FLAGS_steering_out_json);
   }
 
-  Eigen::Vector3d forward_axis = Eigen::Vector3d::Zero();
-  if (FLAGS_compute_velocities_from_imu) {
-    CHECK(!FLAGS_velocities_out_json.empty());
+  if (!FLAGS_velocities_out_json.empty() ||
+      !FLAGS_forward_axis_out_json.empty()) {
     ComputeAndSaveForwardVelocitiesFromImu(
-        gps_velocities, rotations, accelerations, FLAGS_locations_batch_size,
-        FLAGS_locations_shift_step, FLAGS_optimization_iters,
-        FLAGS_post_smoothing_sigma_sec, FLAGS_velocities_out_json,
-        &forward_axis, FLAGS_forward_axis_out_json);
-  }
-
-  if (FLAGS_compute_steering_using_forward_axis) {
-    CHECK(FLAGS_compute_velocities_from_imu);
-
-    const cv::Vec3d forward_axis_cv(forward_axis(0), forward_axis(1),
-                                    forward_axis(2));
-    // Remove the rotations around the vehicle forward axis from the raw
-    // rotations data. This will force the main principal rotation axis to be
-    // orthogonal to the vehicle forward axis.
-    const std::vector<pilotguru::TimestampedRotationVelocity>
-        rotations_no_forward_axis =
-            pilotguru::GetRotationsComplementaryToAxisDirect(rotations,
-                                                             forward_axis_cv);
-    ComputeAndSaveSteeringAngles(
-        rotations_no_forward_axis,
-        FLAGS_principal_rotation_axis_integration_interval_usec,
-        FLAGS_steering_out_json_forward_axis_complementary);
+        gps_velocities, rotations, accelerations, vertical_axis_eigen,
+        FLAGS_locations_batch_size, FLAGS_locations_shift_step,
+        FLAGS_optimization_iters, FLAGS_post_smoothing_sigma_sec,
+        FLAGS_velocities_out_json,
+        FLAGS_forward_axis_inference_min_velocity_m_s,
+        FLAGS_forward_axis_inference_min_rotation_rad,
+        FLAGS_forward_axis_out_json);
   }
 
   return EXIT_SUCCESS;
