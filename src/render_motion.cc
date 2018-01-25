@@ -1,7 +1,6 @@
-// From a video file and a JSON file with veocity and angular velocity on the
-// horizontal plane produced by fit_motion.cc, generates a video tiled with a
-// steering wheel picture rotating according to the horizontal angular velocity
-// and a digital speedometer field.
+// From a video file and a JSON file with velocity and steering data, generates
+// a video tiled with a steering wheel picture rotating according to the
+// steering angle magnitude and a digital speedometer field.
 
 #include <fstream>
 #include <iostream>
@@ -14,7 +13,6 @@
 
 #include <opencv2/imgproc/imgproc.hpp>
 
-#include <interpolation/time_series.hpp>
 #include <io/image_sequence_reader.hpp>
 #include <io/image_sequence_writer.hpp>
 #include <io/json_converters.hpp>
@@ -24,21 +22,36 @@ DEFINE_bool(vertical_flip, false,
             "Whether to flip the input frames vertically.");
 DEFINE_bool(horizontal_flip, false,
             "Whether to flip input video frames horizontally.");
-DEFINE_string(frames_json, "", "JSON file with video frames timestamps. Comes "
-                               "from the raw PilotGuru Recorder data.");
-DEFINE_string(velocities_json, "", "JSON file with timestamped absolute "
-                                   "velocities. Comes from fit_motion output.");
-DEFINE_string(steering_json, "", "JSON file with timestamped angular "
-                                  "velocities in the horizontal plane (i.e. "
-                                  "steering). Comes from fit_motion output.");
-DEFINE_double(steering_scale, 200.0,
-              "Scale factor to go from angular velocity in radians (from the "
-              "--rotations_json file) to the rotation angle of the steering "
-              "wheel (in degrees) for visualization.");
-DEFINE_double(steering_smoothing_sigma, 0.1,
-              "Steering angular velocity smoothing sigma, in seconds. If "
-              "positive, steering angular velocity is smoothed out with this "
-              "sigma before rendering.");
+
+DEFINE_int32(target_video_height, -1,
+             "If positive, resize the input video to this height.");
+DEFINE_int32(target_video_width, -1,
+             "If positive, resize the input video to this width.");
+
+constexpr char kSteeringJsonFlagHelp[] =
+    "JSON file with per-frame steering angles, produced by annotate_frames.";
+constexpr char kSteeringUnitsFlagHelp[] = "Steering magnitude name in the JSON "
+                                          "file, typically 'steering' or "
+                                          "'angular_velocity'.";
+constexpr char kSteeringScaleFlagHelp[] = "Scale to convert from raw steering "
+                                          "magnitude to on-screnn steering "
+                                          "wheel turn degrees.";
+
+DEFINE_string(steering_left_json, "", kSteeringJsonFlagHelp);
+DEFINE_string(steering_left_units, pilotguru::kSteering,
+              kSteeringUnitsFlagHelp);
+DEFINE_double(steering_left_scale, 90.0, kSteeringScaleFlagHelp);
+
+DEFINE_string(steering_right_json, "", kSteeringJsonFlagHelp);
+DEFINE_string(steering_right_units, pilotguru::kSteering,
+              kSteeringUnitsFlagHelp);
+DEFINE_double(steering_right_scale, 90.0, kSteeringScaleFlagHelp);
+
+constexpr char kVelocitiesJsonFlagHelp[] =
+    "JSON file with per-frame veocities in m/s, produced by annotate_frames.";
+DEFINE_string(velocities_json_left, "", kVelocitiesJsonFlagHelp);
+DEFINE_string(velocities_json_right, "", kVelocitiesJsonFlagHelp);
+
 DEFINE_string(steering_wheel, "",
               "A file with the steering wheel image to use.");
 DEFINE_string(out_video, "", "Output video file to write.");
@@ -49,7 +62,41 @@ DEFINE_int64(max_out_frames, -1, "If positive, the maximum number of frames to "
                                  "ones will be ignored.");
 
 namespace {
-void RenderRotation(cv::Mat *out_frame, int offset_rows, int offset_cols,
+std::unique_ptr<std::map<size_t, double>>
+LoadPerFrameSeries(const std::string &json_name, const std::string &root_name,
+                   const std::string &units, double scale) {
+  using nlohmann::json;
+  std::unique_ptr<std::map<size_t, double>> result(
+      new std::map<size_t, double>());
+  std::unique_ptr<json> per_frame_json = pilotguru::ReadJsonFile(json_name);
+  for (const json &frame : (*per_frame_json)[root_name]) {
+    (*result)[frame[pilotguru::kFrameId]] = frame[units];
+    (*result)[frame[pilotguru::kFrameId]] *= scale;
+  }
+  return result;
+}
+
+std::unique_ptr<std::map<size_t, double>>
+MaybeLoadSteering(const std::string &json_name, const std::string &units,
+                  double scale) {
+  if (!json_name.empty()) {
+    return LoadPerFrameSeries(json_name, pilotguru::kSteering, units, scale);
+  } else {
+    return nullptr;
+  }
+}
+
+std::unique_ptr<std::map<size_t, double>>
+MaybeLoadVelocities(const std::string &json_name, double scale) {
+  if (!json_name.empty()) {
+    return LoadPerFrameSeries(json_name, pilotguru::kVelocities,
+                              pilotguru::kSpeedMS, scale);
+  } else {
+    return nullptr;
+  }
+}
+
+void RenderSteering(cv::Mat *out_frame, int offset_rows, int offset_cols,
                     const cv::Mat &steering_wheel, double turn_degrees) {
   CHECK_NOTNULL(out_frame);
   cv::Mat out_steer =
@@ -60,6 +107,18 @@ void RenderRotation(cv::Mat *out_frame, int offset_rows, int offset_cols,
       turn_degrees, 1);
   cv::warpAffine(steering_wheel, out_steer, rotation_matrix,
                  steering_wheel.size(), cv::INTER_LINEAR);
+}
+
+void MaybeRenderSteering(const std::map<size_t, double> *steering,
+                         size_t frame_idx, cv::Mat *out_frame, int offset_rows,
+                         int offset_cols, const cv::Mat &steering_wheel) {
+  if (steering != nullptr) {
+    const auto steering_it = steering->find(frame_idx);
+    if (steering_it != steering->end()) {
+      RenderSteering(out_frame, offset_rows, offset_cols, steering_wheel,
+                     steering_it->second);
+    }
+  }
 }
 
 void RenderVelocity(cv::Mat *out_frame, int offset_rows, int offset_cols,
@@ -121,6 +180,18 @@ void RenderVelocity(cv::Mat *out_frame, int offset_rows, int offset_cols,
   marked_speedometer_bar = text_color;
 }
 
+void MaybeRenderVelocity(const std::map<size_t, double> *velocities,
+                         size_t frame_idx, cv::Mat *out_frame, int offset_rows,
+                         int offset_cols, int window_rows, int window_cols) {
+  if (velocities != nullptr) {
+    const auto velocity_it = velocities->find(frame_idx);
+    if (velocity_it != velocities->end()) {
+      RenderVelocity(out_frame, offset_rows, offset_cols, window_rows,
+                     window_cols, velocity_it->second);
+    }
+  }
+}
+
 cv::Mat LoadImageBgr2Rgb(const std::string &filename) {
   const cv::Mat image_bgr = cv::imread(filename, CV_LOAD_IMAGE_COLOR);
   CHECK(!image_bgr.empty());
@@ -145,91 +216,72 @@ int main(int argc, char **argv) {
 
   const cv::Mat steering_wheel = LoadImageBgr2Rgb(FLAGS_steering_wheel);
 
-  CHECK(!FLAGS_frames_json.empty());
-  std::unique_ptr<nlohmann::json> frames_json =
-      pilotguru::ReadJsonFile(FLAGS_frames_json);
-  const nlohmann::json &frames = (*frames_json)[pilotguru::kFrames];
-
-  std::unique_ptr<pilotguru::RealTimeSeries> steering(nullptr);
-  if (!FLAGS_steering_json.empty()) {
-    steering.reset(new pilotguru::RealTimeSeries(FLAGS_steering_json,
-                                                 pilotguru::kSteering,
-                                                 pilotguru::kAngularVelocity));
-    if (FLAGS_steering_smoothing_sigma > 0) {
-      steering->GaussianSmooth(FLAGS_steering_smoothing_sigma);
-    }
-  }
-
-  std::unique_ptr<pilotguru::RealTimeSeries> velocities(
-      FLAGS_velocities_json.empty() ? nullptr : new pilotguru::RealTimeSeries(
-                                                    FLAGS_velocities_json,
-                                                    pilotguru::kVelocities,
-                                                    pilotguru::kSpeedMS));
+  std::unique_ptr<std::map<size_t, double>> steering_left =
+      MaybeLoadSteering(FLAGS_steering_left_json, FLAGS_steering_left_units,
+                        FLAGS_steering_left_scale);
+  std::unique_ptr<std::map<size_t, double>> steering_right =
+      MaybeLoadSteering(FLAGS_steering_right_json, FLAGS_steering_right_units,
+                        FLAGS_steering_right_scale);
+  constexpr double msToKmh = 3.6;
+  std::unique_ptr<std::map<size_t, double>> velocities_left =
+      MaybeLoadVelocities(FLAGS_velocities_json_left, msToKmh);
+  std::unique_ptr<std::map<size_t, double>> velocities_right =
+      MaybeLoadVelocities(FLAGS_velocities_json_right, msToKmh);
 
   pilotguru::ImageSequenceVideoFileSink sink(FLAGS_out_video, 30 /* fps */);
 
   std::unique_ptr<cv::Mat> out_frame(nullptr);
   int total_rendered_frames = 0;
   int skipped_frames = 0;
-  pilotguru::RealTimeSeries::ValueLookupResult frame_velocity{0, false, 0};
-  pilotguru::RealTimeSeries::ValueLookupResult frame_steering{0, false, 0};
+  //  pilotguru::RealTimeSeries::ValueLookupResult frame_velocity{0, false, 0};
+
+  ORB_SLAM2::TimestampedImage frame;
+
   for (size_t frame_idx = 0; image_source->hasNext() &&
                              (total_rendered_frames < FLAGS_max_out_frames ||
                               FLAGS_max_out_frames < 0);
        ++frame_idx) {
-    const ORB_SLAM2::TimestampedImage frame = image_source->next();
+    const ORB_SLAM2::TimestampedImage raw_frame = image_source->next();
     if (skipped_frames < FLAGS_frames_to_skip) {
       ++skipped_frames;
       continue;
     }
-    // We need interframe time difference to have a nontrivia;l interval for
-    // averaging velocity and steering angle over, so skip the first frame.
-    if (frame_idx == 0) {
-      continue;
-    }
 
-    const long frame_usec = frames.at(frame_idx)[pilotguru::kTimeUsec];
-    const long prev_frame_usec = frames.at(frame_idx - 1)[pilotguru::kTimeUsec];
-    if (steering != nullptr) {
-      frame_steering = steering->TimeAveragedValue(prev_frame_usec, frame_usec,
-                                                   frame_steering.end_index);
-    }
-
-    if (velocities != nullptr) {
-      frame_velocity = velocities->TimeAveragedValue(
-          prev_frame_usec, frame_usec, frame_velocity.end_index);
-    }
-
-    if (!frame_steering.is_valid && !frame_velocity.is_valid) {
-      // The video frame is out of bounds for the velocity/steering time series.
-      continue;
-    }
+    const int32_t effective_video_height = FLAGS_target_video_height > 0
+                                               ? FLAGS_target_video_height
+                                               : raw_frame.image.rows;
+    const int32_t effective_video_width = FLAGS_target_video_width > 0
+                                              ? FLAGS_target_video_width
+                                              : raw_frame.image.cols;
 
     if (out_frame == nullptr) {
       out_frame.reset(new cv::Mat(
-          frame.image.rows + steering_wheel.rows,
-          std::max(frame.image.cols, steering_wheel.cols), CV_8UC3));
+          effective_video_height + steering_wheel.rows,
+          std::max(effective_video_width, 4 * steering_wheel.cols), CV_8UC3));
       *out_frame = cv::Scalar_<unsigned char>(0, 0, 0);
     }
 
-    // Double check the sizes match in case the out_frame was initialized on an
-    // earlier iteration.
-    CHECK_EQ(out_frame->rows, frame.image.rows + steering_wheel.rows);
-    CHECK_EQ(out_frame->cols, std::max(frame.image.cols, steering_wheel.cols));
-    cv::Mat out_video =
-        out_frame->rowRange(0, frame.image.rows).colRange(0, frame.image.cols);
-    frame.image.copyTo(out_video);
+    cv::Mat out_video = out_frame->rowRange(0, effective_video_height)
+                            .colRange(0, effective_video_width);
+    cv::resize(raw_frame.image, out_video, out_video.size(), 0, 0,
+               cv::INTER_CUBIC);
 
-    if (frame_steering.is_valid) {
-      RenderRotation(out_frame.get(), frame.image.rows, 0, steering_wheel,
-                     frame_steering.value * FLAGS_steering_scale);
-    }
+    // Fill frame bottom with black.
+    out_frame->rowRange(frame.image.rows, out_frame->rows)
+        .setTo(cv::Scalar(0, 0, 0));
 
-    if (frame_velocity.is_valid) {
-      RenderVelocity(out_frame.get(), frame.image.rows, steering_wheel.cols,
-                     steering_wheel.rows, steering_wheel.cols,
-                     static_cast<int>(frame_velocity.value * 3.6));
-    }
+    MaybeRenderSteering(steering_left.get(), frame_idx, out_frame.get(),
+                        effective_video_height, 0, steering_wheel);
+    MaybeRenderSteering(steering_right.get(), frame_idx, out_frame.get(),
+                        effective_video_height,
+                        out_frame->cols - steering_wheel.cols, steering_wheel);
+    MaybeRenderVelocity(velocities_left.get(), frame_idx, out_frame.get(),
+                        effective_video_height, steering_wheel.cols,
+                        steering_wheel.rows, steering_wheel.cols);
+    MaybeRenderVelocity(velocities_right.get(), frame_idx, out_frame.get(),
+                        effective_video_height,
+                        out_frame->cols - 2 * steering_wheel.cols,
+                        steering_wheel.rows, steering_wheel.cols);
 
     sink.consume(*out_frame);
 
