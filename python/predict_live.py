@@ -2,6 +2,7 @@ import argparse
 import json
 import time
 
+import image_helpers
 import io_helpers
 import prediction_helpers
 
@@ -13,7 +14,10 @@ from torch.autograd import Variable
 
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()
-  parser.add_argument('--in_video_device_id', type=int, required=True)
+  parser.add_argument('--in_video_device_id', type=int, default=None)
+  parser.add_argument('--in_video_file', type=int, default=None)
+  parser.add_argument('--delay_max_fps', type=float, default=-1)
+  parser.add_argument('--skip_max_fps', type=float, default=-1)
   parser.add_argument('--forward_axis_json', required=True)
   parser.add_argument('--net_settings_json', required=True)
   parser.add_argument(
@@ -22,6 +26,8 @@ if __name__ == '__main__':
   parser.add_argument('--convert_to_yuv', type=bool, default=False)
   parser.add_argument('--cuda_device_id', type=int, default=0)
   parser.add_argument('--trajectory_frame_update_rate', type=float, default=1.0)
+  parser.add_argument(
+      '--prediction_units_to_degrees_scale', type=float, default=90.0)
   parser.add_argument(
     '--steering_prediction_socket', default='ipc:///tmp/steering-predict')
   
@@ -48,13 +54,34 @@ if __name__ == '__main__':
     # Init model and load weights.
   nets = prediction_helpers.LoadPredictionModels(
       args.in_model_weights.split(','), net_settings, args.cuda_device_id)
-  
-  video_capture = cv2.VideoCapture(args.in_video_device_id)
 
+  # Initialize the base frame generator, either capturing frames live from a
+  # USB camera, or reading from a video file.
+  base_frame_generator = None
+  video_capture = None
+  if args.in_video_device_id is not None:
+    assert base_frame_generator is None
+    video_capture = cv2.VideoCapture(args.in_video_device_id)
+    base_frame_generator = image_helpers.VideoCaptureFrameGenerator(
+        video_capture)
+  elif args.in_video_file:
+    assert base_frame_generator is None
+    base_frame_generator = image_helpers.VideoFrameGenerator(args.in_video_file)
+  
+  # Make sure the frames arrive at roughly the frame rate we need.
+  # First add delays between captured frames (needed when reading from a video
+  # file to simulate the original camera frame rate).
+  # Then add frame skipping. This can be effective both for video files (to e.g.
+  # get a 10 FPS subsequence from a 30 FPS video) and live USB camera capture.
+  assert base_frame_generator is not None
+  frame_generator_delay = image_helpers.VideoFrameGeneratorLimitedFpsDelay(
+      base_frame_generator, args.delay_max_fps)
+  final_frame_generator = image_helpers.VideoFrameGeneratorLimitedFpsSkip(
+      frame_generator_delay, args.skip_max_fps)
+  
   trajectory_prediction = None
-  print('Started.')
-  while True:
-    frame_capture_status, raw_frame = video_capture.read()
+  print('Live prediction started.')
+  for raw_frame, _ in final_frame_generator:
     frame_variable = prediction_helpers.RawFrameToModelInput(
         raw_frame=raw_frame,
         crop_settings=args,
@@ -63,17 +90,24 @@ if __name__ == '__main__':
         cuda_device_id=args.cuda_device_id)
     prediction_single_frame = prediction_helpers.EvalModelsEnsemble(
         nets, [frame_variable, forward_axis_tensor])
+    # TODO downsample the single frame trajectory prediction in case the live
+    # source framerate is different from the framerate on which the model was
+    # trained.
     trajectory_prediction = prediction_helpers.UpdateFutureTrajectoryPrediction(
         trajectory_prediction,
         prediction_single_frame,
         args.trajectory_frame_update_rate)
-    prediction_dict = {'s': trajectory_prediction[0,0].item()}
+    prediction_degrees = (
+        trajectory_prediction[0,0].item() *
+        args.prediction_units_to_degrees_scale)
+    prediction_dict = {'s': prediction_degrees}
     socket.send_json(prediction_dict)
 
-    # cv2.imshow('frame', raw_frame)
-    # if cv2.waitKey(1) & 0xFF == ord('q'):
-    #   break
+    cv2.imshow('frame', raw_frame)
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+      break
 
-  # When everything done, release the capture
-  video_capture.release()
+  # When everything done, release the capture.
+  if video_capture is not None:
+    video_capture.release()
   cv2.destroyAllWindows()
