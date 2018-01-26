@@ -1,10 +1,10 @@
 import random
 
 import re		
-import subprocess		
+import subprocess
+import time
 		
 import av
-
 import numpy as np
 import scipy.misc
 import scipy.ndimage
@@ -85,6 +85,35 @@ def VideoFrameGenerator(filename):
   for raw_frame in raw_frames_generator:		
     frame_image_raw = np.asarray(raw_frame.to_image())		
     yield (np.rot90(frame_image_raw, k=rotation_times), raw_frame.index)
+
+def VideoCaptureFrameGenerator(video_capture):
+  '''Wraps OpenCV VideoCapture.'''
+  video_frame_id = 0
+  while True:
+    yield (video_capture.read(), video_frame_id)
+    video_frame_id += 1
+
+def VideoFrameGeneratorLimitedFpsDelay(base_generator, max_fps):
+  '''Inserts time delays between frames from base generator to not exceed
+      max_fps.'''
+  frame_interval_sec = 1.0 / max_fps
+  prev_frame_time = time.time()
+  for frame_data in base_generator:
+    time_since_last_frame = time.time() - prev_frame_time
+    remaining_sleep = max(0.0, frame_interval_sec - time_since_last_frame)
+    time.sleep(remaining_sleep)
+    prev_frame_time = time.time()
+    yield frame_data
+
+def VideoFrameGeneratorLimitedFpsSkip(base_generator, max_fps):
+  '''Skips frames from base generator to not exceed max_fps.'''
+  frame_interval_sec = 1.0 / max_fps
+  prev_frame_time = time.time()
+  for frame_data in base_generator:
+    time_since_last_frame = time.time() - prev_frame_time
+    if time_since_last_frame >= frame_interval_sec:
+      prev_frame_time = time.time()
+      yield frame_data
 
 def GetPcaRgbDirections(images_chw):
   # Train data is of size [examples x (frames per example) x C x H x W].
