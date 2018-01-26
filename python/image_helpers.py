@@ -90,8 +90,12 @@ def VideoCaptureFrameGenerator(video_capture):
   '''Wraps OpenCV VideoCapture.'''
   video_frame_id = 0
   while True:
-    yield (video_capture.read(), video_frame_id)
-    video_frame_id += 1
+    frame_capture_status, raw_frame = video_capture.read()
+    if frame_capture_status:
+      yield (raw_frame, video_frame_id)
+      video_frame_id += 1
+    else:
+      break
 
 def VideoFrameGeneratorLimitedFpsDelay(base_generator, max_fps):
   '''Inserts time delays between frames from base generator to not exceed
