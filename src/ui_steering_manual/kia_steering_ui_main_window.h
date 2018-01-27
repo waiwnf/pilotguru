@@ -20,9 +20,6 @@ namespace Ui {
 class MainWindow;
 }
 
-constexpr char STEERING_COMMANDS_LOG_ROOT_ELEMENT[] = "steering_commands";
-constexpr char STEERING_ANGLES_LOG_ROOT_ELEMENT[] = "steering_angles";
-
 class MainWindow : public QMainWindow {
   Q_OBJECT
 

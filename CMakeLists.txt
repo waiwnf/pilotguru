@@ -132,6 +132,9 @@ target_link_libraries(kalman_filter_lib glog)
 add_library(kiacanlib SHARED ${PROJECT_SOURCE_DIR}/src/car/kia_can.cc)
 target_link_libraries(kiacanlib canlib glog)
 
+add_library(kia_json_loggers SHARED ${PROJECT_SOURCE_DIR}/src/io/kia_json_loggers.cc)
+target_link_libraries(kia_json_loggers kiacanlib)
+
 add_library(
     kia_steering_angle_holder_lib SHARED
     ${PROJECT_SOURCE_DIR}/src/car/kia_steering_angle_holder.cc)
@@ -190,7 +193,7 @@ target_link_libraries(integrate_motion pilotgurulib glog gflags)
 target_link_libraries(interpolate_velocity pilotgurulib glog gflags)
 target_link_libraries(kia_steering_angle kiacanlib glog gflags pthread)
 target_link_libraries(kia_steering_nn qt_helpers kia_steering_angle_holder_lib arduinocommlib kiacanlib glog gflags zmq pthread Qt5::Widgets)
-target_link_libraries(kia_steering_ui qt_helpers kia_steering_angle_holder_lib arduinocommlib kiacanlib glog gflags pthread Qt5::Widgets)
+target_link_libraries(kia_steering_ui qt_helpers kia_json_loggers kia_steering_angle_holder_lib arduinocommlib kiacanlib glog gflags pthread Qt5::Widgets)
 target_link_libraries(optical_trajectories pilotgurulib ${OpenCV_LIBS} glog gflags)
 target_link_libraries(process_can_frames pilotgurulib kiacanlib glog gflags)
 target_link_libraries(project_translations pilotgurulib ${OpenCV_LIBS} glog gflags)

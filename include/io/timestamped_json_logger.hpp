@@ -106,6 +106,7 @@ private:
   // Guards Stop() to make sure we do not try to close the file twice.
   std::mutex stop_mutex_;
 };
-}
+
+} // namespace pilotguru
 
 #endif // PILOTGURU_IO_TIMESTAMPED_JSON_LOGGER_HPP_
