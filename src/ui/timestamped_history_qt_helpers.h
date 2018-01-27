@@ -1,26 +1,15 @@
-#ifndef MAINWINDOW_H
-#define MAINWINDOW_H
+#ifndef UI_TIMESTAMPED_HISTORY_QT_HELPERS_HPP_
+#define UI_TIMESTAMPED_HISTORY_QT_HELPERS_HPP_
 
-#include <QMainWindow>
+#include <car/kia_can.hpp>
+#include <car/timestamped_history.hpp>
+#include <spoof-steering-serial-commands.h>
+
+#include <QObject>
+#include <QString>
 #include <QThread>
 
-#include <chrono>
-#include <memory>
-
 #include <glog/logging.h>
-
-#include <car/arduino_comm.hpp>
-#include <car/can.hpp>
-#include <car/kia_can.hpp>
-#include <car/kia_steering_angle_holder.hpp>
-#include <io/timestamped_json_logger.hpp>
-
-namespace Ui {
-class MainWindow;
-}
-
-constexpr char STEERING_COMMANDS_LOG_ROOT_ELEMENT[] = "steering_commands";
-constexpr char STEERING_ANGLES_LOG_ROOT_ELEMENT[] = "steering_angles";
 
 // Common logic for a separate thread continuously picking new timestamped
 // values from a queue and processing them.
@@ -65,7 +54,7 @@ private:
   bool must_run_ = true;
 };
 
-// Reads SteeringAngle values off the queue.
+// Reads SteeringAngle values off the queue and formats them as text.
 class SteeringAngleReadThread
     : public TimestampedValueReadThread<pilotguru::kia::SteeringAngle> {
   Q_OBJECT
@@ -94,7 +83,8 @@ signals:
   void VelocityChanged(QString text);
 };
 
-// Reads Velocity values off the queue and formats average wheel velocity as
+
+// Reads steering torque spoof voltage values off the queue and formats them as
 // text.
 class SteeringTorqueOffsetReadThread
     : public TimestampedValueReadThread<pilotguru::kia::KiaControlCommand> {
@@ -111,50 +101,4 @@ signals:
   void SteeringTorqueChanged(QString text);
 };
 
-class MainWindow : public QMainWindow {
-  Q_OBJECT
-
-public:
-  explicit MainWindow(const std::string &can_interface,
-                      const std::string &arduino_tty,
-                      const pilotguru::kia::SteeringAngleHolderSettings
-                          &steering_controller_settings,
-                      const std::string &log_dir, QWidget *parent = 0);
-  virtual ~MainWindow();
-
-private:
-  void SendSingleSteeringCommand();
-  void SetTargetSteeringAngleFromInputField();
-  void ClearTargetSteeringAngle();
-  void TurnLeft();
-  void TurnRight();
-  void OnSteeringAngleChanged(int16_t angle_deci_degrees);
-  void OnVelocityChanged(QString text);
-  void OnSteeringTorqueChanged(QString text);
-
-  void SetTargetSteeringAngle(double target_angle_degrees);
-  void ShiftTargetSteeringAngle(double target_angle_shift_degrees);
-
-  Ui::MainWindow *ui;
-
-  std::unique_ptr<pilotguru::kia::CarMotionData> car_motion_data_;
-  std::unique_ptr<pilotguru::kia::CarMotionDataUpdater>
-      car_motion_data_updater_;
-  std::unique_ptr<pilotguru::ArduinoCommandChannel> arduino_command_channel_;
-  std::unique_ptr<pilotguru::kia::SteeringAngleHolderController>
-      steering_controller_;
-
-  std::unique_ptr<SteeringAngleReadThread> steering_angle_read_thread_;
-  std::unique_ptr<VelocityReadThread> velocity_read_thread_;
-  std::unique_ptr<SteeringTorqueOffsetReadThread>
-      steering_torque_offset_read_thread_;
-
-  std::unique_ptr<
-      pilotguru::TimestampedJsonLogger<pilotguru::kia::KiaControlCommand>>
-      kia_commands_logger_;
-  std::unique_ptr<
-      pilotguru::TimestampedJsonLogger<pilotguru::kia::SteeringAngle>>
-      steering_angles_logger_;
-};
-
-#endif // MAINWINDOW_H
+#endif  // UI_TIMESTAMPED_HISTORY_QT_HELPERS_HPP_

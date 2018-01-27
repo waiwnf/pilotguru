@@ -1,4 +1,4 @@
-#include "ui/kia_steering_ui_main_window.h"
+#include "ui_steering_manual/kia_steering_ui_main_window.h"
 #include <QApplication>
 
 #include <gflags/gflags.h>

@@ -89,6 +89,7 @@ add_subdirectory(thirdparty/orb-slam2)
 
 include_directories(
 ${PROJECT_SOURCE_DIR}/include
+${PROJECT_SOURCE_DIR}/src
 ${PROJECT_SOURCE_DIR}/thirdparty/orb-slam2/include
 ${PROJECT_SOURCE_DIR}/thirdparty/DBoW2
 ${PROJECT_SOURCE_DIR}/thirdparty/g2o
@@ -118,7 +119,6 @@ add_library(
     steeringcommandslib SHARED
     ${PROJECT_SOURCE_DIR}/sketches/libs/spoof-steering-serial-commands/spoof-steering-serial-commands.cpp)
 
-
 add_library(arduinocommlib SHARED ${PROJECT_SOURCE_DIR}/src/car/arduino_comm.cc)
 target_link_libraries(arduinocommlib steeringcommandslib)
 
@@ -137,6 +137,9 @@ add_library(
     ${PROJECT_SOURCE_DIR}/src/car/kia_steering_angle_holder.cc)
 target_link_libraries(kia_steering_angle_holder_lib kalman_filter_lib kiacanlib arduinocommlib glog)
 
+add_library(qt_helpers SHARED ${PROJECT_SOURCE_DIR}/src/ui/timestamped_history_qt_helpers.cpp)
+target_link_libraries(qt_helpers kiacanlib glog Qt5::Widgets)
+
 add_library(
 	spoof_voltage_smoothing_lib SHARED
 	${PROJECT_SOURCE_DIR}/sketches/libs/kia-spoof-steering/spoof-voltage-smoothing.cpp)
@@ -148,7 +151,7 @@ add_executable(integrate_motion src/integrate_motion.cc)
 add_executable(interpolate_velocity src/interpolate_velocity.cc)
 add_executable(kia_steering_angle src/kia_steering_angle.cc)
 add_executable(kia_steering_nn src/kia_steering_nn.cc)
-add_executable(kia_steering_ui src/kia_steering_ui.cc src/ui/kia_steering_ui_main_window.cpp)
+add_executable(kia_steering_ui src/kia_steering_ui.cc src/ui_steering_manual/kia_steering_ui_main_window.cpp)
 add_executable(optical_trajectories src/optical_trajectories.cc)
 add_executable(process_can_frames src/process_can_frames.cc)
 add_executable(project_translations src/project_translations.cc)
@@ -186,8 +189,8 @@ target_link_libraries(fit_motion pilotgurulib glog gflags)
 target_link_libraries(integrate_motion pilotgurulib glog gflags)
 target_link_libraries(interpolate_velocity pilotgurulib glog gflags)
 target_link_libraries(kia_steering_angle kiacanlib glog gflags pthread)
-target_link_libraries(kia_steering_nn kia_steering_angle_holder_lib arduinocommlib kiacanlib glog gflags zmq)
-target_link_libraries(kia_steering_ui kia_steering_angle_holder_lib arduinocommlib kiacanlib glog gflags pthread Qt5::Widgets)
+target_link_libraries(kia_steering_nn qt_helpers kia_steering_angle_holder_lib arduinocommlib kiacanlib glog gflags zmq pthread Qt5::Widgets)
+target_link_libraries(kia_steering_ui qt_helpers kia_steering_angle_holder_lib arduinocommlib kiacanlib glog gflags pthread Qt5::Widgets)
 target_link_libraries(optical_trajectories pilotgurulib ${OpenCV_LIBS} glog gflags)
 target_link_libraries(process_can_frames pilotgurulib kiacanlib glog gflags)
 target_link_libraries(project_translations pilotgurulib ${OpenCV_LIBS} glog gflags)
