@@ -6,6 +6,7 @@ import io_helpers
 import json
 import models
 import optimize
+import sample_weighting
 import training_helpers
 
 if __name__ == '__main__':
@@ -62,8 +63,8 @@ if __name__ == '__main__':
   parser.add_argument('--train_blur_prob', type=float, default=0.0)
   parser.add_argument('--do_pca_random_shifts', type=bool, default=False)
   parser.add_argument('--grayscale_interpolate_prob', type=float, default=0.0)
-  parser.add_argument(
-      '--example_label_extra_weight_scale', type=float, default=0.0)
+  parser.add_argument('--sample_weighter_options',
+      default=json.dumps({sample_weighting.NAME: sample_weighting.UNIFORM}))
   parser.add_argument('--dry_run', type=bool, default=False)
   parser.add_argument('--settings_id', default='')  
   parser.add_argument('--cuda_device_id', type=int, default=0)
@@ -94,8 +95,8 @@ if __name__ == '__main__':
     training_helpers.TRAIN_BLUR_PROB: args.train_blur_prob,
     training_helpers.GRAYSCALE_INTERPOLATE_PROB: args.grayscale_interpolate_prob,
     training_helpers.BATCH_SIZE: args.batch_size,
-    training_helpers.EXAMPLE_LABEL_EXTRA_WEIGHT_SCALE:
-        args.example_label_extra_weight_scale,
+    training_helpers.SAMPLE_WEIGHTER_OPTIONS:
+        json.loads(args.sample_weighter_options),
     training_helpers.DO_PCA_RANDOM_SHIFTS: args.do_pca_random_shifts
   }
 

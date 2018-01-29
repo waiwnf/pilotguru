@@ -25,7 +25,7 @@ TRAIN_BLUR_PROB = 'train_blur_prob'
 DO_PCA_RANDOM_SHIFTS = 'do_pca_random_shifts'
 GRAYSCALE_INTERPOLATE_PROB = 'grayscale_interpolate_prob'
 BATCH_SIZE = 'batch_size'
-EXAMPLE_LABEL_EXTRA_WEIGHT_SCALE = 'example_lable_extra_weight_scale'
+SAMPLE_WEIGHTER_OPTIONS = 'sample_weighter_options'
 DO_PCA_RANDOM_SHIFTS = 'do_pca_random_shifts'
 OPTIMIZER = 'optimizer'
 PLATEAU_PATIENCE_EPOCHS = 'plateau_patience_epochs'
@@ -133,10 +133,11 @@ def MakeTrainer(
     if all_settings[PLATEAU_PATIENCE_EPOCHS] > 0:
       lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
           optimizer, factor=0.5, patience=all_settings[PLATEAU_PATIENCE_EPOCHS])
-    sample_weighter = sample_weighting.LabelL1Weighter(
-        all_settings[EXAMPLE_LABEL_EXTRA_WEIGHT_SCALE],
-        np.mean(
-            np.abs(train_data[steering_element_idx]), axis=1, keepdims=False))
+    # Average label magnitudes may be needed by the training sample weighter.
+    mean_steering_magnitude = np.mean(
+        np.abs(train_data[steering_element_idx]), axis=1, keepdims=False)
+    sample_weighter = sample_weighting.MakeSampleWeighter(
+        all_settings[SAMPLE_WEIGHTER_OPTIONS], mean_steering_magnitude)
     learners.append(
         optimize.Learner(net, optimizer, lr_scheduler, sample_weighter))
 

@@ -122,9 +122,9 @@ def TrainModels(
           learner.optimizer.step()
           learner.optimizer.zero_grad()
 
-          # TODO update weights using loss_value_per_example
+          # Update weights using loss_value_per_example.
           learner.weighter.RegisterLosses(
-              example_indices, np.asarray(loss_value_per_example))
+              example_indices, loss_value_per_example.cpu().data.numpy())
 
           # Accumulate statistics
           batch_size = input_vars[0].size()[0]
