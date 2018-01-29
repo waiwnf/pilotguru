@@ -120,7 +120,7 @@ CarMotionDataUpdater::CarMotionDataUpdater(
 }
 
 void CarMotionDataUpdater::start() {
-  std::unique_lock<std::mutex> lock;
+  std::unique_lock<std::mutex> lock(thread_status_mutex_);
   if (update_thread_ == nullptr) {
     should_run_ = true;
     update_thread_.reset(
@@ -129,7 +129,7 @@ void CarMotionDataUpdater::start() {
 }
 
 void CarMotionDataUpdater::stop() {
-  std::unique_lock<std::mutex> lock;
+  std::unique_lock<std::mutex> lock(thread_status_mutex_);
   if (update_thread_ != nullptr) {
     should_run_ = false;
     update_thread_->join();
