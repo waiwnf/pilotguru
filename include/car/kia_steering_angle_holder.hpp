@@ -90,6 +90,8 @@ public:
       const SteeringAngleHolderSettings &settings);
 
   const SteeringAngleHolderSettings &settings() const;
+  const TimestampedHistory<double>& TargetSteeringAnglesHistory() const;
+
   bool SetTargetAngle(double target_angle_degrees);
   bool IsTargetAngleSet() const;
   double GetTargetAngle();
@@ -102,6 +104,7 @@ public:
 private:
   // Initialized by the constructor.
   const TimestampedHistory<SteeringAngle> *const steering_angle_sensor_;
+  std::unique_ptr<TimestampedHistory<double>> target_steering_angles_history_;
   ArduinoCommandChannel *const arduino_command_channel_;
   const SteeringAngleHolderSettings settings_;
   std::unique_ptr<KalmanFilter1D2Order> angle_sensor_filter_;
@@ -114,6 +117,25 @@ private:
   std::mutex mutex_;
 
   std::unique_ptr<std::thread> controller_loop_thread_;
+};
+
+class SteeringAngleHolderFeeder {
+public:
+  SteeringAngleHolderFeeder(SteeringAngleHolderController *controller,
+                            const TimestampedHistory<double> *steering_feed);
+
+  void Start();
+  void Stop();
+  void SetFeedEnabled(bool must_feed);
+
+private:
+  void FeedLoop();
+
+  SteeringAngleHolderController *controller_;
+  const TimestampedHistory<double> *steering_feed_;
+  bool must_run_ = false, must_feed_ = false;
+  std::unique_ptr<std::thread> feed_thread_;
+  std::mutex feed_thread_status_mutex_;
 };
 }
 }

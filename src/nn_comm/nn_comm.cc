@@ -11,21 +11,21 @@ SingleSteeringAnglePredictionUpdater::SingleSteeringAnglePredictionUpdater(
   CHECK_NOTNULL(socket_);
 }
 
-const TimestampedHistory<SingleSteeringAnglePrediction> &
-SingleSteeringAnglePredictionUpdater::predictions() const {
+const TimestampedHistory<double> &
+SingleSteeringAnglePredictionUpdater::Predictions() const {
   return steering_angle_predictions_;
 }
 
-void SingleSteeringAnglePredictionUpdater::start() {
+void SingleSteeringAnglePredictionUpdater::Start() {
   std::unique_lock<std::mutex> lock(update_thread_status_mutex_);
   if (update_thread_ == nullptr) {
     must_run_ = true;
     update_thread_.reset(new std::thread(
-        &SingleSteeringAnglePredictionUpdater::updateLoop, this));
+        &SingleSteeringAnglePredictionUpdater::UpdateLoop, this));
   }
 }
 
-void SingleSteeringAnglePredictionUpdater::stop() {
+void SingleSteeringAnglePredictionUpdater::Stop() {
   std::unique_lock<std::mutex> lock(update_thread_status_mutex_);
   if (update_thread_ != nullptr) {
     must_run_ = false;
@@ -34,7 +34,7 @@ void SingleSteeringAnglePredictionUpdater::stop() {
   }
 }
 
-void SingleSteeringAnglePredictionUpdater::updateLoop() {
+void SingleSteeringAnglePredictionUpdater::UpdateLoop() {
   timeval message_time;
   std::unique_ptr<std::string> steering_raw_text;
   while (must_run_) {
@@ -52,7 +52,7 @@ void SingleSteeringAnglePredictionUpdater::updateLoop() {
     }
     nlohmann::json steering_json = nlohmann::json::parse(*steering_raw_text);
     const double steering_degrees = steering_json["s"];
-    steering_angle_predictions_.update({steering_degrees}, message_time);
+    steering_angle_predictions_.update(steering_degrees, message_time);
   }
 }
 

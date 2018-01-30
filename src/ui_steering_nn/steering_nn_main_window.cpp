@@ -27,6 +27,8 @@ SteeringNNMainWindow::SteeringNNMainWindow(
           arduino_command_channel_.get(), steering_controller_settings)),
       prediction_updater_(new pilotguru::SingleSteeringAnglePredictionUpdater(
           CHECK_NOTNULL(prediction_data_socket), 5 /* history length */)),
+      steering_controller_feeder_(new pilotguru::kia::SteeringAngleHolderFeeder(
+          steering_controller_.get(), &(prediction_updater_->Predictions()))),
       kia_commands_logger_(
           new pilotguru::TimestampedJsonLogger<KiaControlCommand>(
               log_dir + "/" + pilotguru::STEERING_COMMANDS_LOG_ROOT_ELEMENT +
@@ -44,6 +46,9 @@ SteeringNNMainWindow::SteeringNNMainWindow(
                   new pilotguru::SteeringAngleJsonWriter()),
               &(car_motion_data_->steering_angles()))) {
   ui->setupUi(this);
+
+  prediction_updater_->Start();
+  steering_controller_feeder_->Start();
 
   steering_angle_read_thread_.reset(
       new SteeringAngleReadThread(&(car_motion_data_->steering_angles())));
@@ -65,8 +70,10 @@ SteeringNNMainWindow::SteeringNNMainWindow(
           &SteeringNNMainWindow::OnSteeringTorqueChanged);
   steering_torque_offset_read_thread_->start();
 
-  steering_prediction_read_thread_.reset(
-      new SteeringPredictionReadThread(&(prediction_updater_->predictions())));
+  // TODO separate indicators for incoming predictions and effective controller
+  // target angles?
+  steering_prediction_read_thread_.reset(new SteeringPredictionReadThread(
+      &(steering_controller_->TargetSteeringAnglesHistory())));
   connect(steering_prediction_read_thread_.get(),
           &SteeringPredictionReadThread::SteeringPredictionChanged, this,
           &SteeringNNMainWindow::OnSteeringPredictionChanged);
@@ -95,13 +102,12 @@ SteeringNNMainWindow::~SteeringNNMainWindow() {
   steering_angles_logger_->Stop();
   steering_controller_->Stop();
   car_motion_data_updater_->stop();
-  prediction_updater_->stop();
+  prediction_updater_->Stop();
   delete ui;
 }
 
 void SteeringNNMainWindow::OnSteeringAngleChanged(int16_t angle_deci_degrees) {
   const double angle_degrees = static_cast<double>(angle_deci_degrees) / 10.0;
-  //  std::cout << "Set angle: " << angle_degrees << std::endl;
   ui->steering_angle_value_label->setText(QString::number(angle_degrees));
 }
 
@@ -114,20 +120,17 @@ void SteeringNNMainWindow::OnSteeringTorqueChanged(QString text) {
 }
 
 void SteeringNNMainWindow::OnSteeringPredictionChanged(double degrees) {
-  // TODO move out to separate thread.
-  steering_controller_->SetTargetAngle(degrees);
   ui->target_angle_value_label->setText(QString::number(degrees));
 }
 
 void SteeringNNMainWindow::PredictionUpdaterStart() {
-  // TODO replace with signal to the predictor module.
-  prediction_updater_->start();
+  // TODO add signal to the predictor module.
+  steering_controller_feeder_->SetFeedEnabled(true);
 }
 
 void SteeringNNMainWindow::PredictionUpdaterStop() {
-  // TODO replace with signal to the predictor module.
-  steering_controller_->ClearTargetAngle();
-  prediction_updater_->stop();
+  // TODO add signal to the predictor module.
+  steering_controller_feeder_->SetFeedEnabled(false);
 }
 
 void SteeringNNMainWindow::SteeringStart() {

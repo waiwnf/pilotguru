@@ -136,6 +136,8 @@ SteeringAngleHolderController::SteeringAngleHolderController(
     ArduinoCommandChannel *arduino_command_channel,
     const SteeringAngleHolderSettings &settings)
     : steering_angle_sensor_(steering_angle_sensor),
+      target_steering_angles_history_(
+          new TimestampedHistory<double>(5 /* history length */)),
       arduino_command_channel_(arduino_command_channel), settings_(settings) {
   CHECK_NOTNULL(steering_angle_sensor_);
   CHECK_NOTNULL(arduino_command_channel_);
@@ -154,6 +156,11 @@ SteeringAngleHolderController::settings() const {
   return settings_;
 }
 
+const TimestampedHistory<double>&
+SteeringAngleHolderController::TargetSteeringAnglesHistory() const {
+  return *target_steering_angles_history_;
+}
+
 bool SteeringAngleHolderController::SetTargetAngle(
     double target_angle_degrees) {
   if (std::abs(target_angle_degrees) > settings_.max_angle_amplitude) {
@@ -163,6 +170,9 @@ bool SteeringAngleHolderController::SetTargetAngle(
   std::unique_lock<std::mutex> lock(mutex_);
   is_target_angle_set_ = true;
   target_angle_degrees_ = target_angle_degrees;
+  timeval now_time;
+  gettimeofday(&now_time, nullptr);
+  target_steering_angles_history_->update(target_angle_degrees, now_time);
   return true;
 }
 
@@ -272,6 +282,46 @@ void SteeringAngleHolderController::Join() { controller_loop_thread_->join(); }
 void SteeringAngleHolderController::Stop() {
   RequestStop();
   Join();
+}
+
+SteeringAngleHolderFeeder::SteeringAngleHolderFeeder(
+    SteeringAngleHolderController *controller,
+    const TimestampedHistory<double> *steering_feed)
+    : controller_(CHECK_NOTNULL(controller)),
+      steering_feed_(CHECK_NOTNULL(steering_feed)) {}
+
+void SteeringAngleHolderFeeder::Start() {
+  std::unique_lock<std::mutex> lock(feed_thread_status_mutex_);
+  if (feed_thread_ == nullptr) {
+    must_run_ = true;
+    feed_thread_.reset(
+        new std::thread(&SteeringAngleHolderFeeder::FeedLoop, this));
+  }
+}
+
+void SteeringAngleHolderFeeder::Stop() {
+  std::unique_lock<std::mutex> lock(feed_thread_status_mutex_);
+  if (feed_thread_ != nullptr) {
+    must_run_ = false;
+    feed_thread_->join();
+    feed_thread_.reset(nullptr);
+  }
+}
+
+void SteeringAngleHolderFeeder::SetFeedEnabled(bool must_feed) {
+  must_feed_ = must_feed;
+}
+
+void SteeringAngleHolderFeeder::FeedLoop() {
+  Timestamped<double> steering_angle = {0, {0, 0}};
+  const timeval loop_timeout({0 /* seconds */, 50000 /* usec */});
+  while (must_run_) {
+    const bool steering_wait_result = steering_feed_->wait_get_next(
+        steering_angle.timestamp(), &loop_timeout, &steering_angle);
+    if (steering_wait_result && must_feed_) {
+      controller_->SetTargetAngle(steering_angle.data());
+    }
+  }
 }
 }
 }

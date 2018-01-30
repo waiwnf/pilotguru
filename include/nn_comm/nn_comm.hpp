@@ -11,24 +11,20 @@
 
 namespace pilotguru {
 
-struct SingleSteeringAnglePrediction {
-  double degrees;
-};
-
 class SingleSteeringAnglePredictionUpdater {
 public:
   SingleSteeringAnglePredictionUpdater(zmq::socket_t *socket,
                                        size_t history_length);
 
-  const TimestampedHistory<SingleSteeringAnglePrediction> &predictions() const;
-  void start();
-  void stop();
+  const TimestampedHistory<double> &Predictions() const;
+  void Start();
+  void Stop();
 
 private:
-  void updateLoop();
+  void UpdateLoop();
 
   zmq::socket_t *socket_;
-  TimestampedHistory<SingleSteeringAnglePrediction> steering_angle_predictions_;
+  TimestampedHistory<double> steering_angle_predictions_;
 
   bool must_run_ = false;
   std::unique_ptr<std::thread> update_thread_;

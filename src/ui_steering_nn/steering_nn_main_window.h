@@ -25,20 +25,15 @@ class SteeringNNMainWindow;
 constexpr char STEERING_COMMANDS_LOG_ROOT_ELEMENT[] = "steering_commands";
 constexpr char STEERING_ANGLES_LOG_ROOT_ELEMENT[] = "steering_angles";
 
-class SteeringPredictionReadThread
-    : public TimestampedValueReadThread<
-          pilotguru::SingleSteeringAnglePrediction> {
+class SteeringPredictionReadThread : public TimestampedValueReadThread<double> {
   Q_OBJECT
 public:
   SteeringPredictionReadThread(
-      const pilotguru::TimestampedHistory<
-          pilotguru::SingleSteeringAnglePrediction> *values_history)
-      : TimestampedValueReadThread<pilotguru::SingleSteeringAnglePrediction>(
-            values_history) {}
+      const pilotguru::TimestampedHistory<double> *values_history)
+      : TimestampedValueReadThread<double>(values_history) {}
 
-  void ProcessValue(const pilotguru::Timestamped<
-                    pilotguru::SingleSteeringAnglePrediction> &value) override {
-    emit SteeringPredictionChanged(value.data().degrees);
+  void ProcessValue(const pilotguru::Timestamped<double> &value) override {
+    emit SteeringPredictionChanged(value.data());
   }
 
 signals:
@@ -77,6 +72,14 @@ private:
   std::unique_ptr<pilotguru::kia::SteeringAngleHolderController>
       steering_controller_;
 
+  // Steering predictions module comms.
+  std::unique_ptr<pilotguru::SingleSteeringAnglePredictionUpdater>
+      prediction_updater_;
+
+  // Steering predictions - car controller link.
+  std::unique_ptr<pilotguru::kia::SteeringAngleHolderFeeder>
+      steering_controller_feeder_;
+
   // UI indicators update threads.
   std::unique_ptr<SteeringAngleReadThread> steering_angle_read_thread_;
   std::unique_ptr<VelocityReadThread> velocity_read_thread_;
@@ -84,10 +87,6 @@ private:
       steering_torque_offset_read_thread_;
   std::unique_ptr<SteeringPredictionReadThread>
       steering_prediction_read_thread_;
-
-  // Steering predictions module comms.
-  std::unique_ptr<pilotguru::SingleSteeringAnglePredictionUpdater>
-      prediction_updater_;
 
   // Logging.
   std::unique_ptr<
