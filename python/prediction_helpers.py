@@ -45,14 +45,17 @@ def RawFrameToModelInput(
       frame_cropped,
       net_settings[training_helpers.TARGET_HEIGHT],
       net_settings[training_helpers.TARGET_WIDTH])
+  frame_colorspace = None
   if convert_to_yuv:
-    frame_resized = image_helpers.RgbToYuv(frame_resized)
-  frame_chw = np.transpose(frame_resized, (2,0,1))
+    frame_colorspace = image_helpers.RgbToYuv(frame_resized)
+  else:
+    frame_colorspace = frame_resized
+  frame_chw = np.transpose(frame_colorspace, (2,0,1))
   frame_float = frame_chw.astype(np.float32) / 255.0
   # Add a dummy dimension to make it a "batch" of size 1.
   frame_variable = torch.autograd.Variable(
       torch.from_numpy(frame_float[np.newaxis,...]))
-  return frame_variable.cuda(cuda_device_id)
+  return frame_variable.cuda(cuda_device_id), frame_resized
 
 def LoadPredictionModels(in_model_weights_names, net_settings, cuda_device_id):
   nets = []

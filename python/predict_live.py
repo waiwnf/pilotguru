@@ -15,7 +15,7 @@ from torch.autograd import Variable
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()
   parser.add_argument('--in_video_device_id', type=int, default=None)
-  parser.add_argument('--in_video_file', type=int, default=None)
+  parser.add_argument('--in_video_file', default=None)
   parser.add_argument('--delay_max_fps', type=float, default=-1)
   parser.add_argument('--skip_max_fps', type=float, default=-1)
   parser.add_argument('--forward_axis_json', required=True)
@@ -82,7 +82,7 @@ if __name__ == '__main__':
   trajectory_prediction = None
   print('Live prediction started.')
   for raw_frame, _ in final_frame_generator:
-    frame_variable = prediction_helpers.RawFrameToModelInput(
+    frame_variable, frame_display = prediction_helpers.RawFrameToModelInput(
         raw_frame=raw_frame,
         crop_settings=args,
         net_settings=net_settings,
@@ -103,7 +103,7 @@ if __name__ == '__main__':
     prediction_dict = {'s': prediction_degrees}
     socket.send_json(prediction_dict)
 
-    cv2.imshow('frame', raw_frame)
+    cv2.imshow('frame', cv2.cvtColor(frame_display, cv2.COLOR_RGB2BGR))
     if cv2.waitKey(1) & 0xFF == ord('q'):
       break
 
