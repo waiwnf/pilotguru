@@ -13,7 +13,7 @@ namespace pilotguru {
 
 template <typename T> class Timestamped {
 public:
-  Timestamped() {}
+  Timestamped() : timestamp_({0, 0}) {}
   Timestamped(const T &data, const timeval &timestamp)
       : data_(data), timestamp_(timestamp) {}
 
@@ -74,10 +74,11 @@ public:
     }
     std::unique_lock<std::mutex> lock(data_mutex_);
     auto predicate = [this, &prev_timestamp]() {
-      return !(prev_timestamp.tv_sec ==
-                   this->values_.at(this->latest_idx_).timestamp().tv_sec &&
-               prev_timestamp.tv_usec ==
-                   this->values_.at(this->latest_idx_).timestamp().tv_usec);
+      return !(num_valid_values_ <= 0 /* no data yet */ ||
+               (prev_timestamp.tv_sec ==
+                    this->values_.at(this->latest_idx_).timestamp().tv_sec &&
+                prev_timestamp.tv_usec ==
+                    this->values_.at(this->latest_idx_).timestamp().tv_usec));
     };
     if (timeout != nullptr) {
       const std::chrono::microseconds timeout_micros =
