@@ -61,7 +61,7 @@ def RawVideoFrameGenerator(filename):
   container = av.open(filename)		
   for packet in container.demux():		
     for frame in packet.decode():		
-      if isinstance(frame, av.video.frame.VideoFrame):		
+      if isinstance(frame, av.video.frame.VideoFrame):
         yield frame		
 		
 def VideoOrientationDegrees(filename):		
@@ -90,9 +90,10 @@ def VideoCaptureFrameGenerator(video_capture):
   '''Wraps OpenCV VideoCapture.'''
   video_frame_id = 0
   while True:
-    frame_capture_status, raw_frame = video_capture.read()
+    frame_capture_status, raw_frame_bgr = video_capture.read()
+    raw_frame_rgb = raw_frame_bgr[:,:,[2, 1, 0]]
     if frame_capture_status:
-      yield (raw_frame, video_frame_id)
+      yield (raw_frame_rgb, video_frame_id)
       video_frame_id += 1
     else:
       break
