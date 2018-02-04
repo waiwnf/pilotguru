@@ -82,6 +82,11 @@ double BoundedRotationVelocityEffectiveTorque(
     double measured_angle_degrees, double angular_velocity_degrees_per_second,
     const SteeringAngleHolderSettings &settings);
 
+struct TargetSteeringAngleStatus {
+  bool is_set;
+  double angle_degrees;
+};
+
 class SteeringAngleHolderController {
 public:
   SteeringAngleHolderController(
@@ -90,7 +95,7 @@ public:
       const SteeringAngleHolderSettings &settings);
 
   const SteeringAngleHolderSettings &settings() const;
-  const TimestampedHistory<double> &TargetSteeringAnglesHistory() const;
+  const TimestampedHistory<TargetSteeringAngleStatus> &TargetSteeringAnglesHistory() const;
 
   bool SetTargetAngle(double target_angle_degrees);
   bool IsTargetAngleSet() const;
@@ -104,7 +109,7 @@ public:
 private:
   // Initialized by the constructor.
   const TimestampedHistory<SteeringAngle> *const steering_angle_sensor_;
-  std::unique_ptr<TimestampedHistory<double>> target_steering_angles_history_;
+  std::unique_ptr<TimestampedHistory<TargetSteeringAngleStatus>> target_steering_angles_history_;
   ArduinoCommandChannel *const arduino_command_channel_;
   const SteeringAngleHolderSettings settings_;
   std::unique_ptr<KalmanFilter1D2Order> angle_sensor_filter_;

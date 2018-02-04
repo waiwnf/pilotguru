@@ -25,19 +25,30 @@ class SteeringNNMainWindow;
 constexpr char STEERING_COMMANDS_LOG_ROOT_ELEMENT[] = "steering_commands";
 constexpr char STEERING_ANGLES_LOG_ROOT_ELEMENT[] = "steering_angles";
 
-class SteeringPredictionReadThread : public TimestampedValueReadThread<double> {
+class SteeringPredictionReadThread
+    : public TimestampedValueReadThread<
+          pilotguru::kia::TargetSteeringAngleStatus> {
   Q_OBJECT
 public:
   SteeringPredictionReadThread(
-      const pilotguru::TimestampedHistory<double> *values_history)
-      : TimestampedValueReadThread<double>(values_history) {}
+      const pilotguru::TimestampedHistory<
+          pilotguru::kia::TargetSteeringAngleStatus> *values_history)
+      : TimestampedValueReadThread<pilotguru::kia::TargetSteeringAngleStatus>(
+            values_history) {}
 
-  void ProcessValue(const pilotguru::Timestamped<double> &value) override {
-    emit SteeringPredictionChanged(value.data());
+  void ProcessValue(
+      const pilotguru::Timestamped<pilotguru::kia::TargetSteeringAngleStatus>
+          &value) override {
+    if (value.data().is_set) {
+      emit SteeringPredictionChanged(
+          QString::number(value.data().angle_degrees));
+    } else {
+      emit SteeringPredictionChanged("not set");
+    }
   }
 
 signals:
-  void SteeringPredictionChanged(double angle_degrees);
+  void SteeringPredictionChanged(QString text);
 };
 
 class SteeringNNMainWindow : public QMainWindow {
@@ -56,7 +67,7 @@ private:
   void OnSteeringAngleChanged(int16_t angle_deci_degrees);
   void OnVelocityChanged(QString text);
   void OnSteeringTorqueChanged(QString text);
-  void OnSteeringPredictionChanged(double degrees);
+  void OnSteeringPredictionChanged(QString text);
   void PredictionUpdaterStart();
   void PredictionUpdaterStop();
   void SteeringStart();

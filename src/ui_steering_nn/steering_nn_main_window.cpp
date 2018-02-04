@@ -120,8 +120,8 @@ void SteeringNNMainWindow::OnSteeringTorqueChanged(QString text) {
   ui->torque_offset_value_label->setText(text);
 }
 
-void SteeringNNMainWindow::OnSteeringPredictionChanged(double degrees) {
-  ui->target_angle_value_label->setText(QString::number(degrees));
+void SteeringNNMainWindow::OnSteeringPredictionChanged(QString text) {
+  ui->target_angle_value_label->setText(text);
 }
 
 void SteeringNNMainWindow::PredictionUpdaterStart() {
