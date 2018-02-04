@@ -103,6 +103,7 @@ SteeringNNMainWindow::~SteeringNNMainWindow() {
   steering_controller_->Stop();
   car_motion_data_updater_->stop();
   prediction_updater_->Stop();
+  steering_controller_feeder_->Stop();
   delete ui;
 }
 
