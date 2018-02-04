@@ -33,6 +33,12 @@ public:
       : history_length_(history_length), values_(history_length),
         latest_idx_(history_length - 1) {}
 
+  void update_now(const T &t) {
+    timeval now_time;
+    gettimeofday(&now_time, nullptr);
+    update(t, now_time);
+  }
+
   void update(const T &t, const timeval &timestamp) {
     // TODO timestamp checks.
     std::unique_lock<std::mutex> lock(data_mutex_);

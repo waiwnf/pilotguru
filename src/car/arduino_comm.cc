@@ -129,9 +129,7 @@ char ArduinoCommandChannel::SendCommand(const kia::KiaControlCommand &command) {
   // Defer logging command to history until after it has been written to the
   // serial connection.
   // TODO: consider logging on above errors also, and log the outcome too.
-  timeval time_now;
-  gettimeofday(&time_now, nullptr);
-  commands_history_->update(command, time_now);
+  commands_history_->update_now(command);
 
   // Wait for reply
   const int wait_result = arduino_tty_.wait_read(nullptr);

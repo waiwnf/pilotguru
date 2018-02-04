@@ -1,7 +1,5 @@
 #include <car/kia_steering_angle_holder.hpp>
 
-#include <sys/time.h>
-
 #include <glog/logging.h>
 
 namespace pilotguru {
@@ -171,19 +169,14 @@ bool SteeringAngleHolderController::SetTargetAngle(
   std::unique_lock<std::mutex> lock(mutex_);
   is_target_angle_set_ = true;
   target_angle_degrees_ = target_angle_degrees;
-  timeval now_time;
-  gettimeofday(&now_time, nullptr);
-  target_steering_angles_history_->update({true, target_angle_degrees},
-                                          now_time);
+  target_steering_angles_history_->update_now({true, target_angle_degrees});
   return true;
 }
 
 void SteeringAngleHolderController::ClearTargetAngle() {
   std::unique_lock<std::mutex> lock(mutex_);
   is_target_angle_set_ = false;
-  timeval now_time;
-  gettimeofday(&now_time, nullptr);
-  target_steering_angles_history_->update({false, 0}, now_time);
+  target_steering_angles_history_->update_now({false, 0});
 }
 
 bool SteeringAngleHolderController::IsTargetAngleSet() const {
