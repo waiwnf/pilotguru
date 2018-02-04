@@ -90,7 +90,7 @@ public:
       const SteeringAngleHolderSettings &settings);
 
   const SteeringAngleHolderSettings &settings() const;
-  const TimestampedHistory<double>& TargetSteeringAnglesHistory() const;
+  const TimestampedHistory<double> &TargetSteeringAnglesHistory() const;
 
   bool SetTargetAngle(double target_angle_degrees);
   bool IsTargetAngleSet() const;
@@ -126,6 +126,7 @@ public:
 
   void Start();
   void Stop();
+  // On disabling the feed, also clears the target angle on the controller.
   void SetFeedEnabled(bool must_feed);
 
 private:
@@ -135,7 +136,7 @@ private:
   const TimestampedHistory<double> *steering_feed_;
   bool must_run_ = false, must_feed_ = false;
   std::unique_ptr<std::thread> feed_thread_;
-  std::mutex feed_thread_status_mutex_;
+  std::mutex feed_thread_status_mutex_, must_feed_mutex_;
 };
 }
 }

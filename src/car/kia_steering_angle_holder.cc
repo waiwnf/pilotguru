@@ -156,7 +156,7 @@ SteeringAngleHolderController::settings() const {
   return settings_;
 }
 
-const TimestampedHistory<double>&
+const TimestampedHistory<double> &
 SteeringAngleHolderController::TargetSteeringAnglesHistory() const {
   return *target_steering_angles_history_;
 }
@@ -309,7 +309,11 @@ void SteeringAngleHolderFeeder::Stop() {
 }
 
 void SteeringAngleHolderFeeder::SetFeedEnabled(bool must_feed) {
+  std::unique_lock<std::mutex> lock(must_feed_mutex_);
   must_feed_ = must_feed;
+  if (!must_feed) {
+    controller_->ClearTargetAngle();
+  }
 }
 
 void SteeringAngleHolderFeeder::FeedLoop() {
@@ -318,6 +322,7 @@ void SteeringAngleHolderFeeder::FeedLoop() {
   while (must_run_) {
     const bool steering_wait_result = steering_feed_->wait_get_next(
         steering_angle.timestamp(), &loop_timeout, &steering_angle);
+    std::unique_lock<std::mutex> must_feed_lock(must_feed_mutex_);
     if (steering_wait_result && must_feed_) {
       controller_->SetTargetAngle(steering_angle.data());
     }
