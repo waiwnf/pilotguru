@@ -21,7 +21,14 @@ struct SteeringAngleHolderSettings {
   // exceeding this magnitude, regardless of the requested target steering
   // angle, zero spoof torque voltage will be used to avoid accidentall damaging
   // the hardware.
-  double max_angle_amplitude = 180.0;
+  double max_angle_amplitude_for_torque = 180.0;
+
+  // Maximum absolute angle that the controller will accept as the target angle.
+  // This should be smaller than max_angle_amplitude_for_torque by some margin,
+  // to make it possible for the controller to compensate deviation from target
+  // away from zero.
+  double max_target_angle_amplitude = 90.0;
+
   // Maximum absolute spoof torque voltage, in controller-internal units.
   int16_t max_torque = 80;
 
@@ -95,7 +102,8 @@ public:
       const SteeringAngleHolderSettings &settings);
 
   const SteeringAngleHolderSettings &settings() const;
-  const TimestampedHistory<TargetSteeringAngleStatus> &TargetSteeringAnglesHistory() const;
+  const TimestampedHistory<TargetSteeringAngleStatus> &
+  TargetSteeringAnglesHistory() const;
 
   bool SetTargetAngle(double target_angle_degrees);
   bool IsTargetAngleSet() const;
@@ -109,7 +117,8 @@ public:
 private:
   // Initialized by the constructor.
   const TimestampedHistory<SteeringAngle> *const steering_angle_sensor_;
-  std::unique_ptr<TimestampedHistory<TargetSteeringAngleStatus>> target_steering_angles_history_;
+  std::unique_ptr<TimestampedHistory<TargetSteeringAngleStatus>>
+      target_steering_angles_history_;
   ArduinoCommandChannel *const arduino_command_channel_;
   const SteeringAngleHolderSettings settings_;
   std::unique_ptr<KalmanFilter1D2Order> angle_sensor_filter_;
@@ -127,7 +136,8 @@ private:
 class SteeringAngleHolderFeeder {
 public:
   SteeringAngleHolderFeeder(SteeringAngleHolderController *controller,
-                            const TimestampedHistory<double> *steering_feed);
+                            const TimestampedHistory<double> *steering_feed,
+                            bool clip_target_angle);
 
   void Start();
   void Stop();
@@ -139,6 +149,7 @@ private:
 
   SteeringAngleHolderController *controller_;
   const TimestampedHistory<double> *steering_feed_;
+  const bool clip_target_angle_;
   bool must_run_ = false, must_feed_ = false;
   std::unique_ptr<std::thread> feed_thread_;
   std::mutex feed_thread_status_mutex_, must_feed_mutex_;

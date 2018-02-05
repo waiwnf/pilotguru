@@ -28,7 +28,8 @@ SteeringNNMainWindow::SteeringNNMainWindow(
       prediction_updater_(new pilotguru::SingleSteeringAnglePredictionUpdater(
           CHECK_NOTNULL(prediction_data_socket), 5 /* history length */)),
       steering_controller_feeder_(new pilotguru::kia::SteeringAngleHolderFeeder(
-          steering_controller_.get(), &(prediction_updater_->Predictions()))),
+          steering_controller_.get(), &(prediction_updater_->Predictions()),
+          true /* clip_target_angle */)),
       kia_commands_logger_(
           new pilotguru::TimestampedJsonLogger<KiaControlCommand>(
               log_dir + "/" + pilotguru::STEERING_COMMANDS_LOG_ROOT_ELEMENT +

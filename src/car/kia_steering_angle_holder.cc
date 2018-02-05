@@ -6,8 +6,15 @@ namespace pilotguru {
 namespace kia {
 
 bool SteeringAngleHolderSettings::IsValid() const {
-  if (max_angle_amplitude < 0 ||
-      max_angle_amplitude > angle_amplitude_hard_limit) {
+  if (max_angle_amplitude_for_torque < 0 ||
+      max_angle_amplitude_for_torque > angle_amplitude_hard_limit) {
+    return false;
+  }
+  if (max_target_angle_amplitude < 0 ||
+      max_target_angle_amplitude > angle_amplitude_hard_limit) {
+    return false;
+  }
+  if (max_target_angle_amplitude >= max_angle_amplitude_for_torque) {
     return false;
   }
   if (max_torque < 0 || max_torque > torque_hard_limit) {
@@ -99,7 +106,8 @@ double BoundedRotationVelocityEffectiveTorque(
     double torque_voltage_finegrained, double target_angle_degrees,
     double measured_angle_degrees, double angular_velocity_degrees_per_second,
     const SteeringAngleHolderSettings &settings) {
-  if (std::abs(measured_angle_degrees) > settings.max_angle_amplitude) {
+  if (std::abs(measured_angle_degrees) >
+      settings.max_angle_amplitude_for_torque) {
     // Steering angle is out of bounds. Remove the steering torque completely to
     // avoid accidentally damaging the power steering drive.
     return 0;
@@ -162,7 +170,7 @@ SteeringAngleHolderController::TargetSteeringAnglesHistory() const {
 
 bool SteeringAngleHolderController::SetTargetAngle(
     double target_angle_degrees) {
-  if (std::abs(target_angle_degrees) > settings_.max_angle_amplitude) {
+  if (std::abs(target_angle_degrees) > settings_.max_target_angle_amplitude) {
     return false;
   }
 
@@ -284,9 +292,10 @@ void SteeringAngleHolderController::Stop() {
 
 SteeringAngleHolderFeeder::SteeringAngleHolderFeeder(
     SteeringAngleHolderController *controller,
-    const TimestampedHistory<double> *steering_feed)
+    const TimestampedHistory<double> *steering_feed, bool clip_target_angle)
     : controller_(CHECK_NOTNULL(controller)),
-      steering_feed_(CHECK_NOTNULL(steering_feed)) {}
+      steering_feed_(CHECK_NOTNULL(steering_feed)),
+      clip_target_angle_(clip_target_angle) {}
 
 void SteeringAngleHolderFeeder::Start() {
   std::unique_lock<std::mutex> lock(feed_thread_status_mutex_);
@@ -324,7 +333,15 @@ void SteeringAngleHolderFeeder::FeedLoop() {
     std::unique_lock<std::mutex> must_feed_lock(must_feed_mutex_);
     if (must_feed_) {
       if (steering_wait_result) {
-        controller_->SetTargetAngle(steering_angle.data());
+        const double raw_angle_degrees = steering_angle.data();
+        const double target_angle_limit =
+            controller_->settings().max_target_angle_amplitude;
+        const double effective_target_angle =
+            !clip_target_angle_
+                ? raw_angle_degrees
+                : std::max(std::min(raw_angle_degrees, target_angle_limit),
+                           -target_angle_limit);
+        controller_->SetTargetAngle(effective_target_angle);
       } else {
         // Stop trying to keep the steering direction if we have not heard a
         // steering update for too long.

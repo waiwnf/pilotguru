@@ -138,7 +138,7 @@ void MainWindow::TurnRight() {
 
 void MainWindow::SetTargetSteeringAngle(double target_angle_degrees) {
   if (std::abs(target_angle_degrees) <=
-      steering_controller_->settings().max_angle_amplitude) {
+      steering_controller_->settings().max_target_angle_amplitude) {
     steering_controller_->SetTargetAngle(target_angle_degrees);
     ui->target_angle_value_label->setText(
         QString::number(target_angle_degrees));
