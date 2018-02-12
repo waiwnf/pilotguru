@@ -262,6 +262,9 @@ void SteeringAngleHolderController::ControllerLoop() {
         torque_voltage_finegrained = BoundedRotationVelocityEffectiveTorque(
             torque_voltage_finegrained, target_angle_degrees_, lookahead_angle,
             lookahead_velocity, settings_);
+      } else {
+        // Do not add any spoof torque voltage if the target angle is not set.
+        torque_voltage_finegrained = 0;
       }
     } else {
       // Steering angle sensor timed out. The car is not powered up or CAN bus
