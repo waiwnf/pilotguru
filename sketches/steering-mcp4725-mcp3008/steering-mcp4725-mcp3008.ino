@@ -46,7 +46,7 @@ void TakeVoltageMeasurement() {
 }
 
 void setup() {
-  steering_spoof_settings.max_steering_magnitude = 80;
+  steering_spoof_settings.max_steering_magnitude = 300;
   steering_spoof_settings.steps_per_adjustment_level = 2;
   steering_spoof_settings.steps_at_target_level = 300;
   steering_spoof_settings.voltage_update_hystheresis = 1;
