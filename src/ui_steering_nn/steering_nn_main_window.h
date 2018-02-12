@@ -106,6 +106,9 @@ private:
   std::unique_ptr<
       pilotguru::TimestampedJsonLogger<pilotguru::kia::SteeringAngle>>
       steering_angles_logger_;
+  std::unique_ptr<pilotguru::TimestampedJsonLogger<
+      pilotguru::kia::TargetSteeringAngleStatus>>
+      target_steering_angles_logger_;
 };
 
 #endif // STEERINGNNMAINWINDOW_H

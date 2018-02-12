@@ -17,4 +17,13 @@ void SteeringAngleJsonWriter::WriteAsJsonString(const kia::SteeringAngle &data,
   file_stream << "\"angle_deci_degrees\" : " << data.angle_deci_degrees << "\n";
 }
 
+void TargetSteeringAngleStatusJsonWriter::WriteAsJsonString(
+    const kia::TargetSteeringAngleStatus &data, std::ostream &file_stream) {
+  file_stream << "\"is_set\": " << (data.is_set ? "true" : "false");
+  if (data.is_set) {
+    file_stream << ", \"angle_degrees\": " << data.angle_degrees;
+  }
+  file_stream << "\n";
+}
+
 } // namespace pilotguru

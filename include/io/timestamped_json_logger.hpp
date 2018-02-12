@@ -20,12 +20,13 @@ public:
 
 template <typename T> class TimestampedJsonLogger {
 public:
-  TimestampedJsonLogger(const std::string &filename,
+  TimestampedJsonLogger(const std::string &log_dir,
                         const std::string &root_element_name,
                         std::unique_ptr<JsonSteamWriter<T>> value_writer,
                         const TimestampedHistory<T> *elements_source)
       : value_writer_(std::move(value_writer)),
-        json_ostream_(new std::ofstream(filename)),
+        json_ostream_(
+            new std::ofstream(log_dir + "/" + root_element_name + ".json")),
         elements_source_(elements_source) {
     CHECK_NOTNULL(elements_source_);
 

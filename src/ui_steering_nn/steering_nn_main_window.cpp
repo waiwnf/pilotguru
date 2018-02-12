@@ -32,20 +32,23 @@ SteeringNNMainWindow::SteeringNNMainWindow(
           true /* clip_target_angle */)),
       kia_commands_logger_(
           new pilotguru::TimestampedJsonLogger<KiaControlCommand>(
-              log_dir + "/" + pilotguru::STEERING_COMMANDS_LOG_ROOT_ELEMENT +
-                  ".json",
-              pilotguru::STEERING_COMMANDS_LOG_ROOT_ELEMENT,
+              log_dir, pilotguru::STEERING_COMMANDS_LOG_ROOT_ELEMENT,
               std::unique_ptr<pilotguru::JsonSteamWriter<KiaControlCommand>>(
                   new pilotguru::SteeringCommandsJsonWriter()),
               &(arduino_command_channel_->CommandsHistory()))),
       steering_angles_logger_(
           new pilotguru::TimestampedJsonLogger<SteeringAngle>(
-              log_dir + "/" + pilotguru::STEERING_ANGLES_LOG_ROOT_ELEMENT +
-                  ".json",
-              pilotguru::STEERING_ANGLES_LOG_ROOT_ELEMENT,
+              log_dir, pilotguru::STEERING_ANGLES_LOG_ROOT_ELEMENT,
               std::unique_ptr<pilotguru::JsonSteamWriter<SteeringAngle>>(
                   new pilotguru::SteeringAngleJsonWriter()),
-              &(car_motion_data_->steering_angles()))) {
+              &(car_motion_data_->steering_angles()))),
+      target_steering_angles_logger_(new pilotguru::TimestampedJsonLogger<
+                                     pilotguru::kia::TargetSteeringAngleStatus>(
+          log_dir, pilotguru::TARGET_STEERING_ANGLES_LOG_ROOT_ELEMENT,
+          std::unique_ptr<pilotguru::JsonSteamWriter<
+              pilotguru::kia::TargetSteeringAngleStatus>>(
+              new pilotguru::TargetSteeringAngleStatusJsonWriter()),
+          &(steering_controller_->TargetSteeringAnglesHistory()))) {
   ui->setupUi(this);
 
   prediction_updater_->Start();
@@ -101,6 +104,7 @@ SteeringNNMainWindow::~SteeringNNMainWindow() {
   steering_prediction_read_thread_->wait();
   kia_commands_logger_->Stop();
   steering_angles_logger_->Stop();
+  target_steering_angles_logger_->Stop();
   steering_controller_->Stop();
   car_motion_data_updater_->stop();
   prediction_updater_->Stop();

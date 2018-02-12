@@ -23,17 +23,13 @@ MainWindow::MainWindow(const std::string &can_interface,
           arduino_command_channel_.get(), steering_controller_settings)),
       kia_commands_logger_(
           new pilotguru::TimestampedJsonLogger<KiaControlCommand>(
-              log_dir + "/" + pilotguru::STEERING_COMMANDS_LOG_ROOT_ELEMENT +
-                  ".json",
-              pilotguru::STEERING_COMMANDS_LOG_ROOT_ELEMENT,
+              log_dir, pilotguru::STEERING_COMMANDS_LOG_ROOT_ELEMENT,
               std::unique_ptr<pilotguru::JsonSteamWriter<KiaControlCommand>>(
                   new pilotguru::SteeringCommandsJsonWriter()),
               &(arduino_command_channel_->CommandsHistory()))),
       steering_angles_logger_(
           new pilotguru::TimestampedJsonLogger<SteeringAngle>(
-              log_dir + "/" + pilotguru::STEERING_ANGLES_LOG_ROOT_ELEMENT +
-                  ".json",
-              pilotguru::STEERING_ANGLES_LOG_ROOT_ELEMENT,
+              log_dir, pilotguru::STEERING_ANGLES_LOG_ROOT_ELEMENT,
               std::unique_ptr<pilotguru::JsonSteamWriter<SteeringAngle>>(
                   new pilotguru::SteeringAngleJsonWriter()),
               &(car_motion_data_->steering_angles()))) {
