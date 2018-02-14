@@ -5,12 +5,14 @@ import time
 import image_helpers
 import io_helpers
 import prediction_helpers
+import threading_helpers
 
 import cv2
 import zmq
 
 import torch
 from torch.autograd import Variable
+import numpy as np
 
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()
@@ -27,13 +29,25 @@ if __name__ == '__main__':
   parser.add_argument('--cuda_device_id', type=int, default=0)
   parser.add_argument('--trajectory_frame_update_rate', type=float, default=1.0)
   parser.add_argument(
-      '--prediction_units_to_degrees_scale', type=float, default=90.0)
+    '--prediction_units_to_degrees_scale', type=float, default=90.0)
   parser.add_argument(
     '--steering_prediction_socket', default='ipc:///tmp/steering-predict')
+  parser.add_argument('--log_dir', default=None) 
   
   prediction_helpers.AddCropArgs(parser)
 
   args = parser.parse_args()
+
+  frames_feed = threading_helpers.SynchronizedTimestampedValue()
+
+  video_writer = None
+  if args.log_dir is not None:
+    video_writer = image_helpers.AsyncVideoWriter(
+        frames_feed,
+        args.log_dir,
+        inputdict={'-r': '30.0'},
+        outputdict={'-preset': 'superfast', '-r': '30.0'})
+    video_writer.start()
 
   context = zmq.Context()
   socket = context.socket(zmq.PUB)
@@ -82,6 +96,7 @@ if __name__ == '__main__':
   trajectory_prediction = None
   print('Live prediction started.')
   for raw_frame, _ in final_frame_generator:
+    timestamp = time.time()
     frame_variable, frame_display = prediction_helpers.RawFrameToModelInput(
         raw_frame=raw_frame,
         crop_settings=args,
@@ -103,6 +118,8 @@ if __name__ == '__main__':
     prediction_dict = {'s': prediction_degrees}
     socket.send_json(prediction_dict)
 
+    frames_feed.Update(timestamp, np.copy(raw_frame))
+
     cv2.imshow('frame', cv2.cvtColor(frame_display, cv2.COLOR_RGB2BGR))
     if cv2.waitKey(1) & 0xFF == ord('q'):
       break
@@ -110,4 +127,6 @@ if __name__ == '__main__':
   # When everything done, release the capture.
   if video_capture is not None:
     video_capture.release()
+  if video_writer is not None:
+    video_writer.stop()
   cv2.destroyAllWindows()

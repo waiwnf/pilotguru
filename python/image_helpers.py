@@ -1,7 +1,9 @@
+import json
+import os
 import random
-
 import re		
 import subprocess
+import threading
 import time
 		
 import av
@@ -9,6 +11,7 @@ import numpy as np
 import scipy.misc
 import scipy.ndimage
 import sklearn.decomposition
+import skvideo.io
 
 def CropHWC(img, top, bottom, left, right):
   """Crops given number of pixels from the edges of the image in HWC format."""
@@ -119,6 +122,41 @@ def VideoFrameGeneratorLimitedFpsSkip(base_generator, max_fps):
     if time_since_last_frame >= frame_interval_sec:
       prev_frame_time = time.time()
       yield frame_data
+
+class AsyncVideoWriter(object):
+  def __init__(self, frames_feed, out_dir, inputdict, outputdict):
+    self.frames_feed = frames_feed
+    self.must_run = True
+    self.frames_json_name = os.path.join(out_dir, 'frames.json')
+    self.frames_timestamps = []
+    self.next_frame_id = 0
+    out_video_name = os.path.join(out_dir, 'video.mp4')
+    self.video_writer = skvideo.io.FFmpegWriter(
+        out_video_name, inputdict=inputdict, outputdict=outputdict)
+    self.writer_tread = threading.Thread(
+        target=AsyncVideoWriter.run, args=(self,))
+  
+  def start(self):
+    self.writer_tread.start()
+
+  def run(self):
+    timestamp = None
+    frame = None
+    while self.must_run:
+      next_data = self.frames_feed.WaitGetNext(timestamp, timeout=1.0)
+      if next_data is not None:
+        (timestamp, frame) = next_data
+        self.frames_timestamps.append(
+            {'frame_id': self.next_frame_id, 'time_usec': int(timestamp * 1e6)})
+        self.next_frame_id += 1
+        self.video_writer.writeFrame(frame)
+
+  def stop(self):
+    self.must_run = False
+    self.writer_tread.join()
+    with open(self.frames_json_name, 'w') as frames_json:
+      json.dump({'frames': self.frames_timestamps}, frames_json, indent=2)
+    self.video_writer.close()
 
 def GetPcaRgbDirections(images_chw):
   # Train data is of size [examples x (frames per example) x C x H x W].
