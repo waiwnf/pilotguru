@@ -23,13 +23,8 @@ if __name__ == '__main__':
       '--rotations_json', os.path.join(args.in_dir, 'rotations.json'),
       '--accelerations_json', os.path.join(args.in_dir, 'accelerations.json'),
       '--locations_json', os.path.join(args.in_dir, 'locations.json'),
-      '--compute_steering_raw_rotations',
-      '--compute_velocities_from_imu',
-      '--compute_steering_using_forward_axis',
       '--velocities_out_json', os.path.join(out_dir, 'velocities-imu.json'),
-      '--steering_out_json_raw', os.path.join(out_dir, 'steering-imu-raw.json'),
-      '--steering_out_json_forward_axis_complementary',
-      os.path.join(out_dir, 'steering-imu-forward.json'),
+      '--steering_out_json', os.path.join(out_dir, 'steering-imu.json'),
       '--forward_axis_out_json', os.path.join(out_dir, 'forward.json')])
 
   # Convert raw CAN bus data to steering and velocity.
