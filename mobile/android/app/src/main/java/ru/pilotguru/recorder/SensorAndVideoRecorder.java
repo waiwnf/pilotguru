@@ -9,6 +9,7 @@ import android.media.MediaScannerConnection;
 import android.support.annotation.NonNull;
 import android.view.Surface;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import java.io.File;
 import java.io.IOException;
@@ -65,7 +66,14 @@ public class SensorAndVideoRecorder {
       throw new AssertionError("Attempted to stop recording, but no recording is in progress");
     }
     sensorRecorder.stop(context);
-    videoRecorder.stop();
+    try {
+      videoRecorder.stop();
+    } catch (RuntimeException e) {
+      Toast.makeText(
+          context,
+          "Exception occurred on stopping video recording. Last video is likely lost.",
+          Toast.LENGTH_LONG).show();
+    }
     videoRecorder.reset();
     MediaScannerConnection.scanFile(context, new String[]{videoFile.toString()}, null, null);
   }
