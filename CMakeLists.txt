@@ -43,6 +43,13 @@ ExternalProject_Add(
 # Get GTest source and binary directories from CMake project
 ExternalProject_Get_Property(gtest source_dir binary_dir)
 
+add_library(libgtest IMPORTED STATIC GLOBAL)
+add_dependencies(libgtest gtest)
+set_target_properties(libgtest PROPERTIES
+    "IMPORTED_LOCATION" "${binary_dir}/googlemock/gtest/libgtest.a"
+    "IMPORTED_LINK_INTERFACE_LIBRARIES" "${CMAKE_THREAD_LIBS_INIT}"
+)
+
 # Create a libgtest target to be used as a dependency by test programs
 add_library(libgtest_main IMPORTED STATIC GLOBAL)
 add_dependencies(libgtest_main gtest)
@@ -65,6 +72,9 @@ set_target_properties(libgmock PROPERTIES
 
 include_directories("${source_dir}/googletest/include"
                     "${source_dir}/googlemock/include")
+                    
+add_library(gtest_main_all SHARED)
+target_link_libraries(gtest_main_all libgtest_main libgmock libgtest )
 
 # ---------------------- Google test end ----------------------
 
@@ -168,25 +178,25 @@ add_executable(smooth_heading_directions src/smooth_heading_directions.cc)
 add_executable(
     steeringcommandslib_test
     ${PROJECT_SOURCE_DIR}/sketches/libs/spoof-steering-serial-commands/test/spoof-steering-serial-commands_test.cpp)
-target_link_libraries(steeringcommandslib_test steeringcommandslib libgtest_main libgmock)
+target_link_libraries(steeringcommandslib_test steeringcommandslib gtest_main_all)
 add_test(SteeringCommandsTests steeringcommandslib_test)
 
 add_executable(
     kia_steering_angle_holder_test
     ${PROJECT_SOURCE_DIR}/src/car/kia_steering_angle_holder_test.cc)
-target_link_libraries(kia_steering_angle_holder_test kia_steering_angle_holder_lib arduinocommlib kiacanlib canlib steeringcommandslib libgtest_main libgmock glog)  
+target_link_libraries(kia_steering_angle_holder_test kia_steering_angle_holder_lib arduinocommlib kiacanlib canlib steeringcommandslib gtest_main_all glog)  
 add_test(KiaSteeringAngleHolderTests kia_steering_angle_holder_test)
 
 add_executable(
     kalman_filter_lib_test
     ${PROJECT_SOURCE_DIR}/src/car/kalman_filter_test.cc)
-target_link_libraries(kalman_filter_lib_test kalman_filter_lib libgtest_main libgmock glog)  
+target_link_libraries(kalman_filter_lib_test kalman_filter_lib gtest_main_all glog)  
 add_test(KalmanFilterTests kalman_filter_lib_test)
 
 add_executable(
     spoof_voltage_smoothing_lib_test
     ${PROJECT_SOURCE_DIR}/sketches/libs/kia-spoof-steering/test/spoof-voltage-smoothing_test.cpp)
-target_link_libraries(spoof_voltage_smoothing_lib_test spoof_voltage_smoothing_lib libgtest_main libgmock glog)  
+target_link_libraries(spoof_voltage_smoothing_lib_test spoof_voltage_smoothing_lib gtest_main_all glog)  
 add_test(SpoofVoltageSmoothingLibTest spoof_voltage_smoothing_lib_test)
 
 target_link_libraries(annotate_frames pilotgurulib ${OpenCV_LIBS} glog gflags)
