@@ -81,7 +81,7 @@ the necessary dependencies will be pulled when you build the image.
     ```
 2. Build the docker image (this will take a while).
     ```
-    ./build-docker.sh main
+    ./build-docker.sh
     ```
 3. Build everything (inside a docker container).
     ```
