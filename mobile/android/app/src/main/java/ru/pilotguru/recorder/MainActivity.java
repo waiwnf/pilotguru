@@ -42,6 +42,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
@@ -114,7 +115,7 @@ public class MainActivity extends Activity {
         @Override
         public void onOpened(@NonNull CameraDevice camera) {
           cameraDevice = camera;
-          createCameraSession(camera, Arrays.<Surface>asList(), null);
+          createCameraSession(camera, Collections.<Surface>emptyList(), null);
           takePictureButton.setOnClickListener(recordButtonListener);
           isCameraOpened = true;
         }
@@ -162,7 +163,7 @@ public class MainActivity extends Activity {
       if (recorder.isRecording()) {
         maybeStopRecording();
         // Recreate the preview-only capture session.
-        createCameraSession(cameraDevice, Arrays.<Surface>asList(), null);
+        createCameraSession(cameraDevice, Collections.<Surface>emptyList(), null);
       } else {
         // Update buttons status.
         Toast.makeText(getApplicationContext(), "Started", Toast.LENGTH_LONG).show();
@@ -180,7 +181,7 @@ public class MainActivity extends Activity {
               displayRotationEnum,
               getCameraCharacteristics());
           createCameraSession(cameraDevice,
-              Arrays.asList(videoRecorderSurface),
+                  Collections.singletonList(videoRecorderSurface),
               recorder.getSensorDataSaver());
         } catch (CameraAccessException e) {
           Errors.dieOnException(MainActivity.this, e, "Camer access exception, exiting.");
@@ -483,12 +484,21 @@ public class MainActivity extends Activity {
 
   private void subscribeToImuUpdates(SensorEventListener listener, int delay) {
     final SensorManager sm = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
-    sm.registerListener(listener, sm.getDefaultSensor(Sensor.TYPE_GYROSCOPE), delay);
+    if (sm == null) {
+      return;
+    }
+
+    final Sensor gyro = sm.getDefaultSensor(Sensor.TYPE_GYROSCOPE);
+    if (gyro != null) {
+      sm.registerListener(listener, sm.getDefaultSensor(Sensor.TYPE_GYROSCOPE), delay);
+    }
     sm.registerListener(listener, sm.getDefaultSensor(Sensor.TYPE_ACCELEROMETER), delay);
   }
 
   private void subscribeToPressureUpdates(SensorEventListener listener, int delay) {
     final SensorManager sm = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
-    sm.registerListener(listener, sm.getDefaultSensor(Sensor.TYPE_PRESSURE), delay);
+    if (sm != null) {
+      sm.registerListener(listener, sm.getDefaultSensor(Sensor.TYPE_PRESSURE), delay);
+    }
   }
 }

@@ -85,7 +85,7 @@ public class SettingsFragment extends PreferenceFragment implements
           characteristics.get(CameraCharacteristics.SENSOR_INFO_SENSITIVITY_RANGE);
       final int maxIsoSensitivity = sensitivityRange.getUpper();//10000
       final int minIsoSensitivity = sensitivityRange.getLower();//100
-      final List<String> isoSensitivities = new ArrayList<String>();
+      final List<String> isoSensitivities = new ArrayList<>();
       for (int i = minIsoSensitivity; i < maxIsoSensitivity; i += 50) {
         isoSensitivities.add(Integer.toString(i));
       }

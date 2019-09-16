@@ -312,8 +312,7 @@ public class ELM327Receiver {
         while (isMonitoring) {
           wait();
         }
-      } catch (IOException e) {
-      } catch (InterruptedException e) {
+      } catch (IOException | InterruptedException e) {
       }
     }
 

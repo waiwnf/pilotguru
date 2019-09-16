@@ -218,8 +218,8 @@ public class SensorDataSaver extends CameraCaptureSession.CaptureCallback implem
   }
 
   public void onSensorChanged(SensorEvent event) {
-    final String valuesXyz[] = {"x", "y", "z"};
-    final String valuesPressureHpa[] = {"hpa"};
+    final String[] valuesXyz = {"x", "y", "z"};
+    final String[] valuesPressureHpa = {"hpa"};
 
     switch (event.sensor.getType()) {
       case Sensor.TYPE_GYROSCOPE:
@@ -296,8 +296,9 @@ public class SensorDataSaver extends CameraCaptureSession.CaptureCallback implem
   }
 
   // CaptureCallback - captured frames timestamps.
-  public void onCaptureCompleted(CameraCaptureSession session, CaptureRequest request,
-                                 TotalCaptureResult result) {
+  public void onCaptureCompleted(@NonNull CameraCaptureSession session,
+                                 @NonNull CaptureRequest request,
+                                 @NonNull TotalCaptureResult result) {
     try {
       frameCaptureLock.lock();
       if (isRecording) {
@@ -306,20 +307,23 @@ public class SensorDataSaver extends CameraCaptureSession.CaptureCallback implem
           firstFrameNumberInSequence = globalFrameNumber;
         }
         final long currentFrameNumberInSequence = globalFrameNumber - firstFrameNumberInSequence;
-        final long frameSensorNanos = result.get(CaptureResult.SENSOR_TIMESTAMP);
-        framesWriter.beginObject();
-        framesWriter.name("frame_id").value(currentFrameNumberInSequence);
-        framesWriter.name("sensor_timestamp").value(frameSensorNanos);
-        final long timeUsec =
-            TimeUnit.NANOSECONDS.toMicros(frameSensorNanos + cameraTimestampsShiftWrtSensors);
-        framesWriter.name(TIME_USEC).value(timeUsec);
-        framesWriter.endObject();
+        final Long frameSensorNanos = result.get(CaptureResult.SENSOR_TIMESTAMP);
+        if (frameSensorNanos != null) {
 
-        // Update FPS text view.
-        fpsTextUpdater.setCurrentFrameNanosMaybeUpdate(frameSensorNanos);
+          framesWriter.beginObject();
+          framesWriter.name("frame_id").value(currentFrameNumberInSequence);
+          framesWriter.name("sensor_timestamp").value(frameSensorNanos);
+          final long timeUsec =
+                  TimeUnit.NANOSECONDS.toMicros(frameSensorNanos + cameraTimestampsShiftWrtSensors);
+          framesWriter.name(TIME_USEC).value(timeUsec);
+          framesWriter.endObject();
 
-        // Update focus distance and stuff.
-        cameraInfoIntervalUpdater.maybeUpdate(frameSensorNanos, result);
+          // Update FPS text view.
+          fpsTextUpdater.setCurrentFrameNanosMaybeUpdate(frameSensorNanos);
+
+          // Update focus distance and stuff.
+          cameraInfoIntervalUpdater.maybeUpdate(frameSensorNanos, result);
+        }
       }
     } catch (IOException e) {
       Errors.dieOnException(parentActivity, e, "Error writing frames timestamps JSON.");

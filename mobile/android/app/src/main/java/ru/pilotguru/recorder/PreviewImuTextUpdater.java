@@ -9,8 +9,8 @@ import android.widget.TextView;
 import java.util.Locale;
 
 public class PreviewImuTextUpdater extends TimeSpacedUpdater implements SensorEventListener {
-  private final float rotation[] = {0, 0, 0};
-  private final float acceleration[] = {0, 0, 0};
+  private final float[] rotation = {0, 0, 0};
+  private final float[] acceleration = {0, 0, 0};
   private final TextView textViewImu;
 
   public PreviewImuTextUpdater(long minUpdateIntervalNanos, @NonNull TextView textViewImu) {

@@ -1,5 +1,6 @@
 package ru.pilotguru.recorder;
 
+import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.Context;
 import android.hardware.camera2.CameraCharacteristics;
@@ -37,7 +38,7 @@ public class SensorAndVideoRecorder {
     }
 
     final long sequenceStartMillis = System.currentTimeMillis();
-    final DateFormat dateFormat = new SimpleDateFormat("yyyy_MM_dd-HH_mm_ss");
+    @SuppressLint("SimpleDateFormat") final DateFormat dateFormat = new SimpleDateFormat("yyyy_MM_dd-HH_mm_ss");
     final File recordingDir =
         new File(storageDir, dateFormat.format(new Date(sequenceStartMillis)));
     recordingDir.mkdirs();

@@ -3,6 +3,8 @@ package ru.pilotguru.recorder;
 import android.hardware.camera2.CaptureResult;
 import android.os.StatFs;
 import android.support.annotation.NonNull;
+import android.support.annotation.Nullable;
+import android.support.annotation.VisibleForTesting;
 import android.widget.TextView;
 
 import java.io.File;
@@ -21,23 +23,22 @@ class CameraInfoIntervalUpdater extends TimeSpacedUpdater {
     this.recordingDir = recordingDir;
   }
 
-  private static String getFocalLengthText(CaptureResult result) {
-    final boolean isFixedFocusDistance =
-        result.get(CaptureResult.CONTROL_AF_MODE) == CaptureResult.CONTROL_AF_MODE_OFF;
-    final Float focusDistance = result.get(CaptureResult.LENS_FOCUS_DISTANCE);
-    if (isFixedFocusDistance) {
-      if (focusDistance != null) {
-        return String.format(Locale.US, "Fixed: %.01f", focusDistance);
+  @VisibleForTesting
+  static String getFocalLengthText(@Nullable Integer controlAfMode, @Nullable Float focusDistance) {
+    String focalLengthLegend = "Unknown";
+    if (controlAfMode != null) {
+      if (controlAfMode == CaptureResult.CONTROL_AF_MODE_OFF) {
+        focalLengthLegend = "Fixed";
       } else {
-        return "NA";
-      }
-    } else {
-      if (focusDistance != null) {
-        return String.format(Locale.US, "Auto: %.01f", focusDistance);
-      } else {
-        return "Auto";
+        focalLengthLegend = "Auto";
       }
     }
+
+    String focalLengthValue = "NA";
+    if (focusDistance != null) {
+      focalLengthValue = String.format(Locale.US, "%.01f", focusDistance);
+    }
+    return String.format(Locale.US, "%s: %s", focalLengthLegend, focalLengthValue);
   }
 
   private static String getIsoSensitivity(CaptureResult result) {
@@ -61,19 +62,20 @@ class CameraInfoIntervalUpdater extends TimeSpacedUpdater {
       return;
     }
 
-    final int whiteBalanceMode = captureResult.get(CaptureResult.CONTROL_AWB_MODE);
+    final Integer whiteBalanceMode = captureResult.get(CaptureResult.CONTROL_AWB_MODE);
 
     final StatFs stat = new StatFs(recordingDir.getPath());
     final long bytesAvailable = stat.getBlockSizeLong() * stat.getAvailableBlocksLong();
     final double gbAvailable = ((double) bytesAvailable) * 1e-9;
-
+    final String focalLengthText = getFocalLengthText(
+            captureResult.get(CaptureResult.CONTROL_AF_MODE), captureResult.get(CaptureResult.LENS_FOCUS_DISTANCE));
     final String cameraText = String.format(
-        Locale.US,
-        "FOC: %s,  ISO: %s,  WB: %s,  Free space: %.02f Gb",
-        getFocalLengthText(captureResult),
-        getIsoSensitivity(captureResult),
-        StringConverters.whiteBalanceModeToString(whiteBalanceMode),
-        gbAvailable);
+            Locale.US,
+            "FOC: %s,  ISO: %s,  WB: %s,  Free space: %.02f Gb",
+            focalLengthText,
+            getIsoSensitivity(captureResult),
+            StringConverters.whiteBalanceModeToString(whiteBalanceMode),
+            gbAvailable);
     textViewCamera.setText(cameraText);
   }
 }

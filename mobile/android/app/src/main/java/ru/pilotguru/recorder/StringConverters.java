@@ -11,7 +11,11 @@ import static android.hardware.camera2.CameraMetadata.CONTROL_AWB_MODE_TWILIGHT;
 import static android.hardware.camera2.CameraMetadata.CONTROL_AWB_MODE_WARM_FLUORESCENT;
 
 public class StringConverters {
-  public static String whiteBalanceModeToString(int wb) {
+  public static String whiteBalanceModeToString(Integer wb) {
+    if (wb == null) {
+      return "N/A";
+    }
+
     switch (wb) {
       case CONTROL_AWB_MODE_CLOUDY_DAYLIGHT:
         return "Cloudy daylight";
