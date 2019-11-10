@@ -88,6 +88,7 @@ ExternalProject_Add(can-utils
 )
 ExternalProject_Get_Property(can-utils source_dir)
 add_library(socketcanlib STATIC IMPORTED)
+add_dependencies(socketcanlib can-utils)
 set_property(TARGET socketcanlib PROPERTY IMPORTED_LOCATION ${source_dir}/.libs/libcan.a)
 include_directories(
   ${source_dir}/include
