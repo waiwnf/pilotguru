@@ -62,5 +62,7 @@ int main(int argc, char **argv) {
     }
   }
 
+  std::cout << "Total rendered frames: " << total_rendered_frames << std::endl;
+
   return EXIT_SUCCESS;
 }
