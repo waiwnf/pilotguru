@@ -10,6 +10,9 @@ ImageSequenceVideoFileSink::ImageSequenceVideoFileSink(
 
 ImageSequenceVideoFileSink::~ImageSequenceVideoFileSink() {
   if (out_frame_ != nullptr) {
+    // Flush the video codec buffer.
+    while(MaybeWriteFrame(nullptr)) {}
+
     av_write_trailer(format_context_);
     avcodec_close(avstream_->codec);
     av_frame_free(&out_frame_);
@@ -66,6 +69,7 @@ void ImageSequenceVideoFileSink::InitStream(int height, int width) {
            0);
   rgb_frame_->height = height;
   rgb_frame_->width = width;
+  rgb_frame_->format = AV_PIX_FMT_RGB24;
 
   const int out_bytes =
       avpicture_get_size(codec_context_->pix_fmt, width, height);
@@ -75,6 +79,7 @@ void ImageSequenceVideoFileSink::InitStream(int height, int width) {
            0);
   out_frame_->height = height;
   out_frame_->width = width;
+  out_frame_->format = codec_context_->pix_fmt;
 
   sws_context_ = sws_getCachedContext(
       sws_context_, width, height, AV_PIX_FMT_RGB24, width, height,
@@ -103,18 +108,22 @@ void ImageSequenceVideoFileSink::consume(const cv::Mat &image) {
             out_frame_->data, out_frame_->linesize);
   out_frame_->pts = next_pts_++;
 
+  MaybeWriteFrame(out_frame_);
+}
+
+int ImageSequenceVideoFileSink::MaybeWriteFrame(AVFrame *out_frame) {
   AVPacket pkt = {0};
   av_init_packet(&pkt);
   int got_packet = 0;
-  CHECK_GE(
-      avcodec_encode_video2(avstream_->codec, &pkt, out_frame_, &got_packet),
-      0);
+  CHECK_EQ(
+      avcodec_encode_video2(avstream_->codec, &pkt, out_frame, &got_packet), 0);
   if (got_packet) {
     av_packet_rescale_ts(&pkt, avstream_->codec->time_base,
                          avstream_->time_base);
     pkt.stream_index = avstream_->index;
     CHECK_GE(av_interleaved_write_frame(format_context_, &pkt), 0);
   }
+  return got_packet;
 }
 
 } // namespace pilotguru

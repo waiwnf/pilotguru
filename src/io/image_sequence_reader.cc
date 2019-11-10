@@ -137,17 +137,37 @@ ORB_SLAM2::TimestampedImage VideoImageSequenceSource::next() {
 
 void VideoImageSequenceSource::fetchNext() {
   has_next_ = false;
+
   AVPacket packet;
+  int got_picture = 0;
   while (av_read_frame(format_context_, &packet) >= 0) {
     if (packet.stream_index != video_stream_index_) {
       continue;
     }
 
-    int got_picture = 0;
     avcodec_decode_video2(codec_context_, source_frame_, &got_picture, &packet);
-    if (!got_picture) {
-      continue;
+    if (got_picture) {
+      break;
     }
+  }
+
+  // No more packets left, try to get the delayed (by codec) frames.
+  if (!got_picture) {
+    AVPacket empty_packet = {0};
+    av_init_packet(&empty_packet);
+    empty_packet.data = nullptr;
+    empty_packet.size = 0;
+    avcodec_decode_video2(codec_context_, source_frame_, &got_picture,
+                          &empty_packet);
+  }
+
+  if (got_picture) {
+    has_next_ = true;
+
+    next_frame_.timestamp =
+        av_frame_get_best_effort_timestamp(source_frame_) *
+        av_q2d(format_context_->streams[video_stream_index_]->time_base);
+
     sws_scale(sws_context_, source_frame_->data, source_frame_->linesize, 0,
               source_frame_->height, rgb_frame_->data, rgb_frame_->linesize);
 
@@ -162,33 +182,28 @@ void VideoImageSequenceSource::fetchNext() {
       }
     }
 
-    next_frame_.timestamp =
-        av_frame_get_best_effort_timestamp(source_frame_) *
-        av_q2d(format_context_->streams[video_stream_index_]->time_base);
     ++next_frame_.frame_id;
-    has_next_ = true;
-    break;
-  }
 
-  // http://stackoverflow.com/questions/16265673/rotate-image-by-90-180-or-270-degrees
-  switch (rotate_degrees_) {
-  case 0:
-    raw_frame_image_.copyTo(next_frame_.image);
-    break;
-  case 90:
-    cv::flip(raw_frame_image_.t(), next_frame_.image, 0);
-    break;
-  case 180:
-    // 180 degrees rotations corresponds to flipping around both x and y axes.
-    cv::flip(raw_frame_image_, next_frame_.image, -1);
-    break;
-  case 270:
-    cv::flip(raw_frame_image_.t(), next_frame_.image, 1);
-    break;
-  default:
-    LOG(FATAL) << "Unsupported rotation angle in video metadata: "
-               << rotate_degrees_
-               << ". Only multiples of 90 degrees rotations are supported.";
+    // http://stackoverflow.com/questions/16265673/rotate-image-by-90-180-or-270-degrees
+    switch (rotate_degrees_) {
+    case 0:
+      raw_frame_image_.copyTo(next_frame_.image);
+      break;
+    case 90:
+      cv::flip(raw_frame_image_.t(), next_frame_.image, 0);
+      break;
+    case 180:
+      // 180 degrees rotations corresponds to flipping around both x and y axes.
+      cv::flip(raw_frame_image_, next_frame_.image, -1);
+      break;
+    case 270:
+      cv::flip(raw_frame_image_.t(), next_frame_.image, 1);
+      break;
+    default:
+      LOG(FATAL) << "Unsupported rotation angle in video metadata: "
+                 << rotate_degrees_
+                 << ". Only multiples of 90 degrees rotations are supported.";
+    }
   }
 }
 
@@ -220,8 +235,7 @@ MakeImageSequenceSource(const std::string &filename, bool vertical_flip,
 
   const int flip_axis = MakeFlipAxis(vertical_flip, horizontal_flip);
   std::unique_ptr<ImageSequenceSource> flipped_source(
-      new FlippedImageSequenceSource(std::move(file_source),
-                                                flip_axis));
+      new FlippedImageSequenceSource(std::move(file_source), flip_axis));
   return std::move(flipped_source);
 }
 

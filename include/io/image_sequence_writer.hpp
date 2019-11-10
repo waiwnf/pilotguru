@@ -28,6 +28,7 @@ public:
 
 private:
   void InitStream(int height, int width);
+  int MaybeWriteFrame(AVFrame *out_frame_);
 
   const std::string filename_;
   const int fps_;
