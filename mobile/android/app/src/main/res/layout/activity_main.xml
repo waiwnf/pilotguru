@@ -38,10 +38,19 @@
         android:textColor="#00ff00" />
 
     <TextView
-        android:id="@+id/textview_imu"
+        android:id="@+id/textview_gps_status"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_below="@id/textview_coords"
+        android:text="GPS status: "
+        android:textColor="#00ff00" />
+
+
+    <TextView
+        android:id="@+id/textview_imu"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/textview_gps_status"
         android:text="IMU: "
         android:textColor="#00ff00" />
 

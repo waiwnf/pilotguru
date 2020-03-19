@@ -40,7 +40,6 @@ import android.widget.Toast;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedList;
@@ -66,8 +65,10 @@ public class MainActivity extends Activity {
   // UI - video preview panel.
   private TextureView videoPreviewTextureView;
 
-  private TextView textViewCoords, textViewIMU, textViewElm327, textViewFps, textViewCamera;
+  private TextView textViewCoords, textViewGpsStatus, textViewIMU, textViewElm327, textViewFps,
+          textViewCamera;
   private PreviewCoordinatesTextUpdater coordinatesTextUpdater;
+  private GPSStatusTextUpdater gpsStatusTextUpdater;
   private PreviewImuTextUpdater imuTextUpdater;
 
   // UI - buttons.
@@ -226,6 +227,9 @@ public class MainActivity extends Activity {
     textViewCoords = (TextView) findViewById(R.id.textview_coords);
     coordinatesTextUpdater = new PreviewCoordinatesTextUpdater(textViewCoords);
 
+    textViewGpsStatus = (TextView) findViewById(R.id.textview_gps_status);
+    gpsStatusTextUpdater = new GPSStatusTextUpdater(textViewGpsStatus);
+
     textViewIMU = (TextView) findViewById(R.id.textview_imu);
     imuTextUpdater = new PreviewImuTextUpdater(TimeUnit.MILLISECONDS.toNanos(500), textViewIMU);
 
@@ -317,6 +321,8 @@ public class MainActivity extends Activity {
       return;
     }
 
+    final SensorDataSaver dataSaver = recorder.getSensorDataSaver();
+
     final SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
     final ELM327Settings elm327Settings = new ELM327Settings(prefs);
     final String elm327DeviceAddress = elm327Settings.getElm327DeviceName();
@@ -333,7 +339,7 @@ public class MainActivity extends Activity {
           elm327Receiver = new ELM327Receiver(new BluetoothELM327Connector(elm327DeviceAddress),
               elm327Settings.getCanIdFilter(),
               elm327Settings.getCanIdMask());
-          elm327Receiver.addSubscriber(recorder.getSensorDataSaver());
+          elm327Receiver.addSubscriber(dataSaver);
           elm327Receiver.addSubscriber(elm327LastPacketTimestampUpdater);
         }
         elm327Receiver.startMonitoringAsync(-1 /* unlimited lines requested */);
@@ -342,15 +348,17 @@ public class MainActivity extends Activity {
       }
     }
 
-    subscribeToLocationUpdates(recorder.getSensorDataSaver(), 20 /* minTimeMsec */);
-    subscribeToImuUpdates(recorder.getSensorDataSaver(), SensorManager.SENSOR_DELAY_FASTEST);
+    subscribeToLocationUpdates(dataSaver, 20 /* minTimeMsec */);
+    subscribeToImuUpdates(dataSaver, SensorManager.SENSOR_DELAY_FASTEST);
+    getLocationManager().registerGnssStatusCallback(dataSaver.gpsStatusSaver);
     subscribeToLocationUpdates(coordinatesTextUpdater, 500 /* minTimeMsec */);
+    getLocationManager().registerGnssStatusCallback(gpsStatusTextUpdater);
     subscribeToImuUpdates(imuTextUpdater, SensorManager.SENSOR_DELAY_NORMAL);
     subscribeToImuUpdates(elm327StatusTextUpdater, SensorManager.SENSOR_DELAY_NORMAL);
 
     final boolean isLogPressures = prefs.getBoolean(PREF_LOG_PRESSURES, false);
     if (isLogPressures) {
-      subscribeToPressureUpdates(recorder.getSensorDataSaver(), SensorManager.SENSOR_DELAY_FASTEST);
+      subscribeToPressureUpdates(dataSaver, SensorManager.SENSOR_DELAY_FASTEST);
     }
 
     maybeConnectCamera();
@@ -358,13 +366,16 @@ public class MainActivity extends Activity {
 
   private synchronized void disconnectSensors() {
     final SensorManager sm = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
-    sm.unregisterListener(recorder.getSensorDataSaver());
+    final SensorDataSaver dataSaver = recorder.getSensorDataSaver();
+    sm.unregisterListener(dataSaver);
     sm.unregisterListener(imuTextUpdater);
     sm.unregisterListener(elm327StatusTextUpdater);
 
-    final LocationManager locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
+    final LocationManager locationManager = getLocationManager();
     locationManager.removeUpdates(coordinatesTextUpdater);
-    locationManager.removeUpdates(recorder.getSensorDataSaver());
+    locationManager.unregisterGnssStatusCallback(gpsStatusTextUpdater);
+    locationManager.removeUpdates(dataSaver);
+    locationManager.unregisterGnssStatusCallback(dataSaver.gpsStatusSaver);
   }
 
   private synchronized void maybeConnectCamera() {
@@ -476,8 +487,12 @@ public class MainActivity extends Activity {
     videoPreviewTextureView.setTransform(transform);
   }
 
+  private LocationManager getLocationManager() {
+    return (LocationManager) getSystemService(LOCATION_SERVICE);
+  }
+
   private void subscribeToLocationUpdates(LocationListener listener, long minTimeMsec) {
-    final LocationManager locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
+    final LocationManager locationManager = getLocationManager();
     final String bestProvider = locationManager.getBestProvider(new Criteria(), false);
     locationManager.requestLocationUpdates(bestProvider, minTimeMsec, 0.01f, listener);
   }

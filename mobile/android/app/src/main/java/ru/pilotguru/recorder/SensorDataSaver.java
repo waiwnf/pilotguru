@@ -11,6 +11,7 @@ import android.hardware.camera2.CameraMetadata;
 import android.hardware.camera2.CaptureRequest;
 import android.hardware.camera2.CaptureResult;
 import android.hardware.camera2.TotalCaptureResult;
+import android.location.GnssStatus;
 import android.location.Location;
 import android.location.LocationListener;
 import android.media.MediaScannerConnection;
@@ -38,17 +39,18 @@ import ru.pilotguru.recorder.elm327.ELM327Receiver;
 
 public class SensorDataSaver extends CameraCaptureSession.CaptureCallback implements
     SensorEventListener, LocationListener, ELM327Receiver.ELM327Listener {
-  public static String ROTATIONS = "rotations";
-  public static String ACCELERATIONS = "accelerations";
-  public static String LOCATIONS = "locations";
-  public static String FRAMES = "frames";
-  public static String CAN_FRAMES = "can_frames";
-  public static String PRESSURES = "pressures";
+  public static final String ROTATIONS = "rotations";
+  public static final String ACCELERATIONS = "accelerations";
+  public static final String LOCATIONS = "locations";
+  public static final String GPS_STATUS = "gps_status";
+  public static final String FRAMES = "frames";
+  public static final String CAN_FRAMES = "can_frames";
+  public static final String PRESSURES = "pressures";
 
-  public static String TIME_USEC = "time_usec";
+  public static final String TIME_USEC = "time_usec";
 
   private JsonWriter rotationsWriter = null, accelerationsWriter = null, locationsWriter = null,
-      framesWriter = null, elm327Writer = null, pressuresWriter = null;
+      gpsStatusWriter = null, framesWriter = null, elm327Writer = null, pressuresWriter = null;
   private List<String> jsonFiles = new LinkedList<>();
 
   private boolean isRecording = false;
@@ -56,6 +58,7 @@ public class SensorDataSaver extends CameraCaptureSession.CaptureCallback implem
   private final Lock gyroLock = recordingStatusLock.readLock();
   private final Lock accelerometerLock = recordingStatusLock.readLock();
   private final Lock locationLock = recordingStatusLock.readLock();
+  private final Lock gpsStatusLock = recordingStatusLock.readLock();
   private final Lock frameCaptureLock = recordingStatusLock.readLock();
   private final Lock pressuresLock = recordingStatusLock.readLock();
   private final Lock elm327Lock = recordingStatusLock.readLock();
@@ -74,6 +77,34 @@ public class SensorDataSaver extends CameraCaptureSession.CaptureCallback implem
   // have its frames be counted from 0 onwards. We will store the first frame id of the current
   // sequence here and subtract it from all the subsequent frame ids of that sequence.
   private long firstFrameNumberInSequence = -1;
+
+  final GnssStatus.Callback gpsStatusSaver = new GnssStatus.Callback() {
+    public void onSatelliteStatusChanged (GnssStatus status) {
+      try {
+        // There is no timestamp in the event itself, so record the time manually asap.
+        final long timeUsec = TimeUnit.NANOSECONDS.toMicros(SystemClock.elapsedRealtimeNanos());
+
+        gpsStatusLock.lock();
+        if (isRecording) {
+          int satsInFix = 0;
+          for (int i=0; i<status.getSatelliteCount(); ++i) {
+            if (status.usedInFix(i)) {
+              satsInFix++;
+            }
+          }
+          gpsStatusWriter.beginObject();
+          gpsStatusWriter.name("sats").value(satsInFix);
+          gpsStatusWriter.name(TIME_USEC).value(timeUsec);
+          gpsStatusWriter.endObject();
+        }
+      } catch (IOException e) {
+        Errors.dieOnException(parentActivity, e, "Error writing GPS status frame.");
+      } finally {
+        gpsStatusLock.unlock();
+      }
+    }
+  };
+
 
   public SensorDataSaver(@NonNull Activity parentActivity) {
     this.parentActivity = parentActivity;
@@ -130,6 +161,7 @@ public class SensorDataSaver extends CameraCaptureSession.CaptureCallback implem
       rotationsWriter = initJsonListWriter(recordingDir, ROTATIONS);
       accelerationsWriter = initJsonListWriter(recordingDir, ACCELERATIONS);
       locationsWriter = initJsonListWriter(recordingDir, LOCATIONS);
+      gpsStatusWriter = initJsonListWriter(recordingDir, GPS_STATUS);
       framesWriter = initJsonListWriter(recordingDir, FRAMES);
       pressuresWriter = initJsonListWriter(recordingDir, PRESSURES);
       elm327Writer = initJsonListWriter(recordingDir, CAN_FRAMES);
@@ -180,6 +212,7 @@ public class SensorDataSaver extends CameraCaptureSession.CaptureCallback implem
     finishJsonListWriter(rotationsWriter, ROTATIONS);
     finishJsonListWriter(accelerationsWriter, ACCELERATIONS);
     finishJsonListWriter(locationsWriter, LOCATIONS);
+    finishJsonListWriter(gpsStatusWriter, GPS_STATUS);
     finishJsonListWriter(pressuresWriter, PRESSURES);
     finishJsonListWriter(framesWriter, FRAMES);
     finishJsonListWriter(elm327Writer, CAN_FRAMES);

@@ -5,7 +5,7 @@ android {
     buildToolsVersion '28.0.3'
     defaultConfig {
         applicationId "ru.pilotguru.recorder"
-        minSdkVersion 23
+        minSdkVersion 24
         targetSdkVersion 26
         versionCode 5
         versionName "0.1.5"
